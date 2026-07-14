@@ -40,31 +40,36 @@ sample 的離岸風場(Formosa 2、Changfang 等 IPP)是**不同群體**。
 `DataSource` protocol,因此可直接接進 `csv_importer` 與 `seed.py`,系統其餘部分不動。
 
 ```
-TaipowerWindSource(year=2024, csv_path=None, fetch=False, url=DEFAULT_URL)
+TaipowerWindSource(months=12, csv_path=None, fetch=False, url=DEFAULT_URL)
 ```
+
+`months` = 匯入資料檔中「最新 N 個月」的滾動視窗(以檔案內最新月份為基準往回推,可跨
+年度邊界)。預設 12。
 
 - `_load_rows()`:`fetch=True` → 以 httpx(延遲載入)下載 CSV 到記憶體;否則讀本地檔
   (預設 `data/taipower/wind_turbines.csv`)。兩者都經現有 `parse_csv()`(已處理 BOM)。
 
 ### 五個 protocol 方法
 
+- 視窗:先掃出資料中所有 (年, 月),取最新 N 個月為 `_window`,`wind_farms()` 與
+  `generation()` 都只看落在視窗內的列。
 - `wind_farms()`:依站名分組,每站一個風場。
   - `code = TPC-<SLUG>`,SLUG 取英文站名去掉 `Wind Power Station` 後大寫(例 `TPC-SHIMEN`)
   - `name` = 完整站名;`location` = 縣市;`operator_name = "台灣電力公司"`
-  - `installed_capacity_mw` = Σ 該站各風機 kW ÷ 1000
+  - `installed_capacity_mw` = Σ 視窗內該站各風機 kW ÷ 1000
   - `status = operational`
-- `generation()`:過濾到 `self.year`,依(站, 月)分組,加總各風機「風機發電量(度)」,
-  跳過 `-`。輸出 `wind_farm_code=TPC-<SLUG>`、`period_start`=當月 1 日、`period_end`=當月
-  最後一日、`generated_energy_mwh` = Σ kWh ÷ 1000、`data_source="taipower"`。
+- `generation()`:依(站, 年, 月)分組,加總各風機「風機發電量(度)」,跳過 `-`。輸出
+  `wind_farm_code=TPC-<SLUG>`、`period_start`=當月 1 日、`period_end`=當月最後一日、
+  `generated_energy_mwh` = Σ kWh ÷ 1000、`data_source="taipower"`。
 - `customers()` / `contracts()` / `consumption()`:回傳 `[]`(台電無需求端資料)。
 
 ### 接線
 
-- `scripts/seed.py`:新增 `--source {sample,taipower}`、`--year`、`--fetch`、`--csv-path`。
+- `scripts/seed.py`:新增 `--source {sample,taipower}`、`--months`、`--fetch`、`--csv-path`。
   預設 `sample` 行為不變。`taipower` 換成 `TaipowerWindSource`;`TPC-` 與 `WF-` 並存。
-- 預設值(URL、CSV 路徑、年度)以 `taipower.py` 的模組常數提供;覆寫透過上述 CLI 旗標。
+- 預設值(URL、CSV 路徑、月數)以 `taipower.py` 的模組常數提供;覆寫透過上述 CLI 旗標。
   (原設計曾規劃在 `config.py` 新增 Settings 欄位,實作時改以 `--csv-path` 等 CLI 旗標覆寫,
-  避免引入未被讀取的設定。)
+  避免引入未被讀取的設定。原本的「單一年度」過濾亦已改為「最近 N 個月」滾動視窗。)
 - `pyproject.toml`:新增選用 extra `ingestion = ["httpx>=0.27"]`。預設本地檔路徑不需新
   runtime 相依;`--fetch` 才延遲載入 httpx。
 - 移除 `sources.py` 中已被取代的 `PublicDataAdapter` 佔位類別。
