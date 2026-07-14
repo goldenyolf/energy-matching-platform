@@ -11,10 +11,23 @@ dist/
 venv/
 env/
 
+# Environment
+.env
+
+# Databases
+*.db
+*.sqlite3
+
 # Test / coverage
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit
+.streamlit/secrets.toml
 
 # IDE / OS
 .idea/

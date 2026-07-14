@@ -1,63 +1,80 @@
-"""共用測試資料建構工具。"""
+"""Shared test fixtures: an isolated in-memory DB and API client per test."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from app.models import (
-    AllocationType,
-    Company,
-    Contract,
-    Dataset,
-    WindFarm,
-)
+import app.models  # noqa: F401  (register tables on Base)
+from app.db.base import Base
 
 
-def make_farm(id="wf1", generation=1000.0, capacity=100.0):
-    return WindFarm(
-        id=id,
-        name=f"Farm {id}",
-        location="外海",
-        capacity_mw=capacity,
-        annual_generation_mwh=generation,
+@pytest.fixture
+def engine():
+    """A fresh in-memory SQLite engine per test (StaticPool → one shared conn)."""
+    eng = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
+    Base.metadata.create_all(eng)
+    yield eng
+    Base.metadata.drop_all(eng)
 
 
-def make_company(id="co1", consumption=1000.0, target=1.0):
-    return Company(
-        id=id,
-        name=f"Company {id}",
-        industry="測試",
-        annual_consumption_mwh=consumption,
-        re_target_ratio=target,
-    )
-
-
-def make_contract(
-    id="ct1",
-    company_id="co1",
-    farm_id="wf1",
-    alloc=AllocationType.RATIO,
-    value=1.0,
-    price=4.5,
-    year=2025,
-):
-    return Contract(
-        id=id,
-        company_id=company_id,
-        wind_farm_id=farm_id,
-        allocation_type=alloc,
-        value=value,
-        price_per_kwh=price,
-        start_year=year,
+@pytest.fixture
+def session_factory(engine):
+    return sessionmaker(
+        bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
     )
 
 
 @pytest.fixture
-def simple_dataset():
-    """1 案場 (1000 MWh) + 1 企業 (用電 1000, RE100) + 1 張 50% ratio 合約。"""
-    return Dataset(
-        wind_farms=[make_farm(generation=1000.0)],
-        companies=[make_company(consumption=1000.0, target=1.0)],
-        contracts=[make_contract(value=0.5)],
-    )
+def db(session_factory) -> Iterator[Session]:
+    session = session_factory()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def client(session_factory):
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_db
+    from app.main import app
+
+    def _override() -> Iterator[Session]:
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _override
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def seeded_db(db):
+    """Load the bundled demo dataset into the test DB."""
+    from pathlib import Path
+
+    from app.ingestion import csv_importer
+    from app.ingestion.sources import CsvDataSource
+
+    sample = Path(__file__).resolve().parent.parent / "data" / "sample"
+    src = CsvDataSource(sample)
+    csv_importer.import_wind_farms(db, src.wind_farms())
+    csv_importer.import_customers(db, src.customers())
+    csv_importer.import_contracts(db, src.contracts())
+    csv_importer.import_generation(db, src.generation())
+    csv_importer.import_consumption(db, src.consumption())
+    return db

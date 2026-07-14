@@ -1,53 +1,90 @@
-# 架構說明
+# Architecture
 
-## 概觀
+## Overview
 
-Energy Matching Platform 是一個以台灣綠電交易（Corporate PPA / 轉供）為情境的媒合引擎。系統將「風場產出的綠電」依合約分配給「有 RE 目標的企業」，並產出分析報表。
+The Energy Matching Platform is a layered FastAPI application. The **matching
+engine is a pure, deterministic core** with no I/O; everything around it —
+persistence, ingestion, API, dashboard — is a replaceable outer layer.
 
+```mermaid
+flowchart TB
+    subgraph Client
+        UI["Streamlit Dashboard<br/>(dashboard/)"]
+        SW["Swagger UI / curl"]
+    end
+
+    subgraph API["FastAPI (app/api/v1)"]
+        R["Routers:<br/>wind-farms · customers · contracts<br/>generation · consumption · matching · analytics"]
+    end
+
+    subgraph Domain["Domain layer"]
+        SVC["Services (app/services)"]
+        ENG["Matching Engine<br/>(app/matching) — pure & deterministic"]
+        ING["Ingestion (app/ingestion)<br/>CSV importer · data sources"]
+    end
+
+    subgraph Data["Persistence"]
+        REPO["Repositories (app/repositories)"]
+        ORM["SQLAlchemy models (app/models)"]
+        DB[("PostgreSQL / SQLite")]
+    end
+
+    UI -->|HTTP| R
+    SW --> R
+    R --> SVC
+    SVC --> ENG
+    SVC --> REPO
+    ING --> REPO
+    REPO --> ORM --> DB
+    SVC -->|Alembic migrations| DB
 ```
-        ┌─────────────┐      ┌──────────────┐      ┌────────────────┐
- 輸入   │  WindFarm   │      │   Company    │      │    Contract     │
- 資料   │ 風場/年發電量 │      │ 企業/用電/RE目標 │    │ 企業↔案場/比例或電量 │
-        └──────┬──────┘      └──────┬───────┘      └───────┬────────┘
-               └────────────────────┴──────────────────────┘
-                                    │  Dataset
-                                    ▼
-                         ┌───────────────────────┐
-                         │   matching.match()     │  純函式媒合引擎
-                         │  1. 依案場分組合約        │
-                         │  2. 計算需求 / 超額削減   │
-                         │  3. 彙整企業 RE 分析      │
-                         └───────────┬───────────┘
-                                     ▼
-                         ┌───────────────────────┐
-                         │    MatchingResult      │
-                         │  分配明細 / 企業分析 /     │
-                         │  案場利用 / 平台總覽       │
-                         └───────────┬───────────┘
-                     ┌───────────────┴───────────────┐
-                     ▼                                ▼
-              FastAPI (app/main.py)           CLI (scripts/demo.py)
+
+## Layers
+
+| Layer | Package | Responsibility |
+|-------|---------|----------------|
+| API | `app/api/v1` | HTTP routing, request/response schemas, status codes |
+| Schemas | `app/schemas` | Pydantic v2 validation & serialization contracts |
+| Services | `app/services` | Business logic, orchestration, transactions |
+| Matching | `app/matching` | Pure deterministic allocation engine (no I/O) |
+| Ingestion | `app/ingestion` | CSV import, pluggable `DataSource`, mock generator |
+| Repositories | `app/repositories` | Generic CRUD data-access over the ORM |
+| Models | `app/models` | SQLAlchemy 2.x ORM entities |
+| Core | `app/core` | Settings, domain exceptions |
+| DB | `app/db` | Engine, session, declarative base |
+
+## Design principles
+
+- **Pure core, replaceable edges.** `match_period()` takes plain dataclasses and
+  returns plain dataclasses — trivially unit-testable and reused by both the
+  matching service (persisted runs) and analytics (on-the-fly).
+- **Deterministic.** Contracts are processed in a total, stable order; there is
+  no randomness. Same input ⇒ identical output.
+- **Database-agnostic.** Models avoid vendor-specific types, so the exact same
+  code runs on SQLite (local/tests) and PostgreSQL (Docker/production).
+- **No fake data sources.** Where a real public API is not confirmed available,
+  the platform exposes a `DataSource` interface + CSV import + a deterministic
+  `MockDataGenerator`, and a `PublicDataAdapter` placeholder that must honour the
+  upstream's ToS / robots.txt before it is ever implemented.
+
+## Request lifecycle (matching run)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as FastAPI
+    participant S as matching_service
+    participant E as engine (pure)
+    participant DB as Database
+    C->>API: POST /api/v1/matching/runs {period}
+    API->>S: run_matching(db, period)
+    S->>DB: load generation, consumption, contracts
+    S->>E: match_period(period, farms, demands, contracts)
+    E-->>S: MatchingOutcome (allocations, summaries, skipped)
+    S->>DB: persist MatchingRun + MatchingResult rows
+    S-->>API: MatchingRun (completed)
+    API-->>C: 201 + result summary & details
 ```
 
-## 分層
-
-| 層 | 模組 | 職責 |
-|----|------|------|
-| 領域模型 | `app/models.py` | 以 Pydantic 定義輸入與結果模型，含欄位驗證 |
-| 核心邏輯 | `app/matching.py` | 無副作用的媒合演算法，輸入 `Dataset` 輸出 `MatchingResult` |
-| 資料存取 | `app/data.py` | 載入並驗證範例 JSON 資料 |
-| 介面 | `app/main.py`、`scripts/demo.py` | REST API 與 CLI 兩種呈現方式 |
-
-## 設計原則
-
-- **核心與介面分離**：媒合邏輯不依賴 FastAPI，可獨立測試與重用。
-- **純函式引擎**：`match()` 無 I/O、無全域狀態，相同輸入必得相同輸出，利於單元測試。
-- **型別即驗證**：Pydantic 在資料進入引擎前就擋掉不合法輸入（如 ratio > 1、負值電量）。
-- **可延伸**：目前為年度總量比例分配；`AllocationType` 與案場分組的設計預留了加入逐時匹配或最佳化的空間。
-
-## 後續可延伸方向
-
-- 8760 小時逐時發電／用電曲線匹配（時序 matching）。
-- 以線性規劃最小化總缺口或成本的最佳化分配。
-- 合約起訖年度與案場商轉時程（COD）的時間維度。
-- 憑證（T-REC）與碳排係數計算。
+See also [`domain-model.md`](domain-model.md) and
+[`matching-rules.md`](matching-rules.md).

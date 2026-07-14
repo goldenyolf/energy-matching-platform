@@ -1,122 +1,209 @@
 # Energy Matching Platform
 
-> 台灣綠電交易媒合 MVP — 模擬**風力發電案場**、**企業綠電合約 (CPPA)**、**企業用電**與 **RE 目標** 之間的綠電分配與分析。
+A portfolio-ready **MVP for renewable-energy contract management, wind-power data
+ingestion, green-energy allocation, and RE-target analysis** in Taiwan.
 
-以台灣企業購買再生能源（Corporate PPA / 轉供）為情境，把「哪個案場的綠電、以多少比例、轉供給哪家企業」建模成一個可計算、可測試、可透過 API 查詢的媒合引擎，並產出每家企業的 **RE 覆蓋率**與**距離 RE 目標的缺口**。
+Built around a **pure, deterministic matching engine** and a clean layered
+architecture (FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL ·
+Streamlit), with Docker, CI, and a full test suite.
 
-## ✨ 功能
+> ⚠️ **Demo data is simulated.** Not affiliated with Taipower, TSEC, or any
+> energy company. This is a technical portfolio project, **not** a settlement,
+> certificate-transfer, or trading system.
 
-- **綠電比例分配 (proportional matching)**：合約可用「案場發電量比例」或「固定年電量」兩種方式約定。
-- **超額認購自動削減 (curtailment)**：當單一案場的合約需求超過年發電量時，依需求等比例削減。
-- **RE 目標分析**：計算每家企業的綠電覆蓋率、RE 目標缺口與是否達標。
-- **平台總覽**：整體發電量、分配量、剩餘綠電、綠電利用率與達標企業數。
-- **視覺化儀表板**：內建 HTML 儀表板（KPI 卡片 + 企業覆蓋率/RE 目標條圖 + 風場利用率），零外部相依、支援深/淺色。
-- **REST API**（FastAPI，內建 Swagger UI）與 **CLI 展示報表**。
-- **19 個單元／API 測試**，核心演算法為純函式、易於驗證。
+---
 
-## 🏗️ 技術棧
+## Problem statement
 
-| 層 | 技術 |
-|----|------|
-| 語言 | Python 3.10+ |
-| Web | FastAPI + Uvicorn |
-| 資料驗證 | Pydantic v2 |
-| 測試 | pytest + FastAPI TestClient |
+Taiwanese corporates buying renewable energy via Corporate PPAs (轉供) need to
+know: given each wind farm's *actual* generation, each company's *actual*
+consumption, and a set of contracts with different volumes, shares and
+priorities — **how much green energy does each company actually receive, and how
+far is it from its RE target?**
 
-## 🚀 快速開始
+A contract ratio is not the delivered energy. This platform models generation,
+consumption, contracts and allocation as **separate** quantities and computes the
+real, auditable result.
+
+## Key features
+
+- **Deterministic matching engine** — monthly allocation by contract priority,
+  bounded by real generation, real consumption and contract caps; every
+  allocation records *why* it was bounded. Same input ⇒ identical output.
+- **RE-target analytics** — per-customer coverage %, gap to target, target-met;
+  per-farm utilisation & unallocated surplus; per-period summaries.
+- **REST API** (FastAPI + Swagger) with request/response schemas, validation,
+  proper status codes and error handling.
+- **Pluggable data sources** — CSV import, a deterministic `MockDataGenerator`,
+  and a `PublicDataAdapter` placeholder (Phase 2) that will respect source ToS /
+  robots.txt. No scraping, no fabricated "real" data.
+- **Streamlit dashboard** — Overview, Wind Farms, Customers, Contracts, Matching.
+- **Production-shaped tooling** — Alembic migrations, Docker Compose, Makefile,
+  Ruff/Black/mypy, pre-commit, GitHub Actions CI, pytest (matching core ≥ 80 %).
+
+## Architecture
+
+```
+app/
+├── api/v1/        # FastAPI routers (wind-farms, customers, contracts,
+│                  #   generation, consumption, matching, analytics)
+├── schemas/       # Pydantic v2 request/response models
+├── services/      # business logic & orchestration
+├── matching/      # PURE deterministic engine (no I/O)
+├── ingestion/     # CSV importer, DataSource interface, mock generator
+├── repositories/  # generic CRUD over the ORM
+├── models/        # SQLAlchemy 2.x entities
+├── core/          # settings, domain exceptions
+└── db/            # engine, session, declarative base
+dashboard/         # Streamlit app (Home + 4 pages)
+alembic/           # migrations
+data/sample/       # demo CSVs (3 farms, 5 customers, 8 contracts, 12 months)
+```
+
+Full diagrams in [`docs/architecture.md`](docs/architecture.md),
+[`docs/domain-model.md`](docs/domain-model.md) (ERD), and
+[`docs/matching-rules.md`](docs/matching-rules.md) (process flow).
+
+## Matching logic (in one paragraph)
+
+For a month, sum each farm's generation and each customer's consumption. Process
+**active, in-window** contracts in order of `priority` (ties → `start_date` →
+`contract_number`). Each contract gets
+`min(farm remaining, customer remaining demand, contract cap)`, where the cap is
+the tighter of its fixed volume and its % share of the farm's generation. A
+farm's energy is never allocated twice; a customer never exceeds its consumption.
+See [`docs/matching-rules.md`](docs/matching-rules.md).
+
+## Quick start (local, no Docker)
+
+Requires **Python 3.12**. [`uv`](https://docs.astral.sh/uv/) is preferred.
 
 ```bash
-# 1. 建立虛擬環境並安裝依賴
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# 1. Install (uv preferred; falls back to python -m venv + pip)
+make install
+#   or manually:
+#   uv venv --python 3.12 && uv pip install -e ".[dashboard,dev]"
 
-# 2. 執行 CLI 展示（以內建範例資料跑一次媒合）
-python -m scripts.demo
+# 2. Load the demo data (SQLite by default)
+make seed
 
-# 3. 執行測試
-pytest
+# 3. Run the API  → http://localhost:8000/docs
+make run
 
-# 4. 啟動伺服器（儀表板 + API）
-uvicorn app.main:app --reload
-# 儀表板   → http://127.0.0.1:8000/
-# API 文件 → http://127.0.0.1:8000/docs
+# 4. In another terminal, run the dashboard → http://localhost:8501
+make dashboard
 ```
 
-## 🖥️ 視覺化儀表板
-
-啟動伺服器後開啟 `http://127.0.0.1:8000/`，儀表板會向 `/match` 取資料並即時渲染：
-
-- **KPI 卡片**：總發電量、已媒合綠電、綠電利用率、達標企業數、RE 目標總缺口。
-- **企業 RE 目標分析**：每家企業的綠電覆蓋率長條，搭配 RE 目標標記線與達標／缺口標籤。
-- **風場利用情形**：各案場已媒合量佔年發電量的比例與剩餘綠電。
-
-儀表板為單一 HTML 檔（`app/static/dashboard.html`），純 vanilla JS + 內嵌 CSS，**無任何外部 CDN 相依**，並支援深/淺色主題切換。
-
-## 📊 範例情境輸出
-
-以內建的 5 個案場、5 家企業、7 張合約執行媒合：
-
-```
-[ 企業 RE 目標分析 ]
-企業        用電         綠電        覆蓋率   RE目標   缺口        達標
-台積電      5,000.0 GWh  4,850.0 GWh  97%    100%   150.0 GWh   未達
-台達電        900.0 GWh    800.0 GWh  89%    100%   100.0 GWh   未達
-友達光電    2,000.0 GWh  1,850.0 GWh  92%     60%     0.0 GWh   達標
-宏碁          150.0 GWh    120.0 GWh  80%     80%     0.0 GWh   達標
-大江生醫       60.0 GWh     16.0 GWh  27%     50%    14.0 GWh   未達
-
-[ 平台總覽 ]
-  總發電量   : 9,900.0 GWh    綠電利用率   : 77%
-  總分配量   : 7,636.0 GWh    RE 目標總缺口 : 264.0 GWh
-  剩餘綠電   : 2,264.0 GWh    達標企業數    : 2 / 5
-```
-
-## 🔌 API 端點
-
-| 方法 | 路徑 | 說明 |
-|------|------|------|
-| GET  | `/health` | 健康檢查 |
-| GET  | `/dataset` | 取得內建範例資料集 |
-| GET  | `/match` | 以範例資料執行媒合並回傳完整分析 |
-| POST | `/match` | 以自訂資料集執行媒合 |
-| GET  | `/companies/{id}` | 查詢單一企業的 RE 目標分析 |
+Trigger a matching run and inspect analytics:
 
 ```bash
-curl http://127.0.0.1:8000/match | python -m json.tool
-curl http://127.0.0.1:8000/companies/co-tsmc
+curl -X POST http://localhost:8000/api/v1/matching/runs \
+     -H 'Content-Type: application/json' -d '{"period":"2024-01"}'
+curl 'http://localhost:8000/api/v1/analytics/customers?period=2024-01'
 ```
 
-## 🧮 媒合演算法
+## Docker usage
 
-1. 每個案場有固定年發電量。
-2. 綁在案場上的每張合約產生一筆需求：ratio → `比例 × 年發電量`；volume → `約定電量`。
-3. 需求總和 ≤ 年發電量 → 全額分配，其餘為剩餘綠電。
-4. 需求總和 > 年發電量（超額認購）→ 依需求等比削減，使分配總量剛好等於年發電量。
-5. 彙整到企業層級，計算覆蓋率 `= 分配量 / 用電量` 與 RE 缺口 `= max(0, 用電量 × RE目標 − 分配量)`。
+Brings up PostgreSQL + API + dashboard:
 
-詳見 [`docs/architecture.md`](docs/architecture.md) 與 [`docs/data-model.md`](docs/data-model.md)。
-
-## 📁 專案結構
-
-```
-energy-matching-platform/
-├── app/
-│   ├── models.py      # Pydantic 領域模型（案場／企業／合約／結果）
-│   ├── matching.py    # 核心媒合引擎（純函式）
-│   ├── data.py        # 範例資料載入
-│   ├── main.py        # FastAPI 應用程式（儀表板 + API）
-│   └── static/dashboard.html  # 視覺化儀表板（零外部相依）
-├── data/sample_data.json  # 台灣情境範例資料
-├── scripts/demo.py    # CLI 展示報表
-├── tests/             # 19 個 pytest 測試
-└── docs/              # 架構、資料模型、API 文件
+```bash
+docker compose up --build          # or: make docker-up
+make docker-seed                   # load demo data into the container DB
 ```
 
-## ⚠️ 範圍與免責
+- API / Swagger → http://localhost:8000/docs
+- Streamlit     → http://localhost:8501
+- The API service runs `alembic upgrade head` on start.
 
-本專案為**作品集用途的 MVP**，資料為公開資訊改編之示意值，並非真實合約或即時電網資料。媒合採「年度總量比例分配」，尚未納入 8760 小時逐時匹配或最佳化求解（可作為後續延伸）。
+## Local development
 
-## 📄 授權
+```bash
+make test        # pytest + coverage on the matching core
+make lint        # ruff + black --check + mypy
+make format      # black + ruff --fix
+make migrate     # alembic upgrade head
+make revision m="add X"   # autogenerate a migration
+pre-commit install        # enable the hooks
+```
+
+## Demo data
+
+`data/sample/` contains a scenario designed to exercise every rule: 3 wind farms,
+5 customers with different RE targets, 8 contracts (mixed priorities, one expired,
+one pending), and 12 months of generation & consumption. Regenerate the monthly
+series deterministically with:
+
+```bash
+python -m scripts.generate_sample_data
+```
+
+Example result for `2024-01` (`make seed` then run matching):
+
+| Customer | Consumption | Allocated | RE % | Target | Met |
+|----------|------------:|----------:|-----:|-------:|:---:|
+| 台積電 TSMC | 416,667 | 232,759 | 55.9 % | 100 % | ✗ |
+| 台達電 Delta | 50,000 | 46,552 | 93.1 % | 100 % | ✗ |
+| 友達 AUO | 83,333 | 55,862 | 67.0 % | 60 % | ✓ |
+| 宏碁 Acer | 10,000 | 10,000 | 100 % | 80 % | ✓ |
+| 大江 TCI | 4,000 | 4,000 | 100 % | 50 % | ✓ |
+
+Expired (`PPA-2020-007`) and pending (`PPA-2025-008`) contracts are skipped.
+
+## API documentation
+
+Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Health check |
+| GET/POST | `/api/v1/wind-farms`, `/{id}` | Wind farms |
+| GET/POST | `/api/v1/customers`, `/{id}` | Customers |
+| GET/POST | `/api/v1/contracts`, `/{id}` | Contracts (PPA) |
+| GET/POST | `/api/v1/generation`, `/generation/import` | Generation data + CSV import |
+| GET/POST | `/api/v1/consumption`, `/consumption/import` | Consumption data + CSV import |
+| POST/GET | `/api/v1/matching/runs`, `/runs/{id}` | Run & inspect matching |
+| GET | `/api/v1/matching/results` | Allocation results |
+| GET | `/api/v1/analytics/customers`, `/wind-farms`, `/summary` | Analytics |
+
+## Screenshots
+
+_TODO: add dashboard screenshots (Overview / Matching pages)._
+
+## Known limitations
+
+- Monthly matching only (no 8760-hour time-matching yet).
+- Greedy priority allocation, not a global optimum.
+- No auth/multi-tenancy; demo-scale data.
+- See [`docs/assumptions.md`](docs/assumptions.md) and
+  [`docs/roadmap.md`](docs/roadmap.md).
+
+## Data-source disclaimer
+
+All bundled data is **simulated** for demonstration. Any future integration with
+public open data must comply with the source website's terms of service and
+access rules; this project does not bypass authentication, robots.txt, or rate
+limits.
+
+## Roadmap
+
+Phase 1 MVP (this release) → Phase 2 public data & quality → Phase 3 optimisation
+& portfolio → Phase 4 AI assistant. Details in [`docs/roadmap.md`](docs/roadmap.md).
+
+## License
 
 [MIT](LICENSE)
+
+---
+
+## 繁體中文摘要
+
+以台灣企業綠電交易 (Corporate PPA / 轉供) 為情境的**作品集 MVP**：管理風力發電案場、
+企業客戶、綠電合約，並以**可解釋、deterministic 的媒合引擎**，依「實際發電量、實際
+用電量、合約上限與優先順序」計算每家企業每月實際取得的綠電與 **RE 目標達成率**。
+
+- 技術棧：FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL · Streamlit，
+  搭配 Docker、GitHub Actions CI、Ruff/Black/mypy、pytest（媒合核心覆蓋率 ≥ 80%）。
+- 快速開始：`make install` → `make seed` → `make run`（API）→ `make dashboard`（儀表板）。
+- 重要聲明：Demo 資料皆為**模擬資料**，與台電、台智電或任何能源公司**無官方關係**，
+  亦非正式的結算、憑證移轉或交易系統。公開資料的使用須遵守來源網站規範，本專案不繞過
+  任何驗證、robots.txt 或存取限制。

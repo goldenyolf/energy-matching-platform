@@ -1,0 +1,6 @@
+code,company_name,industry,annual_consumption_mwh,re_target_percent,target_year
+CUST-TSMC,台積電,半導體,5000000,100,2040
+CUST-DELTA,台達電,電源管理,600000,100,2030
+CUST-AUO,友達光電,面板,1000000,60,2035
+CUST-ACER,宏碁,電子,120000,80,2035
+CUST-TCI,大江生醫,生技,48000,50,2030

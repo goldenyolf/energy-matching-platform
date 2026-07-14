@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Create venv & install
+        run: |
+          uv venv --python 3.12
+          uv pip install -e ".[dashboard,dev]"
+
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check app tests
+
+      - name: Format check (black)
+        run: .venv/bin/black --check app tests
+
+      - name: Type check (mypy)
+        run: .venv/bin/mypy app
+
+      - name: Tests + coverage
+        run: .venv/bin/pytest --cov=app.matching --cov=app.services --cov-report=term-missing

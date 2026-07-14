@@ -1,3 +1,3 @@
-"""Energy Matching Platform — 台灣綠電交易媒合 MVP。"""
+"""Energy Matching Platform — renewable energy contract & allocation MVP."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
