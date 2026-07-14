@@ -4,13 +4,14 @@ Usage:
     python -m scripts.seed                         # bundled demo (data/sample)
     python -m scripts.seed --reset                 # drop & recreate tables first
     python -m scripts.seed --source taipower       # real Taipower wind open data
-    python -m scripts.seed --source taipower --year 2024 --fetch
+    python -m scripts.seed --source taipower --months 12 --fetch
 
 The ``sample`` source loads the bundled demo CSVs. The ``taipower`` source reads
-Taiwan Power Company's monthly wind-turbine open data (dataset 29961): by default
-from a local file (``data/taipower/wind_turbines.csv``), or with ``--fetch`` it
-downloads the CSV live. Taipower supplies only the supply side, so customers /
-contracts / consumption stay empty for that source.
+Taiwan Power Company's monthly wind-turbine open data (dataset 29961) for a
+rolling window of the most recent N months (default 12): by default from a local
+file (``data/taipower/wind_turbines.csv``), or with ``--fetch`` it downloads the
+CSV live. Taipower supplies only the supply side, so customers / contracts /
+consumption stay empty for that source.
 """
 
 from __future__ import annotations
@@ -22,20 +23,20 @@ from app.db.base import Base
 from app.db.session import SessionLocal, create_all, engine
 from app.ingestion import csv_importer
 from app.ingestion.sources import CsvDataSource
-from app.ingestion.taipower import DEFAULT_YEAR, TaipowerWindSource
+from app.ingestion.taipower import DEFAULT_MONTHS, TaipowerWindSource
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
 
 def build_source(
     name: str,
-    year: int = DEFAULT_YEAR,
+    months: int = DEFAULT_MONTHS,
     fetch: bool = False,
     csv_path: str | None = None,
 ):
     """Return a ``DataSource`` for the given source name."""
     if name == "taipower":
-        return TaipowerWindSource(year=year, fetch=fetch, csv_path=csv_path)
+        return TaipowerWindSource(months=months, fetch=fetch, csv_path=csv_path)
     if name == "sample":
         return CsvDataSource(SAMPLE_DIR)
     raise ValueError(f"unknown source: {name!r} (expected 'sample' or 'taipower')")
@@ -81,10 +82,10 @@ def main() -> None:
         help="dataset to load (default: sample)",
     )
     parser.add_argument(
-        "--year",
+        "--months",
         type=int,
-        default=DEFAULT_YEAR,
-        help="year to import for the taipower source",
+        default=DEFAULT_MONTHS,
+        help="taipower: import the most recent N months of data (default: 12)",
     )
     parser.add_argument(
         "--fetch",
@@ -98,7 +99,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     source = build_source(
-        args.source, year=args.year, fetch=args.fetch, csv_path=args.csv_path
+        args.source, months=args.months, fetch=args.fetch, csv_path=args.csv_path
     )
     seed(source, reset=args.reset)
 

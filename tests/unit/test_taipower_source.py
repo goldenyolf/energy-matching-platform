@@ -2,6 +2,9 @@
 
 Uses a small in-memory CSV fixture that mirrors the real dataset schema
 (dataset 29961). No real network is touched — the fetch path is monkeypatched.
+
+The adapter imports a rolling window of the most recent N months *present in the
+data* (default 12), which may span calendar-year boundaries.
 """
 
 from __future__ import annotations
@@ -30,16 +33,20 @@ def _row(year, month, county, code, station, turbine, cap, gen):
     return f"{year},{month},{county},{code},{station},{turbine},{cap},{gen},0,0"
 
 
-# Test = station with 2 turbines; Other = station with 1 turbine.
-# Includes a partial "-" (Feb #2), an all-"-" month (Mar), and a 2023 row.
+# TEST station has 5 distinct months (2024-02 back to 2023-10); OTHER has 1.
+# Newest→oldest for TEST: 2024-02, 2024-01, 2023-12, 2023-11, 2023-10.
+#   2024-02: partial "-" (#2 missing)   2023-11: all "-" (no generation)
+#   2023-10: oldest, dropped by a 4-month window
 CSV_ROWS = [
-    _row("2024", "01", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "1000000"),
-    _row("2024", "01", TEST_COUNTY, "99000", TEST_STATION, "#2", "100", "2000000"),
     _row("2024", "02", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "500000"),
     _row("2024", "02", TEST_COUNTY, "99000", TEST_STATION, "#2", "100", "-"),
-    _row("2024", "03", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "-"),
-    _row("2023", "01", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "9999999"),
-    _row("2024", "01", OTHER_COUNTY, "88000", OTHER_STATION, "#1", "50", "3000000"),
+    _row("2024", "01", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "1000000"),
+    _row("2024", "01", TEST_COUNTY, "99000", TEST_STATION, "#2", "100", "2000000"),
+    _row("2023", "12", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "400000"),
+    _row("2023", "12", TEST_COUNTY, "99000", TEST_STATION, "#2", "100", "300000"),
+    _row("2023", "11", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "-"),
+    _row("2023", "10", TEST_COUNTY, "99000", TEST_STATION, "#1", "100", "9999999"),
+    _row("2024", "02", OTHER_COUNTY, "88000", OTHER_STATION, "#1", "50", "3000000"),
 ]
 
 
@@ -54,7 +61,8 @@ def csv_file(tmp_path):
 
 @pytest.fixture
 def source(csv_file):
-    return TaipowerWindSource(year=2024, csv_path=csv_file)
+    # 4-month window → 2024-02, 2024-01, 2023-12, 2023-11 (drops 2023-10).
+    return TaipowerWindSource(months=4, csv_path=csv_file)
 
 
 def _by_code(rows):
@@ -99,17 +107,35 @@ def test_period_end_uses_month_last_day_leap_year(source):
     assert float(feb["generated_energy_mwh"]) == pytest.approx(500.0)
 
 
+def test_window_spans_year_boundary(source):
+    gen = _gen_index(source.generation())
+    # The window reaches back into the previous year.
+    dec = gen[("TPC-TEST", "2023-12-01")]
+    assert dec["period_end"] == "2023-12-31"
+    assert float(dec["generated_energy_mwh"]) == pytest.approx(700.0)
+
+
 def test_generation_skips_all_missing_month(source):
     gen = _gen_index(source.generation())
-    # March has only "-" values → no generation row emitted at all.
-    assert ("TPC-TEST", "2024-03-01") not in gen
+    # 2023-11 has only "-" values → no generation row emitted at all.
+    assert ("TPC-TEST", "2023-11-01") not in gen
 
 
-def test_generation_filters_by_year(source):
+def test_window_drops_months_older_than_n(source):
     gen = source.generation()
-    assert all(r["period_start"].startswith("2024-") for r in gen)
-    # The 2023 row (9,999,999) must not leak into any 2024 total.
+    # 2023-10 (the 9,999,999 row) is outside the 4-month window → excluded.
+    assert not any(r["period_start"] == "2023-10-01" for r in gen)
     assert not any(float(r["generated_energy_mwh"]) > 9000 for r in gen)
+
+
+def test_default_window_is_twelve_months_includes_all_fixture(csv_file):
+    # Only 5 distinct months exist (< 12), so the default window keeps them all,
+    # including the oldest 2023-10.
+    src = TaipowerWindSource(csv_path=csv_file)
+    gen = _gen_index(src.generation())
+    assert ("TPC-TEST", "2023-10-01") in gen
+    oct_mwh = float(gen[("TPC-TEST", "2023-10-01")]["generated_energy_mwh"])
+    assert oct_mwh == pytest.approx(9999.999)
 
 
 def test_demand_side_methods_are_empty(source):
@@ -119,7 +145,7 @@ def test_demand_side_methods_are_empty(source):
 
 
 def test_missing_local_file_raises_clear_error(tmp_path):
-    src = TaipowerWindSource(year=2024, csv_path=tmp_path / "does_not_exist.csv")
+    src = TaipowerWindSource(months=12, csv_path=tmp_path / "does_not_exist.csv")
     with pytest.raises(FileNotFoundError) as exc:
         src.wind_farms()
     assert "--fetch" in str(exc.value)
@@ -133,7 +159,7 @@ def test_fetch_path_uses_http_get(monkeypatch, csv_file):
         return csv_file.read_bytes()
 
     monkeypatch.setattr("app.ingestion.taipower._http_get", fake_get)
-    src = TaipowerWindSource(year=2024, fetch=True, url="https://example.test/wind.csv")
+    src = TaipowerWindSource(months=4, fetch=True, url="https://example.test/wind.csv")
 
     farms = _by_code(src.wind_farms())
     assert set(farms) == {"TPC-TEST", "TPC-OTHER"}

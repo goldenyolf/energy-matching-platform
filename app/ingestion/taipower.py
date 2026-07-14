@@ -13,8 +13,10 @@ Source CSV (UTF-8, monthly, one row per turbine per month)::
 
 The adapter aggregates the per-turbine rows to the station level that the rest
 of the platform models: one wind farm per station, one monthly generation total
-per station. Missing cells (``-``) are skipped. Only Taipower's own (mostly
-onshore) stations appear here — offshore IPP farms are not in this dataset.
+per station. It imports a rolling window of the most recent N months *present in
+the data* (default 12), which may span calendar-year boundaries. Missing cells
+(``-``) are skipped. Only Taipower's own (mostly onshore) stations appear here —
+offshore IPP farms are not in this dataset.
 
 Access note: data.gov.tw is an official open-data platform under the Government
 Open Data Licence v1. Any fetch honours that licence; this adapter does not
@@ -36,7 +38,7 @@ DEFAULT_URL = (
     "https://service.taipower.com.tw/data/opendata/apply/file/d693004/001.csv"
 )
 DEFAULT_CSV_PATH = Path("data/taipower/wind_turbines.csv")
-DEFAULT_YEAR = 2024
+DEFAULT_MONTHS = 12
 OPERATOR_NAME = "台灣電力公司"
 
 # Logical field -> a stable substring that identifies its (bilingual) header.
@@ -96,17 +98,18 @@ class TaipowerWindSource:
 
     def __init__(
         self,
-        year: int = DEFAULT_YEAR,
+        months: int = DEFAULT_MONTHS,
         csv_path: str | Path | None = None,
         fetch: bool = False,
         url: str = DEFAULT_URL,
     ) -> None:
-        self._year = int(year)
+        self._months = int(months)
         self._csv_path = Path(csv_path) if csv_path else DEFAULT_CSV_PATH
         self._fetch = fetch
         self._url = url
         self._rows_cache: list[dict] | None = None
         self._cols_cache: dict[str, str] | None = None
+        self._window_cache: set[tuple[int, int]] | None = None
 
     # -- loading -----------------------------------------------------------
 
@@ -139,13 +142,31 @@ class TaipowerWindSource:
             self._cols_cache = resolved
         return self._cols_cache
 
-    def _year_rows(self):
-        """Yield (row, cols) for rows in the configured year."""
+    def _window(self) -> set[tuple[int, int]]:
+        """The set of (year, month) for the most recent N months in the data."""
+        if self._window_cache is None:
+            rows = self._rows()
+            cols = self._cols(rows)
+            periods = set()
+            for r in rows:
+                year = p.i(r.get(cols["year"]))
+                month = p.i(r.get(cols["month"]))
+                if year is not None and month is not None:
+                    periods.add((year, month))
+            newest = sorted(periods, reverse=True)[: self._months]
+            self._window_cache = set(newest)
+        return self._window_cache
+
+    def _window_rows(self):
+        """Yield (row, cols, year, month) for rows within the recent-N-months window."""
         rows = self._rows()
         cols = self._cols(rows)
+        window = self._window()
         for r in rows:
-            if p.i(r.get(cols["year"])) == self._year:
-                yield r, cols
+            year = p.i(r.get(cols["year"]))
+            month = p.i(r.get(cols["month"]))
+            if year is not None and month is not None and (year, month) in window:
+                yield r, cols, year, month
 
     # -- DataSource protocol ----------------------------------------------
 
@@ -153,7 +174,7 @@ class TaipowerWindSource:
         # code -> (station name, county); code -> {turbine: kW}
         meta: dict[str, tuple[str, str | None]] = {}
         caps: dict[str, dict[str, float]] = {}
-        for r, cols in self._year_rows():
+        for r, cols, _year, _month in self._window_rows():
             station = p.s(r.get(cols["station"]))
             if not station:
                 continue
@@ -180,24 +201,23 @@ class TaipowerWindSource:
         return out
 
     def generation(self) -> list[dict]:
-        totals: dict[tuple[str, int], float] = {}
-        for r, cols in self._year_rows():
+        totals: dict[tuple[str, int, int], float] = {}
+        for r, cols, year, month in self._window_rows():
             station = p.s(r.get(cols["station"]))
-            month = p.i(r.get(cols["month"]))
             kwh = _num(r.get(cols["generation"]))
-            if not station or month is None or kwh is None:
+            if not station or kwh is None:
                 continue
             code = "TPC-" + _station_slug(station)
-            totals[(code, month)] = totals.get((code, month), 0.0) + kwh
+            totals[(code, year, month)] = totals.get((code, year, month), 0.0) + kwh
 
         out = []
-        for (code, month), kwh in totals.items():
-            last = calendar.monthrange(self._year, month)[1]
+        for (code, year, month), kwh in totals.items():
+            last = calendar.monthrange(year, month)[1]
             out.append(
                 {
                     "wind_farm_code": code,
-                    "period_start": date(self._year, month, 1).isoformat(),
-                    "period_end": date(self._year, month, last).isoformat(),
+                    "period_start": date(year, month, 1).isoformat(),
+                    "period_end": date(year, month, last).isoformat(),
                     "generated_energy_mwh": str(round(kwh / 1000.0, 2)),
                     "data_source": "taipower",
                 }

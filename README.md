@@ -165,15 +165,17 @@ Besides the bundled demo, the seeder can load **real** wind generation from
 Taiwan Power Company's monthly open dataset
 ([data.gov.tw #29961](https://data.gov.tw/dataset/29961), Government Open Data
 Licence). It aggregates the per-turbine rows into one wind farm per station
-(codes prefixed `TPC-`) and one monthly generation total, for a chosen year.
-These `TPC-` farms coexist with the `WF-` demo farms.
+(codes prefixed `TPC-`) and one monthly generation total, over a rolling window
+of the most recent N months present in the data (default 12, may span calendar
+years). These `TPC-` farms coexist with the `WF-` demo farms.
 
 ```bash
-# Fetch the CSV live and load 2024 (needs httpx: pip install -e ".[ingestion]")
-python -m scripts.seed --reset --source taipower --year 2024 --fetch
+# Fetch the CSV live and load the last 12 months
+# (needs httpx: pip install -e ".[ingestion]")
+python -m scripts.seed --reset --source taipower --fetch
 
 # Or download the CSV once to data/taipower/wind_turbines.csv, then load offline
-python -m scripts.seed --source taipower --year 2023
+python -m scripts.seed --source taipower --months 24
 #   --csv-path <path>   override the local CSV location
 ```
 

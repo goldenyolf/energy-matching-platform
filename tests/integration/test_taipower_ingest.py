@@ -22,7 +22,7 @@ def csv_file(tmp_path):
 
 
 def test_taipower_rows_import_into_db(db, csv_file):
-    src = TaipowerWindSource(year=2024, csv_path=csv_file)
+    src = TaipowerWindSource(months=4, csv_path=csv_file)
 
     wf_result = csv_importer.import_wind_farms(db, src.wind_farms())
     gen_result = csv_importer.import_generation(db, src.generation())
@@ -37,14 +37,16 @@ def test_taipower_rows_import_into_db(db, csv_file):
     by_start = {g.period_start.isoformat(): g.generated_energy_mwh for g in gens}
     assert by_start["2024-01-01"] == pytest.approx(3000.0)
     assert by_start["2024-02-01"] == pytest.approx(500.0)
-    assert "2024-03-01" not in by_start  # all-missing month dropped
+    assert by_start["2023-12-01"] == pytest.approx(700.0)  # window spans years
+    assert "2023-11-01" not in by_start  # all-missing month dropped
+    assert "2023-10-01" not in by_start  # outside the 4-month window
 
 
 def test_build_source_selects_adapter():
     from scripts.seed import build_source
 
-    taipower = build_source("taipower", year=2024, fetch=False)
+    taipower = build_source("taipower", months=12, fetch=False)
     assert isinstance(taipower, TaipowerWindSource)
 
-    sample = build_source("sample", year=2024, fetch=False)
+    sample = build_source("sample", months=12, fetch=False)
     assert isinstance(sample, CsvDataSource)
