@@ -1,0 +1,55 @@
+# Render Blueprint — deploys the API + Streamlit dashboard from the Dockerfile.
+#
+# Database: bring your own PostgreSQL via DATABASE_URL (Neon recommended — see
+# docs/deployment.md), OR uncomment the `databases:` block at the bottom to use
+# Render's managed Postgres instead.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ---- FastAPI backend -------------------------------------------------------
+  - type: web
+    name: emp-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore          # closest Render region to Taiwan
+    plan: free                 # free web services sleep after ~15 min idle
+    healthCheckPath: /health
+    # Run migrations, then start the server on Render's injected $PORT.
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        sync: false            # paste your Neon URL: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
+      - key: ENVIRONMENT
+        value: production
+      # --- Alternative: use Render Postgres instead of Neon (see block below) ---
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: emp-postgres
+      #     property: connectionString
+
+  # ---- Streamlit dashboard ---------------------------------------------------
+  - type: web
+    name: emp-dashboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore
+    plan: free
+    healthCheckPath: /_stcore/health
+    dockerCommand: sh -c "streamlit run dashboard/Home.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false"
+    envVars:
+      - key: PYTHONPATH
+        value: /app            # so `from dashboard import ...` resolves in the image
+      - key: API_BASE_URL
+        sync: false            # set to the API service URL, e.g. https://emp-api.onrender.com
+
+# ---- Optional: Render-managed Postgres (instead of Neon) ---------------------
+# Uncomment this block AND the `fromDatabase` env var above to use it.
+# NOTE: Render's free Postgres is deleted 90 days after creation — for a durable
+# free demo, Neon is the better choice.
+# databases:
+#   - name: emp-postgres
+#     plan: free
+#     region: singapore

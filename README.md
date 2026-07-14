@@ -115,6 +115,12 @@ make docker-seed                   # load demo data into the container DB
 - Streamlit     → http://localhost:8501
 - The API service runs `alembic upgrade head` on start.
 
+## Cloud deployment
+
+Deploy to **Render** (two web services from the Dockerfile) + **Neon** Postgres
+using the included [`render.yaml`](render.yaml) blueprint. Step-by-step guide:
+[`docs/deployment.md`](docs/deployment.md).
+
 ## Local development
 
 ```bash
