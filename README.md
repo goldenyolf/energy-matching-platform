@@ -117,9 +117,13 @@ make docker-seed                   # load demo data into the container DB
 
 ## Cloud deployment
 
-Deploy to **Render** (two web services from the Dockerfile) + **Neon** Postgres
-using the included [`render.yaml`](render.yaml) blueprint. Step-by-step guide:
-[`docs/deployment.md`](docs/deployment.md).
+Two documented paths, both using the same `Dockerfile` + **Neon** Postgres:
+
+- **Render** — one-click [`render.yaml`](render.yaml) blueprint (two web
+  services). Guide: [`docs/deployment.md`](docs/deployment.md).
+- **Google Cloud Run** — scale-to-zero, `asia-east1` (Taiwan). One-command
+  script [`scripts/deploy_cloudrun.sh`](scripts/deploy_cloudrun.sh). Guide:
+  [`docs/deployment-cloudrun.md`](docs/deployment-cloudrun.md).
 
 ## Local development
 
