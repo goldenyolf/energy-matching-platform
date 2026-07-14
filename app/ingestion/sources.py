@@ -2,8 +2,9 @@
 
 The platform never assumes a specific upstream. A ``DataSource`` yields plain row
 dicts (the same shape as the CSV columns); importers turn those into DB rows. This
-lets us swap a CSV file, a deterministic mock generator, or — in a future phase — a
-real public-data adapter, without touching the rest of the system.
+lets us swap a CSV file, a deterministic mock generator, or a real public-data
+adapter (``app.ingestion.taipower.TaipowerWindSource``) without touching the rest
+of the system.
 """
 
 from __future__ import annotations
@@ -126,16 +127,7 @@ class MockDataGenerator:
         return rows
 
 
-class PublicDataAdapter:
-    """Placeholder for a future public open-data adapter (Phase 2).
-
-    Intentionally not implemented. Any real adapter MUST respect the source
-    site's Terms of Service, robots.txt, authentication and rate limits — this
-    project does not bypass access controls or scrape restricted endpoints.
-    """
-
-    def __init__(self, *_args, **_kwargs) -> None:
-        raise NotImplementedError(
-            "PublicDataAdapter is a Phase-2 placeholder. Implement against a "
-            "documented, legal public API and honour its ToS / robots.txt."
-        )
+# A real public open-data adapter now exists: ``app.ingestion.taipower``'s
+# ``TaipowerWindSource`` reads Taiwan Power Company's wind open data (data.gov.tw
+# dataset 29961). It honours the Government Open Data Licence and does not bypass
+# access controls. See that module for the concrete implementation.

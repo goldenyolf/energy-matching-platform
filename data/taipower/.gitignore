@@ -1,0 +1,6 @@
+# Taipower open-data CSVs are large (~2.4 MB) and fetched on demand — not versioned.
+# Default local path used by: python -m scripts.seed --source taipower
+*.csv
+
+# Keep this directory tracked.
+!.gitignore

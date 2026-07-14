@@ -159,6 +159,28 @@ Example result for `2024-01` (`make seed` then run matching):
 
 Expired (`PPA-2020-007`) and pending (`PPA-2025-008`) contracts are skipped.
 
+## Real data: Taipower wind open data
+
+Besides the bundled demo, the seeder can load **real** wind generation from
+Taiwan Power Company's monthly open dataset
+([data.gov.tw #29961](https://data.gov.tw/dataset/29961), Government Open Data
+Licence). It aggregates the per-turbine rows into one wind farm per station
+(codes prefixed `TPC-`) and one monthly generation total, for a chosen year.
+These `TPC-` farms coexist with the `WF-` demo farms.
+
+```bash
+# Fetch the CSV live and load 2024 (needs httpx: pip install -e ".[ingestion]")
+python -m scripts.seed --reset --source taipower --year 2024 --fetch
+
+# Or download the CSV once to data/taipower/wind_turbines.csv, then load offline
+python -m scripts.seed --source taipower --year 2023
+#   --csv-path <path>   override the local CSV location
+```
+
+Taipower publishes only supply-side data, so customers / contracts / consumption
+stay empty for this source. The dataset covers Taipower's own (mostly onshore)
+stations — offshore IPP farms (Formosa, Changfang, …) are not included.
+
 ## API documentation
 
 Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
