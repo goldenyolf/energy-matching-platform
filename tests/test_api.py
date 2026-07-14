@@ -9,6 +9,14 @@ from app.main import app
 client = TestClient(app)
 
 
+def test_dashboard_served():
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "綠電媒合儀表板" in resp.text
+    assert 'fetch("/match")' in resp.text
+
+
 def test_health():
     resp = client.get("/health")
     assert resp.status_code == 200

@@ -11,18 +11,29 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from . import __version__
 from .data import load_sample_dataset
 from .matching import match
 from .models import Dataset, MatchingResult
 
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 app = FastAPI(
     title="Energy Matching Platform",
     description="台灣綠電交易媒合 MVP：模擬風場、企業綠電合約與 RE 目標分析。",
     version=__version__,
 )
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def dashboard() -> str:
+    """綠電媒合視覺化儀表板 (前端向 /match 取資料後渲染)。"""
+    return (_STATIC_DIR / "dashboard.html").read_text(encoding="utf-8")
 
 
 @app.get("/health", tags=["system"])

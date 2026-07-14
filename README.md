@@ -10,8 +10,9 @@
 - **超額認購自動削減 (curtailment)**：當單一案場的合約需求超過年發電量時，依需求等比例削減。
 - **RE 目標分析**：計算每家企業的綠電覆蓋率、RE 目標缺口與是否達標。
 - **平台總覽**：整體發電量、分配量、剩餘綠電、綠電利用率與達標企業數。
+- **視覺化儀表板**：內建 HTML 儀表板（KPI 卡片 + 企業覆蓋率/RE 目標條圖 + 風場利用率），零外部相依、支援深/淺色。
 - **REST API**（FastAPI，內建 Swagger UI）與 **CLI 展示報表**。
-- **18 個單元／API 測試**，核心演算法為純函式、易於驗證。
+- **19 個單元／API 測試**，核心演算法為純函式、易於驗證。
 
 ## 🏗️ 技術棧
 
@@ -36,10 +37,21 @@ python -m scripts.demo
 # 3. 執行測試
 pytest
 
-# 4. 啟動 API 伺服器
+# 4. 啟動伺服器（儀表板 + API）
 uvicorn app.main:app --reload
-# 開啟 http://127.0.0.1:8000/docs 查看互動式 API 文件
+# 儀表板   → http://127.0.0.1:8000/
+# API 文件 → http://127.0.0.1:8000/docs
 ```
+
+## 🖥️ 視覺化儀表板
+
+啟動伺服器後開啟 `http://127.0.0.1:8000/`，儀表板會向 `/match` 取資料並即時渲染：
+
+- **KPI 卡片**：總發電量、已媒合綠電、綠電利用率、達標企業數、RE 目標總缺口。
+- **企業 RE 目標分析**：每家企業的綠電覆蓋率長條，搭配 RE 目標標記線與達標／缺口標籤。
+- **風場利用情形**：各案場已媒合量佔年發電量的比例與剩餘綠電。
+
+儀表板為單一 HTML 檔（`app/static/dashboard.html`），純 vanilla JS + 內嵌 CSS，**無任何外部 CDN 相依**，並支援深/淺色主題切換。
 
 ## 📊 範例情境輸出
 
@@ -93,10 +105,11 @@ energy-matching-platform/
 │   ├── models.py      # Pydantic 領域模型（案場／企業／合約／結果）
 │   ├── matching.py    # 核心媒合引擎（純函式）
 │   ├── data.py        # 範例資料載入
-│   └── main.py        # FastAPI 應用程式
+│   ├── main.py        # FastAPI 應用程式（儀表板 + API）
+│   └── static/dashboard.html  # 視覺化儀表板（零外部相依）
 ├── data/sample_data.json  # 台灣情境範例資料
 ├── scripts/demo.py    # CLI 展示報表
-├── tests/             # 18 個 pytest 測試
+├── tests/             # 19 個 pytest 測試
 └── docs/              # 架構、資料模型、API 文件
 ```
 
