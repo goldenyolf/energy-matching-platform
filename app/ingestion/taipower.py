@@ -34,9 +34,7 @@ from app.ingestion import parsing as p
 from app.ingestion.csv_importer import parse_csv
 from app.models.enums import WindFarmStatus
 
-DEFAULT_URL = (
-    "https://service.taipower.com.tw/data/opendata/apply/file/d693004/001.csv"
-)
+DEFAULT_URL = "https://service.taipower.com.tw/data/opendata/apply/file/d693004/001.csv"
 DEFAULT_CSV_PATH = Path("data/taipower/wind_turbines.csv")
 DEFAULT_MONTHS = 12
 OPERATOR_NAME = "台灣電力公司"
