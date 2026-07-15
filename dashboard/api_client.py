@@ -80,3 +80,8 @@ def analytics_wind_farms(period: str) -> list[dict]:
 
 def analytics_summary(period: str) -> dict:
     return _get(f"{V1}/analytics/summary", period=period)
+
+
+def live_renewables(force: bool = False) -> dict:
+    params = {"force": "true"} if force else {}
+    return _get(f"{V1}/live/renewables", **params)

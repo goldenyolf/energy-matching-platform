@@ -10,6 +10,7 @@ from app.api.v1 import (
     contracts,
     customers,
     generation,
+    live,
     matching,
     wind_farms,
 )
@@ -22,3 +23,4 @@ api_router.include_router(generation.router)
 api_router.include_router(consumption.router)
 api_router.include_router(matching.router)
 api_router.include_router(analytics.router)
+api_router.include_router(live.router)

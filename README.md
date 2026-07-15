@@ -171,13 +171,21 @@ years). These `TPC-` farms coexist with the `WF-` demo farms.
 
 ```bash
 # Fetch the CSV live and load the last 12 months
-# (needs httpx: pip install -e ".[ingestion]")
 python -m scripts.seed --reset --source taipower --fetch
 
 # Or download the CSV once to data/taipower/wind_turbines.csv, then load offline
 python -m scripts.seed --source taipower --months 24
 #   --csv-path <path>   override the local CSV location
 ```
+
+### Real-time renewables (live monitoring)
+
+`GET /api/v1/live/renewables` reads Taipower's per-unit real-time dataset
+([#8931](https://data.gov.tw/dataset/8931), ~10-min cadence) and returns the
+current wind units and renewable-type totals — **instantaneous MW**, fetched
+read-through with a short cache, never persisted and never used for matching.
+`?force=true` bypasses the cache. The Streamlit dashboard's **Live Renewables**
+page renders it.
 
 Taipower publishes only supply-side data, so customers / contracts / consumption
 stay empty for this source. The dataset covers Taipower's own (mostly onshore)

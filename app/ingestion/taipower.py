@@ -31,6 +31,7 @@ from datetime import date
 from pathlib import Path
 
 from app.ingestion import parsing as p
+from app.ingestion._http import http_get as _http_get
 from app.ingestion.csv_importer import parse_csv
 from app.models.enums import WindFarmStatus
 
@@ -54,19 +55,6 @@ _COLUMN_TOKENS = {
 
 _STATION_SUFFIX = re.compile(r"wind power station$", re.IGNORECASE)
 _NON_SLUG = re.compile(r"[^0-9A-Za-z]+")
-
-
-def _http_get(url: str) -> bytes:
-    """Download ``url`` and return its bytes (httpx is an optional extra)."""
-    try:
-        import httpx
-    except ModuleNotFoundError as exc:  # pragma: no cover - env-dependent
-        raise ModuleNotFoundError(
-            "使用 fetch 需要 httpx。請安裝:pip install '.[ingestion]'"
-        ) from exc
-    resp = httpx.get(url, timeout=30.0, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.content
 
 
 def _num(value: str | None) -> float | None:
