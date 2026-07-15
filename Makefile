@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
 BIN := .venv/bin
 PYTHON := $(BIN)/python
+MONTHS := 12
 
-.PHONY: help install seed test lint format typecheck run dashboard \
+.PHONY: help install seed seed-taipower test lint format typecheck run dashboard \
         migrate revision docker-up docker-down docker-seed clean
 
 help: ## Show this help
@@ -15,6 +16,12 @@ install: ## Create venv (uv preferred) and install deps
 
 seed: ## Load demo data (drops & recreates tables first)
 	$(PYTHON) -m scripts.seed --reset
+
+seed-taipower: ## Full Taipower scenario: demo + real wind (--fetch) + TPC contracts & demand. Override months: make seed-taipower MONTHS=24
+	$(PYTHON) -m scripts.seed --reset --source sample
+	$(PYTHON) -m scripts.seed --source taipower --fetch --months $(MONTHS)
+	$(PYTHON) -m scripts.seed_taipower_contracts
+	$(PYTHON) -m scripts.seed_taipower_demand
 
 test: ## Run tests with coverage on the matching core
 	$(BIN)/pytest --cov=app.matching --cov=app.services --cov-report=term-missing
