@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import DomainError
 from app.ingestion import parsing as p
-from app.models.enums import ContractStatus, WindFarmStatus
+from app.models.enums import ContractStatus, GreenTargetType, WindFarmStatus
 from app.schemas.common import ImportResult
 from app.schemas.consumption import ConsumptionCreate
 from app.schemas.contract import ContractCreate
@@ -80,6 +80,11 @@ def import_customers(db: Session, rows: Iterable[dict]) -> ImportResult:
                 annual_consumption_mwh=p.f(row.get("annual_consumption_mwh")) or 0.0,
                 re_target_percent=p.f(row.get("re_target_percent")) or 0.0,
                 target_year=p.i(row.get("target_year")),
+                green_target_type=GreenTargetType(
+                    p.s(row.get("green_target_type"))
+                    or GreenTargetType.RE_PERCENT.value
+                ),
+                target_energy_mwh=p.f(row.get("target_energy_mwh")),
             )
             customer_svc.create(db, data)
             imported += 1
