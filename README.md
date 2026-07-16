@@ -207,6 +207,7 @@ Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
 | GET | `/api/v1/matching/results` | Allocation results |
 | GET | `/api/v1/analytics/customers`, `/wind-farms`, `/summary` | Analytics |
 | GET | `/api/v1/analytics/evaluation?customer_id=&start=&end=` | Dual-sided sales evaluation (seller gross margin + buyer RE%/cost); dashboard "Evaluation" page renders it |
+| GET | `/api/v1/matching/optimize?period=&min_sites=&min_site_allocation_percent=` | Global economic-optimization matching (MILP): maximize retailer gross margin with RE targets as constraints; dashboard "Optimization" page renders it |
 
 ## Screenshots
 
@@ -215,7 +216,10 @@ _TODO: add dashboard screenshots (Overview / Matching pages)._
 ## Known limitations
 
 - Monthly matching only (no 8760-hour time-matching yet).
-- Greedy priority allocation, not a global optimum.
+- Two matching strategies: deterministic priority (greedy) and global economic
+  optimization (MILP, `GET /matching/optimize`). The greedy engine is the audit
+  baseline; the optimizer maximizes retailer gross margin under RE and structural
+  constraints.
 - No auth/multi-tenancy; demo-scale data.
 - See [`docs/assumptions.md`](docs/assumptions.md) and
   [`docs/roadmap.md`](docs/roadmap.md).
