@@ -282,7 +282,9 @@ def test_optional_fields_default_none_and_ignored_by_engine():
             price_per_kwh=4.5,
         )
     ]
-    out = match_period("2024-01", date(2024, 1, 1), date(2024, 1, 31), farms, demands, contracts)
+    out = match_period(
+        "2024-01", date(2024, 1, 1), date(2024, 1, 31), farms, demands, contracts
+    )
     # engine ignores the new fields; full allocation as before
     assert out.allocations[0].allocated_mwh == 100.0
 

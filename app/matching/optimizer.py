@@ -150,8 +150,10 @@ def optimize_period(
 
     for c in eligible:
         prob += alloc[c.contract_id] <= caps[c.contract_id] * use[c.contract_id]
-        floor = options.min_site_allocation_percent / 100.0 * consumption.get(
-            c.customer_id, 0.0
+        floor = (
+            options.min_site_allocation_percent
+            / 100.0
+            * consumption.get(c.customer_id, 0.0)
         )
         # Always tie `use=1` to a strictly positive allocation (at least a
         # token _EPSILON MWh) so `min_sites_per_customer` cannot be satisfied

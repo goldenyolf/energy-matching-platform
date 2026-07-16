@@ -45,7 +45,9 @@ def test_prefers_higher_margin_farm():
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.0),
     ]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=0.0)]
+    demands = [
+        CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=0.0)
+    ]
     contracts = [
         _contract(1, "C1", 1, 1, price=4.3),  # margin 0.3
         _contract(2, "C2", 2, 1, price=4.9),  # margin 0.9
@@ -64,7 +66,9 @@ def test_re_hard_constraint_met_when_feasible():
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.0),
     ]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=80.0)]
+    demands = [
+        CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=80.0)
+    ]
     # Only the low-margin farm can serve; RE target must still be met.
     contracts = [_contract(1, "C1", 1, 1, price=4.1)]
     out = optimize_period("2024-01", START, END, farms, demands, contracts, OPTS)
@@ -78,7 +82,9 @@ def test_re_hard_constraint_met_when_feasible():
 def test_re_soft_fallback_when_infeasible():
     # Demand 100, target 80, but only 50 MWh of supply exists → shortfall 30.
     farms = [FarmSupply(1, 50.0, feed_in_price_per_kwh=4.0)]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=80.0)]
+    demands = [
+        CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=80.0)
+    ]
     contracts = [_contract(1, "C1", 1, 1, price=4.5)]
     out = optimize_period("2024-01", START, END, farms, demands, contracts, OPTS)
     ct = {c.customer_id: c for c in out.customer_targets}[1]
@@ -89,7 +95,9 @@ def test_re_soft_fallback_when_infeasible():
 
 def test_energy_target_type():
     farms = [FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0)]
-    demands = [CustomerDemand(1, 100.0, green_target_type="energy", target_energy_mwh=25.0)]
+    demands = [
+        CustomerDemand(1, 100.0, green_target_type="energy", target_energy_mwh=25.0)
+    ]
     contracts = [_contract(1, "C1", 1, 1, price=4.5)]
     out = optimize_period("2024-01", START, END, farms, demands, contracts, OPTS)
     ct = {c.customer_id: c for c in out.customer_targets}[1]
@@ -104,7 +112,11 @@ def test_min_sites_forces_spread():
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.0),
     ]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=100.0)]
+    demands = [
+        CustomerDemand(
+            1, 100.0, green_target_type="re_percent", re_target_percent=100.0
+        )
+    ]
     contracts = [
         _contract(1, "C1", 1, 1, price=4.3),
         _contract(2, "C2", 2, 1, price=4.9),
@@ -118,7 +130,11 @@ def test_min_sites_forces_spread():
 
 def test_min_sites_shortfall_when_not_enough_farms():
     farms = [FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0)]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=100.0)]
+    demands = [
+        CustomerDemand(
+            1, 100.0, green_target_type="re_percent", re_target_percent=100.0
+        )
+    ]
     contracts = [_contract(1, "C1", 1, 1, price=4.5)]
     opts = OptimizeOptions(min_sites_per_customer=3, default_feed_in_price_per_kwh=4.0)
     out = optimize_period("2024-01", START, END, farms, demands, contracts, opts)
@@ -134,7 +150,11 @@ def test_min_site_allocation_percent_excludes_slivers():
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.0),
     ]
-    demands = [CustomerDemand(1, 100.0, green_target_type="re_percent", re_target_percent=100.0)]
+    demands = [
+        CustomerDemand(
+            1, 100.0, green_target_type="re_percent", re_target_percent=100.0
+        )
+    ]
     contracts = [
         _contract(1, "C1", 1, 1, price=4.3),
         _contract(2, "C2", 2, 1, price=4.9, energy=5.0),  # capped at 5 MWh
@@ -155,7 +175,9 @@ def test_deterministic_same_and_shuffled_input():
         FarmSupply(3, 60.0, feed_in_price_per_kwh=3.8),
     ]
     demands = [
-        CustomerDemand(1, 120.0, green_target_type="re_percent", re_target_percent=50.0),
+        CustomerDemand(
+            1, 120.0, green_target_type="re_percent", re_target_percent=50.0
+        ),
         CustomerDemand(2, 90.0, green_target_type="re_percent", re_target_percent=70.0),
     ]
     contracts = [
@@ -165,7 +187,9 @@ def test_deterministic_same_and_shuffled_input():
         _contract(4, "C4", 3, 2, price=5.1),
     ]
     a = optimize_period("2024-01", START, END, farms, demands, contracts, OPTS)
-    b = optimize_period("2024-01", START, END, farms, demands, list(reversed(contracts)), OPTS)
+    b = optimize_period(
+        "2024-01", START, END, farms, demands, list(reversed(contracts)), OPTS
+    )
     assert _alloc_map(a) == _alloc_map(b)
 
 
@@ -174,7 +198,9 @@ def test_optimizer_not_worse_than_greedy():
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.0),
     ]
-    demands = [CustomerDemand(1, 150.0, green_target_type="re_percent", re_target_percent=0.0)]
+    demands = [
+        CustomerDemand(1, 150.0, green_target_type="re_percent", re_target_percent=0.0)
+    ]
     # Greedy by priority would serve C1 (low margin) first; optimizer prefers C2.
     contracts = [
         _contract(1, "C1", 1, 1, price=4.2, priority=1),
