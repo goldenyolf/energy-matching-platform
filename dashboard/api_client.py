@@ -93,6 +93,19 @@ def evaluation(
     return _get(f"{V1}/analytics/evaluation", **params)
 
 
+def optimize(
+    period: str,
+    min_sites: int | None = None,
+    min_site_allocation_percent: float | None = None,
+) -> dict:
+    params: dict = {"period": period}
+    if min_sites is not None:
+        params["min_sites"] = min_sites
+    if min_site_allocation_percent is not None:
+        params["min_site_allocation_percent"] = min_site_allocation_percent
+    return _get(f"{V1}/matching/optimize", **params)
+
+
 def live_renewables(force: bool = False) -> dict:
     params = {"force": "true"} if force else {}
     return _get(f"{V1}/live/renewables", **params)
