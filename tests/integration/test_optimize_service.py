@@ -14,8 +14,12 @@ from app.services import optimize_service
 
 @pytest.fixture()
 def seeded(db):
-    f1 = WindFarm(code="F1", name="F1", installed_capacity_mw=100, feed_in_price_per_kwh=4.0)
-    f2 = WindFarm(code="F2", name="F2", installed_capacity_mw=100, feed_in_price_per_kwh=4.0)
+    f1 = WindFarm(
+        code="F1", name="F1", installed_capacity_mw=100, feed_in_price_per_kwh=4.0
+    )
+    f2 = WindFarm(
+        code="F2", name="F2", installed_capacity_mw=100, feed_in_price_per_kwh=4.0
+    )
     cust = Customer(
         code="K1",
         company_name="K1",
@@ -26,11 +30,46 @@ def seeded(db):
     db.flush()
     db.add_all(
         [
-            GenerationData(wind_farm_id=f1.id, period_start=date(2024, 1, 1), period_end=date(2024, 1, 31), generated_energy_mwh=100.0),
-            GenerationData(wind_farm_id=f2.id, period_start=date(2024, 1, 1), period_end=date(2024, 1, 31), generated_energy_mwh=100.0),
-            ConsumptionData(customer_id=cust.id, period_start=date(2024, 1, 1), period_end=date(2024, 1, 31), consumed_energy_mwh=100.0),
-            Contract(contract_number="C1", wind_farm_id=f1.id, customer_id=cust.id, start_date=date(2024, 1, 1), end_date=date(2024, 12, 31), status=ContractStatus.ACTIVE, priority=100, contracted_percentage=100.0, price_per_kwh=4.3),
-            Contract(contract_number="C2", wind_farm_id=f2.id, customer_id=cust.id, start_date=date(2024, 1, 1), end_date=date(2024, 12, 31), status=ContractStatus.ACTIVE, priority=100, contracted_percentage=100.0, price_per_kwh=4.9),
+            GenerationData(
+                wind_farm_id=f1.id,
+                period_start=date(2024, 1, 1),
+                period_end=date(2024, 1, 31),
+                generated_energy_mwh=100.0,
+            ),
+            GenerationData(
+                wind_farm_id=f2.id,
+                period_start=date(2024, 1, 1),
+                period_end=date(2024, 1, 31),
+                generated_energy_mwh=100.0,
+            ),
+            ConsumptionData(
+                customer_id=cust.id,
+                period_start=date(2024, 1, 1),
+                period_end=date(2024, 1, 31),
+                consumed_energy_mwh=100.0,
+            ),
+            Contract(
+                contract_number="C1",
+                wind_farm_id=f1.id,
+                customer_id=cust.id,
+                start_date=date(2024, 1, 1),
+                end_date=date(2024, 12, 31),
+                status=ContractStatus.ACTIVE,
+                priority=100,
+                contracted_percentage=100.0,
+                price_per_kwh=4.3,
+            ),
+            Contract(
+                contract_number="C2",
+                wind_farm_id=f2.id,
+                customer_id=cust.id,
+                start_date=date(2024, 1, 1),
+                end_date=date(2024, 12, 31),
+                status=ContractStatus.ACTIVE,
+                priority=100,
+                contracted_percentage=100.0,
+                price_per_kwh=4.9,
+            ),
         ]
     )
     db.commit()
@@ -52,8 +91,6 @@ def test_compute_optimized_prefers_high_margin(db, seeded):
 
 
 def test_compute_optimized_empty_period(db, seeded):
-    result = optimize_service.compute_optimized(
-        db, "2030-01", OptimizeOptions()
-    )
+    result = optimize_service.compute_optimized(db, "2030-01", OptimizeOptions())
     assert result.objective_gross_margin_ntd == 0.0
     assert all(a.allocated_mwh == 0.0 for a in result.allocations)

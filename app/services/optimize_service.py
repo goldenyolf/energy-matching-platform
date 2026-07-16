@@ -8,9 +8,9 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.matching.engine import ContractInput, CustomerDemand, FarmSupply
 from app.matching.optimizer import OptimizeOptions, optimize_period
 from app.models import Contract, Customer, WindFarm
-from app.matching.engine import ContractInput, CustomerDemand, FarmSupply
 from app.schemas.optimization import (
     OptAllocation,
     OptCustomerSummary,
