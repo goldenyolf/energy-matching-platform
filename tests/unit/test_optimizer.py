@@ -193,6 +193,56 @@ def test_deterministic_same_and_shuffled_input():
     assert _alloc_map(a) == _alloc_map(b)
 
 
+def _targets_map(outcome):
+    return {
+        t.customer_id: (
+            t.allocated_mwh,
+            t.re_shortfall_mwh,
+            t.re_target_met,
+            t.sites_used,
+            t.site_shortfall,
+        )
+        for t in outcome.customer_targets
+    }
+
+
+def test_deterministic_shuffled_demands_and_farms():
+    # Every contract shares the same margin, so the MILP optimum is degenerate
+    # (many allocations tie for the best objective). Determinism must therefore
+    # come from stable internal ordering, not from a unique optimum -- this
+    # covers farms/demands/contracts all being reordered, not just contracts.
+    farms = [
+        FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),
+        FarmSupply(2, 80.0, feed_in_price_per_kwh=4.0),
+        FarmSupply(3, 60.0, feed_in_price_per_kwh=4.0),
+    ]
+    demands = [
+        CustomerDemand(1, 50.0, green_target_type="re_percent", re_target_percent=50.0),
+        CustomerDemand(2, 50.0, green_target_type="re_percent", re_target_percent=50.0),
+        CustomerDemand(3, 50.0, green_target_type="re_percent", re_target_percent=50.0),
+    ]
+    contracts = [
+        _contract(1, "C1", 1, 1, price=4.5),
+        _contract(2, "C2", 2, 1, price=4.5),
+        _contract(3, "C3", 3, 2, price=4.5),
+        _contract(4, "C4", 1, 2, price=4.5),
+        _contract(5, "C5", 2, 3, price=4.5),
+        _contract(6, "C6", 3, 3, price=4.5),
+    ]
+    a = optimize_period("2024-01", START, END, farms, demands, contracts, OPTS)
+    b = optimize_period(
+        "2024-01",
+        START,
+        END,
+        list(reversed(farms)),
+        list(reversed(demands)),
+        list(reversed(contracts)),
+        OPTS,
+    )
+    assert _alloc_map(a) == _alloc_map(b)
+    assert _targets_map(a) == _targets_map(b)
+
+
 def test_optimizer_not_worse_than_greedy():
     farms = [
         FarmSupply(1, 100.0, feed_in_price_per_kwh=4.0),

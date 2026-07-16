@@ -75,9 +75,10 @@ utilization_percent = allocated_from_farm / farm_generation × 100
 ## Limitations & future optimisation
 
 - Monthly granularity only — no 8760-hour time-matching yet (Phase 2).
-- Greedy priority allocation, not a global optimum. A future phase can replace
-  the greedy pass with a linear program that minimises total gap or cost while
-  respecting the same constraints (Phase 3).
+- Two matching strategies exist: the deterministic greedy priority engine above
+  (fast, priority-ordered, not a global optimum) and the MILP economic
+  optimizer (`optimize_period`, `GET /matching/optimize`) documented below,
+  which solves for a global optimum over the same constraints (Phase 3).
 - No inter-farm portfolio balancing or curtailment forecasting yet.
 
 ## 經濟最佳化媒合(optimizer)

@@ -80,6 +80,12 @@ def optimize_period(
     options: OptimizeOptions,
 ) -> OptimizationOutcome:
     """Solve the monthly economic optimization and return a full outcome."""
+    # Normalize input order so a non-unique MILP optimum can't differ just
+    # because farms/demands were reordered (contracts are already re-sorted
+    # into `ordered` below; this extends the same determinism guarantee).
+    farms = sorted(farms, key=lambda f: f.farm_id)
+    demands = sorted(demands, key=lambda d: d.customer_id)
+
     generation = {f.farm_id: f.generated_mwh for f in farms}
     consumption = {d.customer_id: d.consumed_mwh for d in demands}
     farm_by_id = {f.farm_id: f for f in farms}
@@ -266,7 +272,11 @@ def optimize_period(
                 re_target_mwh=round(target, 6),
                 allocated_mwh=allocated,
                 re_shortfall_mwh=shortfall,
-                re_target_met=shortfall <= _EPS,
+                # shortfall is quantized to 6 decimal places (round(..., 6)), so
+                # the met-test tolerance must match that rounding grain rather
+                # than the much tighter _EPS, or an essentially-met target can
+                # be falsely reported as not met.
+                re_target_met=shortfall <= 1e-6,
                 sites_used=sites_used,
                 site_shortfall=max(0, min_sites - sites_used),
             )
