@@ -251,6 +251,5 @@ Phase 1 MVP (this release) → Phase 2 public data & quality → Phase 3 optimis
 - 技術棧：FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL · Streamlit，
   搭配 Docker、GitHub Actions CI、Ruff/Black/mypy、pytest（媒合核心覆蓋率 ≥ 80%）。
 - 快速開始：`make install` → `make seed` → `make run`（API）→ `make dashboard`（儀表板）。
-- 重要聲明：Demo 資料皆為**模擬資料**，與台電、台智電或任何能源公司**無官方關係**，
-  亦非正式的結算、憑證移轉或交易系統。公開資料的使用須遵守來源網站規範，本專案不繞過
+- 重要聲明：Demo 資料皆為**模擬資料**，亦非正式的結算、憑證移轉或交易系統。公開資料的使用須遵守來源網站規範，本專案不繞過
   任何驗證、robots.txt 或存取限制。
