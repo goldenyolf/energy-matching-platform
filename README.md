@@ -206,6 +206,7 @@ Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
 | POST/GET | `/api/v1/matching/runs`, `/runs/{id}` | Run & inspect matching |
 | GET | `/api/v1/matching/results` | Allocation results |
 | GET | `/api/v1/analytics/customers`, `/wind-farms`, `/summary` | Analytics |
+| GET | `/api/v1/analytics/evaluation?customer_id=&start=&end=` | Dual-sided sales evaluation (seller gross margin + buyer RE%/cost); dashboard "Evaluation" page renders it |
 
 ## Screenshots
 
