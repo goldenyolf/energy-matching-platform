@@ -54,6 +54,7 @@ def import_wind_farms(db: Session, rows: Iterable[dict]) -> ImportResult:
                 operator_name=p.s(row.get("operator_name")),
                 location=p.s(row.get("location")),
                 installed_capacity_mw=p.f(row.get("installed_capacity_mw")),
+                feed_in_price_per_kwh=p.f(row.get("feed_in_price_per_kwh")),
                 commercial_operation_date=p.d(row.get("commercial_operation_date")),
                 status=WindFarmStatus(
                     p.s(row.get("status")) or WindFarmStatus.OPERATIONAL.value
