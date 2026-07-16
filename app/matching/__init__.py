@@ -9,6 +9,8 @@ from app.matching.engine import (
     FarmSupply,
     MatchingOutcome,
     SkippedContract,
+    build_customer_summary,
+    build_farm_summary,
     match_period,
 )
 
@@ -21,5 +23,7 @@ __all__ = [
     "FarmSummary",
     "MatchingOutcome",
     "SkippedContract",
+    "build_customer_summary",
+    "build_farm_summary",
     "match_period",
 ]
