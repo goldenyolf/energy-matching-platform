@@ -24,3 +24,8 @@ class MatchingRunStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class GreenTargetType(StrEnum):
+    RE_PERCENT = "re_percent"
+    ENERGY = "energy"

@@ -82,6 +82,17 @@ def analytics_summary(period: str) -> dict:
     return _get(f"{V1}/analytics/summary", period=period)
 
 
+def evaluation(
+    customer_id: int, start: str | None = None, end: str | None = None
+) -> dict:
+    params: dict = {"customer_id": customer_id}
+    if start:
+        params["start"] = start
+    if end:
+        params["end"] = end
+    return _get(f"{V1}/analytics/evaluation", **params)
+
+
 def live_renewables(force: bool = False) -> dict:
     params = {"force": "true"} if force else {}
     return _get(f"{V1}/live/renewables", **params)

@@ -25,6 +25,7 @@ class WindFarm(Base, TimestampMixin):
     operator_name: Mapped[str | None] = mapped_column(String(200), default=None)
     location: Mapped[str | None] = mapped_column(String(200), default=None)
     installed_capacity_mw: Mapped[float] = mapped_column(Float)
+    feed_in_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
     commercial_operation_date: Mapped[date | None] = mapped_column(Date, default=None)
     status: Mapped[WindFarmStatus] = mapped_column(
         Enum(WindFarmStatus), default=WindFarmStatus.OPERATIONAL

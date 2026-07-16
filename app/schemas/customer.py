@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import GreenTargetType
+
 
 class CustomerBase(BaseModel):
     code: str = Field(..., max_length=50, examples=["CUST-TSMC"])
@@ -14,6 +16,8 @@ class CustomerBase(BaseModel):
     annual_consumption_mwh: float = Field(0.0, ge=0)
     re_target_percent: float = Field(0.0, ge=0, le=100)
     target_year: int | None = Field(default=None, ge=2000, le=2100)
+    green_target_type: GreenTargetType = GreenTargetType.RE_PERCENT
+    target_energy_mwh: float | None = Field(default=None, ge=0)
 
 
 class CustomerCreate(CustomerBase):

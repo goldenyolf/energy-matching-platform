@@ -11,7 +11,9 @@ from app.schemas.analytics import (
     PeriodSummary,
     WindFarmAnalytics,
 )
+from app.schemas.evaluation import EvaluationResult
 from app.services import analytics_service as svc
+from app.services import evaluation as eval_svc
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -37,3 +39,13 @@ def period_summary(
     period: str = _period, db: Session = Depends(get_db)
 ) -> PeriodSummary:
     return svc.period_summary(db, period)
+
+
+@router.get("/evaluation", response_model=EvaluationResult)
+def evaluation(
+    customer_id: int = Query(..., ge=1),
+    start: str | None = Query(None, examples=["2025-01"]),
+    end: str | None = Query(None, examples=["2025-12"]),
+    db: Session = Depends(get_db),
+) -> EvaluationResult:
+    return eval_svc.evaluate(db, customer_id, start=start, end=end)
