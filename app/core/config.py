@@ -27,5 +27,9 @@ class Settings(BaseSettings):
     # Streamlit dashboard → backend base URL
     api_base_url: str = "http://localhost:8000"
 
+    # Economics (P2 evaluation) — NTD/kWh
+    grey_price_per_kwh: float = 3.0
+    default_feed_in_price_per_kwh: float = 4.0
+
 
 settings = Settings()
