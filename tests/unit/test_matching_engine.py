@@ -245,3 +245,59 @@ def test_reason_reports_binding_constraint():
         [contract(1, 1, 1, pct=100)],
     )
     assert "wind farm supply" in out.allocations[0].reason
+
+
+def test_optional_fields_default_none_and_ignored_by_engine():
+    from datetime import date
+
+    from app.matching.engine import (
+        ContractInput,
+        CustomerDemand,
+        FarmSupply,
+        match_period,
+    )
+
+    farms = [FarmSupply(farm_id=1, generated_mwh=100.0, feed_in_price_per_kwh=4.0)]
+    demands = [
+        CustomerDemand(
+            customer_id=1,
+            consumed_mwh=100.0,
+            green_target_type="re_percent",
+            re_target_percent=50.0,
+            target_energy_mwh=None,
+        )
+    ]
+    contracts = [
+        ContractInput(
+            contract_id=1,
+            contract_number="C1",
+            wind_farm_id=1,
+            customer_id=1,
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 12, 31),
+            status="active",
+            priority=100,
+            contracted_energy_mwh=None,
+            contracted_percentage=None,
+            price_per_kwh=4.5,
+        )
+    ]
+    out = match_period(
+        "2024-01", date(2024, 1, 1), date(2024, 1, 31), farms, demands, contracts
+    )
+    # engine ignores the new fields; full allocation as before
+    assert out.allocations[0].allocated_mwh == 100.0
+
+
+def test_summary_helpers_match_inline_math():
+    from app.matching.engine import build_customer_summary, build_farm_summary
+
+    cs = build_customer_summary(1, 100.0, 55.5555555)
+    # 55.5555555 is not exactly representable as a float (it is really
+    # 55.55555549999...), so round(x, 6) correctly yields 55.555555.
+    assert cs.allocated_mwh == 55.555555
+    assert cs.achieved_re_percent == 55.555555
+    cs0 = build_customer_summary(2, 0.0, 0.0)
+    assert cs0.achieved_re_percent == 0.0
+    fs = build_farm_summary(1, 100.0, 40.0)
+    assert fs.unallocated_mwh == 60.0

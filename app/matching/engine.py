@@ -29,12 +29,16 @@ _EPS = 1e-9
 class FarmSupply:
     farm_id: int
     generated_mwh: float
+    feed_in_price_per_kwh: float | None = None
 
 
 @dataclass(frozen=True)
 class CustomerDemand:
     customer_id: int
     consumed_mwh: float
+    green_target_type: str | None = None
+    re_target_percent: float | None = None
+    target_energy_mwh: float | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,7 @@ class ContractInput:
     priority: int = 100
     contracted_energy_mwh: float | None = None
     contracted_percentage: float | None = None
+    price_per_kwh: float | None = None
 
 
 @dataclass
@@ -154,6 +159,30 @@ def _reason(
     return f"allocated {round(allocation, 3)} MWh (limited by {where})"
 
 
+def build_customer_summary(
+    customer_id: int, consumption_mwh: float, allocated_mwh: float
+) -> CustomerSummary:
+    """Per-customer allocation summary (shared by the engine and the optimizer)."""
+    allocated = round(allocated_mwh, 6)
+    achieved = (
+        round(allocated / consumption_mwh * 100.0, 6) if consumption_mwh > 0 else 0.0
+    )
+    return CustomerSummary(customer_id, consumption_mwh, allocated, achieved)
+
+
+def build_farm_summary(
+    farm_id: int, generated_mwh: float, allocated_mwh: float
+) -> FarmSummary:
+    """Per-farm allocation summary (shared by the engine and the optimizer)."""
+    allocated = round(allocated_mwh, 6)
+    return FarmSummary(
+        farm_id=farm_id,
+        generated_mwh=generated_mwh,
+        allocated_mwh=allocated,
+        unallocated_mwh=round(generated_mwh - allocated, 6),
+    )
+
+
 def match_period(
     period: str,
     period_start: date,
@@ -219,22 +248,20 @@ def match_period(
             )
 
     for d in demands:
-        allocated = round(allocated_to_customer.get(d.customer_id, 0.0), 6)
-        achieved = (
-            round(allocated / d.consumed_mwh * 100.0, 6) if d.consumed_mwh > 0 else 0.0
-        )
         outcome.customer_summaries.append(
-            CustomerSummary(d.customer_id, d.consumed_mwh, allocated, achieved)
+            build_customer_summary(
+                d.customer_id,
+                d.consumed_mwh,
+                allocated_to_customer.get(d.customer_id, 0.0),
+            )
         )
 
     for f in farms:
-        allocated = round(allocated_to_farm.get(f.farm_id, 0.0), 6)
         outcome.farm_summaries.append(
-            FarmSummary(
-                farm_id=f.farm_id,
-                generated_mwh=f.generated_mwh,
-                allocated_mwh=allocated,
-                unallocated_mwh=round(f.generated_mwh - allocated, 6),
+            build_farm_summary(
+                f.farm_id,
+                f.generated_mwh,
+                allocated_to_farm.get(f.farm_id, 0.0),
             )
         )
 

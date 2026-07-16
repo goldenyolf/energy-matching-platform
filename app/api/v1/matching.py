@@ -6,13 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.core.config import settings
+from app.matching.optimizer import OptimizeOptions
 from app.schemas.matching import (
     MatchingResultRead,
     MatchingRunCreate,
     MatchingRunDetail,
     MatchingRunRead,
 )
+from app.schemas.optimization import OptimizationResult
 from app.services import matching_service as svc
+from app.services import optimize_service
 
 router = APIRouter(prefix="/matching", tags=["matching"])
 
@@ -56,3 +60,25 @@ def list_results(
     return svc.list_results(
         db, run_id=run_id, period=period, limit=limit, offset=offset
     )
+
+
+@router.get("/optimize", response_model=OptimizationResult)
+def optimize(
+    period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
+    min_sites: int | None = Query(default=None, ge=0),
+    min_site_allocation_percent: float | None = Query(default=None, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+) -> OptimizationResult:
+    """Global economic-optimization matching for a period (compute-only)."""
+    options = OptimizeOptions(
+        min_sites_per_customer=(
+            settings.optimize_min_sites_per_customer if min_sites is None else min_sites
+        ),
+        min_site_allocation_percent=(
+            settings.optimize_min_site_allocation_percent
+            if min_site_allocation_percent is None
+            else min_site_allocation_percent
+        ),
+        default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
+    )
+    return optimize_service.compute_optimized(db, period, options)

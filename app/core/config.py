@@ -31,5 +31,9 @@ class Settings(BaseSettings):
     grey_price_per_kwh: float = 3.0
     default_feed_in_price_per_kwh: float = 4.0
 
+    # Economic optimizer (P3) — structural constraints, off by default
+    optimize_min_sites_per_customer: int = 0
+    optimize_min_site_allocation_percent: float = 0.0
+
 
 settings = Settings()
