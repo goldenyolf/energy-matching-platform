@@ -83,7 +83,7 @@
 - 儀表板頁 `dashboard/pages/6_Evaluation.py`:選客戶 + 期間 → 顯示雙欄報表(像 PDF p7)。
 
 ## 邊界與決策
-- 風場未填收購價 → 回退 `default_feed_in_price_per_kwh`,並於回應標記 `used_default_price`。
+- 風場未填收購價 → 回退 `default_feed_in_price_per_kwh`,並於回應標記 `used_default_feed_in_price`。
 - 期間內無媒合/無用電 → 各金額 0、比率 0(不報錯)。
 - 一客戶多合約多風場多月 → 逐筆分配加總(不同合約可有不同售價)。
 
