@@ -36,3 +36,5 @@ htmlcov/
 
 # Claude Code / agent session config
 .claude/
+.agents/
+.superpowers/
