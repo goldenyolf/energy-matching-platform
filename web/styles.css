@@ -195,6 +195,8 @@ thead th{font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.04em;
 tbody td{border-bottom:1px solid var(--line)}
 tbody tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:var(--surface-2)}
+tbody tr.totalrow td{border-top:2px solid var(--line-strong);font-weight:650;background:var(--surface-2)}
+tbody tr.totalrow:hover td{background:var(--surface-2)}
 td.empty{text-align:center;color:var(--faint);padding:22px}
 .code{font-family:var(--font-mono);font-weight:600;color:var(--brand)}
 .barcell{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}

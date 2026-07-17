@@ -59,6 +59,12 @@
       return get("/analytics/evaluation", { customer_id: customerId, start: start, end: end });
     },
     slots: function (period) { return get("/matching/slots", { period: period }); },
+    investment: function (capexPerMw, omRatePercent) {
+      return get("/analytics/investment", {
+        capex_per_mw: capexPerMw,
+        om_rate_percent: omRatePercent,
+      });
+    },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,

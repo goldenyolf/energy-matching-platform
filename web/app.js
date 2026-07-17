@@ -58,7 +58,8 @@
     var r = parseHash();
     var views = {
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
-      contracts: renderContracts, evaluate: renderEvaluate, live: renderLive,
+      contracts: renderContracts, evaluate: renderEvaluate, investment: renderInvestment,
+      live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); return; }
     var known = views[r.route];
@@ -314,6 +315,97 @@
       html += '<div class="foot-note">' + iconInfo() + "示範資料為模擬。各時段發電由 generate_slot_profiles 依風電典型占比拆分(離峰較高)。</div>";
       body.innerHTML = html;
     }).catch(function (err) { body.innerHTML = errbox("載入發電案場", err); });
+  }
+
+  // ---------- 投資效益 (ROI / 回收期) ----------
+  function yi(n) {
+    if (n == null || isNaN(n)) return "–";
+    return (Number(n) / 1e8).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function paybackCell(y) {
+    if (y == null) return '<span class="neg">無法回收</span>';
+    return nfmt(y, 1) + " 年";
+  }
+  function roiCls(r) { return r == null || r < 0 ? "neg" : r >= 8 ? "pos" : "prem"; }
+
+  function renderInvestment() {
+    crumb.textContent = "投資效益";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>投資效益</h1></div>' +
+      '<div class="meta"><span>逐案場與組合的 CAPEX、年淨利、投報率(ROI)與回收期;每 MW 建置成本與 O&amp;M 費率可覆寫。</span></div></div>' +
+      '<form class="formcard" id="invForm"><div class="formgrid">' +
+      '<div class="field"><label>每 MW 建置成本</label><input id="i-capex" class="num" type="number" min="1" step="1000000" placeholder="載入中…"><span class="hint">NTD / MW · 可覆寫</span></div>' +
+      '<div class="field"><label>年 O&amp;M 費率</label><input id="i-om" class="num" type="number" min="0" max="100" step="0.5" placeholder="載入中…"><span class="hint">% of CAPEX · 可覆寫</span></div>' +
+      '</div><div class="formactions"><button class="btn primary" type="submit">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>計算投資效益</button></div></form>' +
+      '<div id="inv-body"><div class="placeholder">載入中…</div></div>';
+
+    var capexEl = document.getElementById("i-capex");
+    var omEl = document.getElementById("i-om");
+    var body = document.getElementById("inv-body");
+    var loaded = false;
+
+    function load(capex, om) {
+      showModal("正在計算投資效益…");
+      api.investment(capex, om)
+        .then(function (r) {
+          if (!loaded) { capexEl.value = r.capex_per_mw; omEl.value = r.om_rate_percent; loaded = true; }
+          renderInvestmentResult(body, r);
+        })
+        .catch(function (err) { body.innerHTML = errbox("計算投資效益", err); })
+        .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+    }
+
+    document.getElementById("invForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var cv = capexEl.value.trim(), ov = omEl.value.trim();
+      load(cv === "" ? null : parseFloat(cv), ov === "" ? null : parseFloat(ov));
+    });
+    load(null, null);
+  }
+
+  function renderInvestmentResult(body, r) {
+    var farms = (r.farms || []).slice().sort(function (a, b) { return b.roi_percent - a.roi_percent; });
+    var t = r.total;
+    var netCls = t.annual_net >= 0 ? "pos" : "neg";
+    var rCls = roiCls(t.roi_percent);
+    var html = '<div class="kpis" style="grid-template-columns:repeat(4,1fr)">' +
+      kpi("總 CAPEX", yi(t.capex) + "<small>億</small>", nfmt(t.capacity_mw, 0) + " MW 裝置容量", "hl") +
+      kpi("年淨利", '<span class="' + netCls + '">' + yi(t.annual_net) + "</span><small>億</small>", "年收入 − O&amp;M") +
+      kpi("組合 ROI", '<span class="' + rCls + '">' + pct(t.roi_percent, 1) + "</span><small>%/年</small>", "年淨利 / CAPEX") +
+      kpi("組合回收期", t.payback_years == null ? '<span class="neg">–</span>' : nfmt(t.payback_years, 1) + "<small>年</small>", t.payback_years == null ? "當前假設下無法回收" : "靜態回收(未折現)") +
+      "</div>";
+
+    html += '<section class="card"><div class="hd"><h3>逐案場投資效益</h3><span class="aside">' + farms.length +
+      " 場 · 依 ROI 排序</span></div><div class=\"tablewrap\"><table>" +
+      "<thead><tr><th>案場</th><th>裝置容量 (MW)</th><th>年發電 (MWh)</th><th>躉售價</th>" +
+      "<th>年收入 (億)</th><th>CAPEX (億)</th><th>年 O&amp;M (億)</th><th>年淨利 (億)</th><th>ROI (%/年)</th><th>回收期</th></tr></thead><tbody>";
+    farms.forEach(function (f) {
+      html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td>" +
+        "<td class=\"num\">" + nfmt(f.capacity_mw, 1) + "</td>" +
+        "<td class=\"num\">" + nfmt(f.annual_generation_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + price(f.selling_price_per_kwh) + "</td>" +
+        "<td class=\"num\">" + yi(f.annual_revenue) + "</td>" +
+        "<td class=\"num\">" + yi(f.capex) + "</td>" +
+        "<td class=\"num\">" + yi(f.annual_om) + "</td>" +
+        "<td class=\"num\" style=\"font-weight:700\"><span class=\"" + (f.annual_net >= 0 ? "pos" : "neg") + "\">" + yi(f.annual_net) + "</span></td>" +
+        "<td class=\"num\"><span class=\"" + roiCls(f.roi_percent) + "\">" + pct(f.roi_percent, 1) + "</span></td>" +
+        "<td class=\"num\">" + paybackCell(f.payback_years) + "</td></tr>";
+    });
+    html += "<tr class=\"totalrow\"><td style=\"font-weight:700\">組合總計</td>" +
+      "<td class=\"num\">" + nfmt(t.capacity_mw, 1) + "</td>" +
+      "<td class=\"num\">" + nfmt(t.annual_generation_mwh, 0) + "</td><td class=\"num\">–</td>" +
+      "<td class=\"num\">" + yi(t.annual_revenue) + "</td>" +
+      "<td class=\"num\">" + yi(t.capex) + "</td>" +
+      "<td class=\"num\">" + yi(t.annual_om) + "</td>" +
+      "<td class=\"num\" style=\"font-weight:700\"><span class=\"" + netCls + "\">" + yi(t.annual_net) + "</span></td>" +
+      "<td class=\"num\"><span class=\"" + rCls + "\">" + pct(t.roi_percent, 1) + "</span></td>" +
+      "<td class=\"num\">" + paybackCell(t.payback_years) + "</td></tr>";
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() +
+      "CAPEX = 裝置容量 × 每 MW 成本;年收入 = 年發電 × 躉售價;年淨利 = 年收入 − 年 O&amp;M;" +
+      "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。</div>";
+    body.innerHTML = html;
   }
 
   // ---------- flagship: 最佳化評估 ----------
