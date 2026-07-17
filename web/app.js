@@ -45,9 +45,9 @@
 
   // ---------- router ----------
   function parseHash() {
-    var h = (location.hash || "#/evaluate").replace(/^#\/?/, "");
+    var h = (location.hash || "#/overview").replace(/^#\/?/, "");
     var parts = h.split("?");
-    var route = parts[0] || "evaluate";
+    var route = parts[0] || "overview";
     var params = {};
     (parts[1] || "").split("&").forEach(function (kv) {
       if (!kv) return; var p = kv.split("="); params[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || "");
@@ -56,9 +56,14 @@
   }
   function route() {
     var r = parseHash();
-    if (r.route === "farms") { renderFarms(); setActive("farms"); }
-    else if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); }
-    else { renderEvaluate(); setActive("evaluate"); }
+    var views = {
+      overview: renderOverview, farms: renderFarms, customers: renderCustomers,
+      contracts: renderContracts, evaluate: renderEvaluate, live: renderLive,
+    };
+    if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); return; }
+    var known = views[r.route];
+    (known || renderOverview)();
+    setActive(known ? r.route : "overview");
   }
   nav.addEventListener("click", function (e) {
     var a = e.target.closest("a"); if (!a || a.classList.contains("off")) return;
@@ -82,6 +87,177 @@
       '<div class="placeholder"><div class="big">' + s[0] + "</div>" +
       "<h2>此頁目前於 Streamlit 儀表板檢視</h2>" +
       "<p>" + esc(s[2]) + " 這一頁尚未移轉到新版介面;請於 Streamlit 儀表板(預設 http://localhost:8501)操作。新版將於後續逐頁移轉。</p></div>";
+  }
+
+  // ---------- shared: period-driven pages ----------
+  function pageHeadWithPeriod(title, subtitle, id) {
+    return '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>' + esc(title) + "</h1></div>" +
+      '<div class="meta"><span>' + esc(subtitle) + "</span></div></div>" +
+      '<div class="headactions"><input id="' + id + '-period" class="period-input num" value="2024-01" placeholder="2024-01">' +
+      '<button class="btn primary" id="' + id + '-go">查詢</button></div></div>' +
+      '<div id="' + id + '-body"><div class="placeholder">載入中…</div></div>';
+  }
+  function bindPeriod(id, fn) {
+    var go = document.getElementById(id + "-go");
+    var inp = document.getElementById(id + "-period");
+    if (go) go.addEventListener("click", fn);
+    if (inp) inp.addEventListener("keydown", function (e) { if (e.key === "Enter") fn(); });
+  }
+  function periodVal(id) { var el = document.getElementById(id + "-period"); return el ? el.value.trim() : "2024-01"; }
+  function reCell(v) {
+    var w = Math.max(0, Math.min(100, v || 0));
+    return pct(v) + "%<span class=\"re-bar\"><i style=\"width:" + w.toFixed(0) + "%\"></i></span>";
+  }
+  function metPill(met) {
+    return met
+      ? '<span class="pill ok"><span class="dot"></span>達標</span>'
+      : '<span class="pill warnp"><span class="dot"></span>未達</span>';
+  }
+  function contractStatusPill(s) {
+    var m = { active: ["有效", "ok"], pending: ["待生效", "warnp"], expired: ["已到期", "warnp"], terminated: ["已終止", "warnp"] };
+    var x = m[s] || [s, "warnp"];
+    return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + esc(x[0]) + "</span>";
+  }
+
+  // ---------- 總覽 ----------
+  function renderOverview() {
+    crumb.textContent = "總覽";
+    view.innerHTML = pageHeadWithPeriod("總覽", "平台整體:發電、分配、RE 達成與案場利用率。", "ov");
+    bindPeriod("ov", loadOverview);
+    loadOverview();
+  }
+  function loadOverview() {
+    var period = periodVal("ov"), body = document.getElementById("ov-body");
+    body.innerHTML = '<div class="placeholder">載入中…</div>';
+    Promise.all([api.analyticsSummary(period), api.analyticsCustomers(period), api.analyticsWindFarms(period)])
+      .then(function (r) {
+        var s = r[0], custs = r[1], farms = r[2];
+        var html = '<div class="kpis">' +
+          kpi("總發電量", nfmt(s.total_generation_mwh, 0) + "<small>MWh</small>", "", "hl") +
+          kpi("已分配", nfmt(s.total_allocated_mwh, 0) + "<small>MWh</small>", "未分配 " + nfmt(s.total_unallocated_mwh, 0)) +
+          kpi("平均 RE 達成", pct(s.average_re_percent) + "<small>%</small>", "") +
+          kpi("總用電量", nfmt(s.total_consumption_mwh, 0) + "<small>MWh</small>", "") +
+          kpi("客戶", s.customer_count + "<small>戶</small>", "達標 " + s.customers_meeting_target + " / " + s.customer_count) +
+          kpi("風場", s.wind_farm_count + "<small>場</small>", "") +
+          "</div><div class=\"grid\">";
+        html += '<section class="card"><div class="hd"><h3>各客戶 RE 達成</h3><span class="aside">' + esc(s.period) + "</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>客戶</th><th>用電 (MWh)</th><th>綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>達標</th></tr></thead><tbody>";
+        custs.forEach(function (c) {
+          html += "<tr><td>" + esc(c.company_name) + "</td><td class=\"num\">" + nfmt(c.consumption_mwh, 0) + "</td><td class=\"num\">" + nfmt(c.allocated_mwh, 0) +
+            "</td><td class=\"num\">" + reCell(c.achieved_re_percent) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td>" + metPill(c.target_met) + "</td></tr>";
+        });
+        html += "</tbody></table></div></section>";
+        html += '<section class="card"><div class="hd"><h3>各風場利用率</h3><span class="aside">' + esc(s.period) + "</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>風場</th><th>發電 (MWh)</th><th>已分配 (MWh)</th><th>未分配 (MWh)</th><th>利用率</th></tr></thead><tbody>";
+        farms.forEach(function (f) {
+          html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td><td class=\"num\">" + nfmt(f.generated_mwh, 0) +
+            "</td><td class=\"num\">" + nfmt(f.allocated_mwh, 0) + "</td><td class=\"num\">" + nfmt(f.unallocated_mwh, 0) + "</td><td class=\"num\">" + reCell(f.utilization_percent) + "</td></tr>";
+        });
+        html += "</tbody></table></div></section></div>";
+        body.innerHTML = html;
+      })
+      .catch(function (err) { body.innerHTML = errbox("載入總覽", err); });
+  }
+
+  // ---------- 企業客戶 ----------
+  function renderCustomers() {
+    crumb.textContent = "企業客戶";
+    view.innerHTML = pageHeadWithPeriod("企業客戶", "客戶基本資料與 RE 目標達成分析。", "cu");
+    bindPeriod("cu", loadCustomers);
+    loadCustomers();
+  }
+  function loadCustomers() {
+    var period = periodVal("cu"), body = document.getElementById("cu-body");
+    body.innerHTML = '<div class="placeholder">載入中…</div>';
+    Promise.all([api.customers(), api.analyticsCustomers(period)])
+      .then(function (r) {
+        var custs = r[0], an = r[1];
+        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3></div><div class="tablewrap"><table>' +
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th></tr></thead><tbody>";
+        custs.forEach(function (c) {
+          html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
+            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td></tr>";
+        });
+        html += "</tbody></table></div></section>";
+        html += '<section class="card section-gap"><div class="hd"><h3>RE 目標達成分析</h3><span class="aside">' + esc(period) + "</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>客戶</th><th>用電 (MWh)</th><th>綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>缺口 (MWh)</th><th>達標</th></tr></thead><tbody>";
+        an.forEach(function (c) {
+          html += "<tr><td>" + esc(c.company_name) + "</td><td class=\"num\">" + nfmt(c.consumption_mwh, 0) + "</td><td class=\"num\">" + nfmt(c.allocated_mwh, 0) +
+            "</td><td class=\"num\">" + reCell(c.achieved_re_percent) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + nfmt(c.gap_to_target_mwh, 0) + "</td><td>" + metPill(c.target_met) + "</td></tr>";
+        });
+        html += "</tbody></table></div></section>";
+        body.innerHTML = html;
+      })
+      .catch(function (err) { body.innerHTML = errbox("載入客戶", err); });
+  }
+
+  // ---------- 綠電合約 ----------
+  function renderContracts() {
+    crumb.textContent = "綠電合約";
+    view.innerHTML = '<div class="pagehead"><div class="title"><span class="bar"></span><h1>綠電合約</h1></div>' +
+      '<div class="meta"><span>PPA 合約清單:風場、客戶、費率、比例、優先序、狀態。</span></div></div>' +
+      '<div id="ct-body"><div class="placeholder">載入中…</div></div>';
+    var body = document.getElementById("ct-body");
+    Promise.all([api.contracts(), api.windFarms(), api.customers()])
+      .then(function (r) {
+        var cs = r[0], fm = {}, cm = {};
+        r[1].forEach(function (f) { fm[f.id] = f.code; });
+        r[2].forEach(function (c) { cm[c.id] = c.code; });
+        var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th></tr></thead><tbody>";
+        cs.forEach(function (c) {
+          html += "<tr><td class=\"code\">" + esc(c.contract_number) + "</td><td>" + esc(fm[c.wind_farm_id] || c.wind_farm_id) + "</td><td>" + esc(cm[c.customer_id] || c.customer_id) +
+            "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) +
+            "</td><td class=\"num\">" + (c.contracted_energy_mwh != null ? nfmt(c.contracted_energy_mwh, 0) : "–") +
+            "</td><td class=\"num\">" + (c.contracted_percentage != null ? pct(c.contracted_percentage, 0) + "%" : "–") +
+            "</td><td class=\"num\">" + (c.price_per_kwh != null ? price(c.price_per_kwh) : "–") +
+            "</td><td class=\"num\">" + c.priority + "</td><td>" + contractStatusPill(c.status) + "</td></tr>";
+        });
+        html += "</tbody></table></div></section>";
+        body.innerHTML = html;
+      })
+      .catch(function (err) { body.innerHTML = errbox("載入合約", err); });
+  }
+
+  // ---------- 即時再生能源 ----------
+  function renderLive() {
+    crumb.textContent = "即時再生能源";
+    view.innerHTML = '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>即時再生能源</h1></div>' +
+      '<div class="meta"><span>台電各機組即時發電(約 10 分更新);瞬時 MW,不進媒合。</span></div></div>' +
+      '<div class="headactions"><button class="btn ghost" id="lv-refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>重新整理</button></div></div>' +
+      '<div id="lv-body"><div class="placeholder">載入中…</div></div>';
+    document.getElementById("lv-refresh").addEventListener("click", function () { loadLive(true); });
+    loadLive(false);
+  }
+  function loadLive(force) {
+    var body = document.getElementById("lv-body");
+    body.innerHTML = '<div class="placeholder">載入中…</div>';
+    api.liveRenewables(force)
+      .then(function (d) {
+        var html = '<div class="kpis" style="grid-template-columns:repeat(3,1fr)">' +
+          kpi("快照時間", esc(d.snapshot_time || "–"), "") +
+          kpi("風力總出力", nfmt(d.wind_total_mw, 1) + "<small>MW</small>", "", "hl") +
+          kpi("再生能源總出力", nfmt(d.renewable_total_mw, 1) + "<small>MW</small>", "") +
+          "</div><div class=\"grid\">";
+        html += '<section class="card"><div class="hd"><h3>各再生能源類型</h3></div><div class="tablewrap"><table>' +
+          "<thead><tr><th>類型</th><th>機組數</th><th>淨出力 (MW)</th></tr></thead><tbody>";
+        (d.renewable_summary || []).forEach(function (x) {
+          html += "<tr><td>" + esc(x.unit_type) + "</td><td class=\"num\">" + x.unit_count + "</td><td class=\"num\">" + nfmt(x.net_mw, 1) + "</td></tr>";
+        });
+        html += "</tbody></table></div></section>";
+        html += '<section class="card"><div class="hd"><h3>風力各機組</h3><span class="aside">' + (d.wind || []).length + " 機組</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>機組</th><th>裝置容量 (MW)</th><th>淨發電 (MW)</th></tr></thead><tbody>";
+        if (!(d.wind || []).length) {
+          html += '<tr><td class="empty" colspan="3">目前無風力機組資料</td></tr>';
+        } else {
+          d.wind.forEach(function (w) {
+            html += "<tr><td>" + esc(w.name) + "</td><td class=\"num\">" + (w.capacity_mw != null ? nfmt(w.capacity_mw, 1) : "–") + "</td><td class=\"num\">" + (w.net_mw != null ? nfmt(w.net_mw, 1) : "–") + "</td></tr>";
+          });
+        }
+        html += "</tbody></table></div></section></div>";
+        body.innerHTML = html;
+      })
+      .catch(function (err) { body.innerHTML = errbox("載入即時再生能源", err); });
   }
 
   // ---------- 發電案場管理 ----------

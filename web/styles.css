@@ -209,6 +209,10 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .slotnote{padding:12px 18px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
 .slotnote b{color:var(--ink);font-weight:600}
 
+.period-input{height:36px;padding:0 11px;border-radius:9px;border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--ink);font-family:var(--font-mono);width:120px}
+.period-input:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--seller-soft)}
+.section-gap{margin-top:18px}
 .foot-note{margin-top:22px;font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:8px}
 .foot-note svg{width:14px;height:14px;flex:none}
 
