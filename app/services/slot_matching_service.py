@@ -43,6 +43,7 @@ def compute_slot_outcome(db: Session, period: str) -> SlotMatchingResult:
     farms = [
         SlotFarmSupply(g.wind_farm_id, g.time_slot, g.generated_energy_mwh)
         for g in gen_rows
+        if g.time_slot is not None
     ]
     con_rows = db.execute(
         select(ConsumptionData).where(
@@ -54,6 +55,7 @@ def compute_slot_outcome(db: Session, period: str) -> SlotMatchingResult:
     demands = [
         SlotCustomerDemand(c.customer_id, c.time_slot, c.consumed_energy_mwh)
         for c in con_rows
+        if c.time_slot is not None
     ]
     contracts = [
         ContractInput(

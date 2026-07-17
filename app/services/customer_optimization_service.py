@@ -197,7 +197,7 @@ def compute_customer_optimization(
             slot_gen.get((g.wind_farm_id, g.time_slot), 0.0) + g.generated_energy_mwh
         )
     slot_con: dict = {}
-    for c in db.execute(
+    for row in db.execute(
         select(ConsumptionData).where(
             ConsumptionData.customer_id == customer_id,
             ConsumptionData.period_start >= start,
@@ -205,7 +205,9 @@ def compute_customer_optimization(
             ConsumptionData.time_slot.is_not(None),
         )
     ).scalars():
-        slot_con[c.time_slot] = slot_con.get(c.time_slot, 0.0) + c.consumed_energy_mwh
+        slot_con[row.time_slot] = (
+            slot_con.get(row.time_slot, 0.0) + row.consumed_energy_mwh
+        )
 
     green_slot = dict.fromkeys(SLOT_ORDER, 0.0)
     for fid, e in by_farm.items():
