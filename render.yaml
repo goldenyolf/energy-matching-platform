@@ -17,7 +17,8 @@ services:
     plan: free                 # free web services sleep after ~15 min idle
     healthCheckPath: /health
     # Run migrations, then start the server on Render's injected $PORT.
-    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    # (A start script avoids dockerCommand shell-quoting pitfalls with `&&`.)
+    dockerCommand: sh scripts/start-api.sh
     envVars:
       - key: DATABASE_URL
         sync: false            # paste your Neon URL: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
@@ -38,7 +39,7 @@ services:
     region: singapore
     plan: free
     healthCheckPath: /_stcore/health
-    dockerCommand: sh -c "streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false"
+    dockerCommand: sh scripts/start-dashboard.sh
     envVars:
       - key: PYTHONPATH
         value: /app            # so `from dashboard import ...` resolves in the image
