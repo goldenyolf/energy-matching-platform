@@ -15,6 +15,7 @@ RUN pip install --upgrade pip && pip install ".[dashboard]"
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY dashboard ./dashboard
+COPY web ./web
 COPY data ./data
 COPY scripts ./scripts
 
