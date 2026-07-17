@@ -54,5 +54,15 @@
       return get("/analytics/evaluation", { customer_id: customerId, start: start, end: end });
     },
     slots: function (period) { return get("/matching/slots", { period: period }); },
+    customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
+      return get("/analytics/customer-optimization", {
+        customer_id: customerId,
+        period: period,
+        min_sites: minSites,
+        min_site_allocation_percent: minPct,
+        re_target_percent: reTarget,
+        transfer_price_per_kwh: transferPrice,
+      });
+    },
   };
 })(window);

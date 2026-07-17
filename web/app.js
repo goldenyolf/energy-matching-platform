@@ -151,8 +151,8 @@
       '<div class="field"><label>期間 (YYYY-MM)</label><input id="f-period" class="num" value="2024-01" placeholder="2024-01"></div>' +
       '<div class="field"><label>最小分配 %</label><input id="f-minpct" class="num" type="number" min="0" max="100" step="1" value="0"></div>' +
       '<div class="field"><label>最少案場數</label><input id="f-minsites" class="num" type="number" min="0" max="20" step="1" value="0"></div>' +
-      '<div class="field"><label>RE 目標</label><input id="f-retarget" class="num" value="–" readonly><span class="hint">取自資料設定</span></div>' +
-      '<div class="field"><label>綠電轉供價</label><input value="依各合約設定" readonly><span class="hint">取自合約(v1 唯讀)</span></div>' +
+      '<div class="field"><label>RE 目標 %</label><input id="f-retarget" class="num" type="number" min="0" max="100" step="1" placeholder="依資料設定"><span class="hint">可覆寫</span></div>' +
+      '<div class="field"><label>綠電轉供價</label><input id="f-transfer" class="num" type="number" min="0" step="0.1" placeholder="依合約"><span class="hint">NTD/kWh · 可覆寫</span></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 12h10M10 17h4"/></svg>執行演算評估</button></div></form>' +
       '<div id="result"></div>';
@@ -165,14 +165,14 @@
         custMap[c.id] = c;
         return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
       }).join("");
-      if (list[0]) reTarget.value = pct(list[0].re_target_percent, 0) + " %";
+      if (list[0]) reTarget.value = pct(list[0].re_target_percent, 0);
     }).catch(function (err) {
       sel.innerHTML = '<option value="">無法載入用電戶</option>';
       document.getElementById("result").innerHTML = errbox("載入用電戶", err);
     });
     sel.addEventListener("change", function () {
       var c = custMap[sel.value];
-      reTarget.value = c ? pct(c.re_target_percent, 0) + " %" : "–";
+      reTarget.value = c ? pct(c.re_target_percent, 0) : "";
     });
 
     document.getElementById("evalForm").addEventListener("submit", function (e) {
@@ -182,36 +182,21 @@
       var period = document.getElementById("f-period").value.trim();
       var minPct = parseFloat(document.getElementById("f-minpct").value) || 0;
       var minSites = parseInt(document.getElementById("f-minsites").value, 10) || 0;
-      runEvaluation(customerId, custMap[customerId], period, minSites, minPct);
+      var rtv = document.getElementById("f-retarget").value.trim();
+      var reTargetV = rtv === "" ? null : parseFloat(rtv);
+      var tpv = document.getElementById("f-transfer").value.trim();
+      var transferV = tpv === "" ? null : parseFloat(tpv);
+      runEvaluation(customerId, custMap[customerId], period, minSites, minPct, reTargetV, transferV);
     });
   }
 
-  function farmsReady() {
-    if (farmsCache) return Promise.resolve(farmsCache);
-    return api.windFarms().then(function (list) {
-      farmsCache = {}; list.forEach(function (f) { farmsCache[f.id] = f; }); return farmsCache;
-    });
-  }
-
-  function runEvaluation(customerId, customer, period, minSites, minPct) {
+  function runEvaluation(customerId, customer, period, minSites, minPct, reTarget, transferPrice) {
     showModal("正在求解最佳綠電組合…");
     var result = document.getElementById("result");
-    Promise.all([
-      api.optimize(period, minSites, minPct),
-      api.evaluation(customerId, period, period),
-      api.slots(period),
-      farmsReady(),
-    ]).then(function (r) {
-      renderResult(result, {
-        optimize: r[0], evaluation: r[1], slots: r[2],
-        customerId: customerId, customer: customer, period: period,
-      });
-    }).catch(function (err) {
-      result.innerHTML = errbox("執行評估", err);
-    }).then(function () {
-      // keep the modal briefly so the animation reads as intentional
-      setTimeout(hideModal, reduce ? 0 : 350);
-    });
+    api.customerOptimization(customerId, period, minSites, minPct, reTarget, transferPrice)
+      .then(function (r) { renderResult(result, r, customer); })
+      .catch(function (err) { result.innerHTML = errbox("執行評估", err); })
+      .then(function () { setTimeout(hideModal, reduce ? 0 : 350); });
   }
 
   function errbox(where, err) {
@@ -220,49 +205,32 @@
       "</p><button class=\"btn ghost\" onclick=\"location.reload()\">重新載入</button></div>";
   }
 
-  function renderResult(root, d) {
-    var opt = d.optimize, ev = d.evaluation, sl = d.slots;
-    var focus = d.customerId;
-    var seller = ev.seller, buyer = ev.buyer;
-    var target = (opt.customer_targets || []).filter(function (t) { return t.customer_id === focus; })[0] || {};
-    var reTargetPct = d.customer ? d.customer.re_target_percent : 0;
-    var allocs = (opt.allocations || []).filter(function (a) { return a.customer_id === focus && a.allocated_mwh > 0; });
-    var totalAlloc = allocs.reduce(function (s, a) { return s + a.allocated_mwh; }, 0);
+  function renderResult(root, r, customer) {
+    var seller = r.seller, buyer = r.buyer;
+    var reTargetPct = r.re_target_percent;
+    var allocs = r.allocations || [];
     var sellPrice = buyer.green_mwh > 0 ? seller.sales_revenue / (buyer.green_mwh * 1000) : 0;
-    var okPill = opt.solver_status === "Optimal";
-    var seasonLabel = sl.season === "summer" ? "夏月" : "非夏月";
-
-    // per-farm aggregate for this customer
-    var byFarm = {};
-    allocs.forEach(function (a) {
-      var k = a.wind_farm_id;
-      if (!byFarm[k]) byFarm[k] = { id: k, alloc: 0, contracts: [] };
-      byFarm[k].alloc += a.allocated_mwh;
-      byFarm[k].contracts.push(a);
-    });
-    var farmRows = Object.keys(byFarm).map(function (k) { return byFarm[k]; })
-      .sort(function (a, b) { return b.alloc - a.alloc; });
+    var okPill = r.solver_status === "Optimal";
+    var seasonLabel = r.season === "summer" ? "夏月" : "非夏月";
 
     var html = "";
-    // page head
     html += '<div class="pagehead" style="margin-top:22px"><div><div class="title"><span class="bar"></span><h1>評估結果</h1>' +
-      '<span class="pill ' + (okPill ? "ok" : "warnp") + '"><span class="dot"></span>求解狀態 ' + esc(opt.solver_status) + "</span></div>" +
-      '<div class="meta"><span>用電戶 <b>' + esc(ev.company_name) + "</b></span>" +
-      "<span>期間 <b>" + esc(d.period) + " · " + seasonLabel + "</b></span>" +
-      "<span>約束 <b>最小分配 " + pct(opt.min_site_allocation_percent, 0) + "% · 最少 " + opt.min_sites_per_customer + " 場</b></span></div></div>" +
+      '<span class="pill ' + (okPill ? "ok" : "warnp") + '"><span class="dot"></span>求解狀態 ' + esc(r.solver_status) + "</span></div>" +
+      '<div class="meta"><span>用電戶 <b>' + esc(r.company_name) + "</b></span>" +
+      "<span>期間 <b>" + esc(r.period) + " · " + seasonLabel + "</b></span>" +
+      "<span>約束 <b>最小分配 " + pct(r.min_site_allocation_percent, 0) + "% · 最少 " + r.min_sites_per_customer + " 場</b></span>" +
+      (r.transfer_price_used != null ? "<span>轉供價覆寫 <b>" + price(r.transfer_price_used) + "</b></span>" : "") +
+      "</div></div>" +
       '<div class="headactions"><button class="btn primary" id="rerun2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>再次評估</button></div></div>';
 
-    // integration note — v1 stitches three complementary engines client-side
-    html += '<div style="margin:-4px 0 16px;font-size:12px;color:var(--muted);line-height:1.6">本頁整合三種計算:' +
-      '<b style="color:var(--seller)">雙面經濟</b> 為 P2 售電評估(優先序引擎);' +
-      '<b style="color:var(--brand)">配對明細</b> 為 P3 最佳化(受下方約束);' +
-      '<b style="color:var(--buyer)">時段別</b> 為 P4a。三者為互補視角,數值來自不同引擎。</div>';
+    html += '<div style="margin:-4px 0 16px;font-size:12px;color:var(--muted);line-height:1.6">' +
+      '四塊皆由<b style="color:var(--brand)">同一次 MILP 最佳化</b>導出,數值一致;時段別為依案場時段發電占比推估(受各時段用電上限)。</div>';
 
     // KPI strip
     html += '<div class="kpis">' +
       kpi("RE 達成率", pct(buyer.re_percent) + "<small>%</small>", "目標 " + pct(reTargetPct, 0) + "%", "hl") +
       kpi("售電端毛利", "NT$ " + abbr(seller.gross_profit), "毛利率 " + pct(seller.gross_margin_percent, 2) + "%", "", seller.gross_profit >= 0 ? "up" : "down") +
-      kpi("配對案場", (target.sites_used || farmRows.length) + "<small>場</small>", "綠電轉供率 " + pct(buyer.re_percent) + "%") +
+      kpi("配對案場", allocs.length + "<small>場</small>", "綠電轉供率 " + pct(buyer.re_percent) + "%") +
       kpi("綠電轉供量", nfmt(buyer.green_mwh, 0) + "<small>MWh</small>", "灰電 " + nfmt(buyer.grey_mwh, 0) + " MWh") +
       kpi("售電均價", price(sellPrice), "NTD / kWh") +
       kpi("用電均價", price(buyer.avg_price_per_kwh), "含綠+灰電") +
@@ -274,7 +242,7 @@
     // seller card
     html += '<section class="card side-seller"><div class="hd"><span class="ic">' + iconMoney() + "</span>" +
       "<h3>售電端 · 發電業收益</h3><span class=\"aside\">綠電轉供均價 " + price(sellPrice) + " NTD/kWh</span></div>";
-    if (ev.used_default_feed_in_price) html += '<div class="note">部分風場未填收購價,已用預設值估算。</div>';
+    if (r.used_default_feed_in_price) html += '<div class="note">部分風場未填收購價,已用預設值估算。</div>';
     html += '<div class="rows">' +
       erow("收購成本(躉售 / FIT)", money(seller.procurement_cost), "NTD") +
       erow("售電收入(綠電轉供)", money(seller.sales_revenue), "NTD") +
@@ -302,47 +270,48 @@
     html += '</div><div class="stack">';
 
     // 發電端分配概況
-    html += '<section class="card"><div class="hd"><h3>發電端分配概況</h3><span class="aside">P3 最佳化 · 此用電戶</span></div>' +
+    html += '<section class="card"><div class="hd"><h3>發電端分配概況</h3><span class="aside">此用電戶</span></div>' +
       '<div class="tablewrap"><table><thead><tr><th>配對案場</th><th>綠電售電量 (MWh)</th><th>綠電轉供率</th><th>預估營收 (NTD)</th></tr></thead><tbody>' +
-      "<tr><td>" + farmRows.length + " 場</td><td class=\"num\">" + nfmt(buyer.green_mwh, 0) + "</td><td class=\"num pos\">" + pct(buyer.re_percent) + "%</td><td class=\"num\">" + money(seller.sales_revenue) + "</td></tr>" +
+      "<tr><td>" + allocs.length + " 場</td><td class=\"num\">" + nfmt(buyer.green_mwh, 0) + "</td><td class=\"num pos\">" + pct(buyer.re_percent) + "%</td><td class=\"num\">" + money(seller.sales_revenue) + "</td></tr>" +
       "</tbody></table></div></section>";
 
     // 逐案場明細
-    html += '<section class="card"><div class="hd"><h3>匹配案場細節</h3><span class="aside">P3 最佳化 · ' + farmRows.length + " 場</span></div><div class=\"tablewrap\"><table>" +
+    html += '<section class="card"><div class="hd"><h3>匹配案場細節</h3><span class="aside">' + allocs.length + " 場</span></div><div class=\"tablewrap\"><table>" +
       "<thead><tr><th>案場</th><th>已分配 (MWh)</th><th>分配比例</th><th>分配原因</th></tr></thead><tbody>";
-    if (!farmRows.length) {
+    if (!allocs.length) {
       html += '<tr><td class="empty" colspan="4">此期間該用電戶無綠電分配</td></tr>';
     } else {
-      farmRows.forEach(function (f) {
-        var fn = farmName(f.id);
-        var share = totalAlloc > 0 ? (f.alloc / totalAlloc * 100) : 0;
-        var reason = (f.contracts[0] && f.contracts[0].reason) || "";
-        html += "<tr><td><span class=\"code\">" + esc(fn.code) + "</span> " + esc(fn.name) + "</td>" +
-          "<td class=\"num\">" + nfmt(f.alloc, 1) + "</td>" +
+      allocs.forEach(function (a) {
+        var share = Math.max(0, Math.min(100, a.share_percent || 0));
+        html += "<tr><td><span class=\"code\">" + esc(a.wind_farm_code) + "</span> " + esc(a.wind_farm_name) + "</td>" +
+          "<td class=\"num\">" + nfmt(a.allocated_mwh, 1) + "</td>" +
           "<td><span class=\"barcell num\">" + pct(share, 0) + "%<span class=\"minibar\"><i style=\"width:" + share.toFixed(0) + "%\"></i></span></span></td>" +
-          "<td style=\"text-align:left;color:var(--muted);font-size:12px;white-space:normal;max-width:280px\">" + esc(reason) + "</td></tr>";
+          "<td style=\"text-align:left;color:var(--muted);font-size:12px;white-space:normal;max-width:280px\">" + esc(a.reason) + "</td></tr>";
       });
     }
     html += "</tbody></table></div></section>";
 
-    // 時段別
+    // 時段別(與經濟同源;綠電受各時段用電上限)
     var slotLabel = { peak: ["尖峰", "s-peak"], half_peak: ["半尖峰", "s-half"], off_peak: ["離峰", "s-off"] };
-    html += '<section class="card"><div class="hd"><h3>時段別達成</h3><span class="aside" style="color:var(--buyer)">P4a · 台電時間電價</span></div><div class="tablewrap"><table>' +
+    html += '<section class="card"><div class="hd"><h3>時段別達成</h3><span class="aside" style="color:var(--buyer)">台電時間電價</span></div><div class="tablewrap"><table>' +
       "<thead><tr><th>時段</th><th>灰電價</th><th>用電量 (MWh)</th><th>綠電分配 (MWh)</th><th>時段 RE</th></tr></thead><tbody>";
     var peakRe = null;
-    (sl.slot_breakdown || []).forEach(function (b) {
-      var cs = (b.customer_summaries || []).filter(function (c) { return c.customer_id === focus; })[0] || { consumption_mwh: 0, allocated_mwh: 0, achieved_re_percent: 0 };
+    (r.slot_breakdown || []).forEach(function (b) {
       var lbl = slotLabel[b.slot] || [b.slot, "s-half"];
-      if (b.slot === "peak") peakRe = cs.achieved_re_percent;
-      var w = Math.max(0, Math.min(100, cs.achieved_re_percent || 0));
+      if (b.slot === "peak") peakRe = b.re_percent;
+      var w = Math.max(0, Math.min(100, b.re_percent || 0));
       html += "<tr><td><span class=\"tag-slot " + lbl[1] + "\">" + esc(lbl[0]) + "</span></td>" +
-        "<td class=\"num\">" + price(b.grey_price_per_kwh).replace(/0+$/, "").replace(/\.$/, ".0") + "</td>" +
-        "<td class=\"num\">" + nfmt(cs.consumption_mwh, 0) + "</td>" +
-        "<td class=\"num\">" + nfmt(cs.allocated_mwh, 0) + "</td>" +
-        "<td class=\"num\">" + pct(cs.achieved_re_percent) + "%<span class=\"re-bar\"><i style=\"width:" + w.toFixed(0) + "%\"></i></span></td></tr>";
+        "<td class=\"num\">" + price(b.grey_price_per_kwh) + "</td>" +
+        "<td class=\"num\">" + nfmt(b.consumption_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + nfmt(b.allocated_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + pct(b.re_percent) + "%<span class=\"re-bar\"><i style=\"width:" + w.toFixed(0) + "%\"></i></span></td></tr>";
     });
     html += "</tbody></table></div>";
-    if (peakRe != null) html += '<div class="slotnote">風電離峰(夜間)發電較高、用電尖峰在日間 → <b>尖峰 RE 僅 ' + pct(peakRe) + "%</b>。月度加總會高估;逐時段媒合才是真實達成。</div>";
+    var surplus = r.time_mismatch_surplus_mwh || 0;
+    html += '<div class="slotnote">' +
+      (peakRe != null ? "風電離峰(夜間)發電多、尖峰用電在日間 → <b>尖峰 RE 僅 " + pct(peakRe) + "%</b>。" : "") +
+      (surplus > 0.5 ? "另有 <b>" + nfmt(surplus, 0) + " MWh</b> 離峰過剩綠電無法於該時段媒合(時段錯配)。" : "") +
+      "月度加總會高估;逐時段才是真實達成。</div>";
     html += "</section>";
 
     html += "</div></div>"; // grid
@@ -352,9 +321,8 @@
     root.innerHTML = html;
     var rr = document.getElementById("rerun2");
     if (rr) rr.addEventListener("click", function () {
-      runEvaluation(d.customerId, d.customer, d.period,
-        parseInt(document.getElementById("f-minsites").value, 10) || 0,
-        parseFloat(document.getElementById("f-minpct").value) || 0);
+      var form = document.getElementById("evalForm");
+      if (form) form.dispatchEvent(new Event("submit", { cancelable: true }));
     });
     root.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }
