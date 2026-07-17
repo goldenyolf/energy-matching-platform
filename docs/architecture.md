@@ -4,12 +4,12 @@
 
 The Energy Matching Platform is a layered FastAPI application. The **matching
 engine is a pure, deterministic core** with no I/O; everything around it —
-persistence, ingestion, API, dashboard — is a replaceable outer layer.
+persistence, ingestion, API, web UI — is a replaceable outer layer.
 
 ```mermaid
 flowchart TB
     subgraph Client
-        UI["Streamlit Dashboard<br/>(dashboard/)"]
+        UI["Static SPA<br/>(web/, served at /app)"]
         SW["Swagger UI / curl"]
     end
 

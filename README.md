@@ -4,8 +4,8 @@ A portfolio-ready **MVP for renewable-energy contract management, wind-power dat
 ingestion, green-energy allocation, and RE-target analysis** in Taiwan.
 
 Built around a **pure, deterministic matching engine** and a clean layered
-architecture (FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL ·
-Streamlit), with Docker, CI, and a full test suite.
+architecture (FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL),
+with a dependency-free static web UI, Docker, CI, and a full test suite.
 
 > ⚠️ **Demo data is simulated.** Not affiliated with Taipower, TSEC, or any
 > energy company. This is a technical portfolio project, **not** a settlement,
@@ -37,7 +37,9 @@ real, auditable result.
 - **Pluggable data sources** — CSV import, a deterministic `MockDataGenerator`,
   and a `PublicDataAdapter` placeholder (Phase 2) that will respect source ToS /
   robots.txt. No scraping, no fabricated "real" data.
-- **Streamlit dashboard** — Overview, Wind Farms, Customers, Contracts, Matching.
+- **Web UI** — a dependency-free static single-page app (HTML/CSS/vanilla JS)
+  served same-origin by the API at `/app`: overview, wind farms, customers,
+  contracts, a product-grade optimization evaluation, and live renewables.
 - **Production-shaped tooling** — Alembic migrations, Docker Compose, Makefile,
   Ruff/Black/mypy, pre-commit, GitHub Actions CI, pytest (matching core ≥ 80 %).
 
@@ -55,7 +57,7 @@ app/
 ├── models/        # SQLAlchemy 2.x entities
 ├── core/          # settings, domain exceptions
 └── db/            # engine, session, declarative base
-dashboard/         # Streamlit app (Home + 4 pages)
+web/               # static SPA (index.html + styles.css + api.js + app.js)
 alembic/           # migrations
 data/sample/       # demo CSVs (3 farms, 5 customers, 8 contracts, 12 months)
 ```
@@ -82,7 +84,7 @@ Requires **Python 3.12**. [`uv`](https://docs.astral.sh/uv/) is preferred.
 # 1. Install (uv preferred; falls back to python -m venv + pip)
 make install
 #   or manually:
-#   uv venv --python 3.12 && uv pip install -e ".[dashboard,dev]"
+#   uv venv --python 3.12 && uv pip install -e ".[dev]"
 
 # 2. Load the demo data (SQLite by default)
 make seed
@@ -90,20 +92,19 @@ make seed
 # 3. Run the API  → http://localhost:8000/docs
 make run
 
-# 4. In another terminal, run the dashboard → http://localhost:8501
-make dashboard
+# 4. Open the web UI (served by the API) → http://localhost:8000/app/
 ```
 
 ### New web UI (static SPA)
 
 A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 **same-origin by the API** at **http://localhost:8000/app/** once `make run` is
-up — no extra process. It currently ships the flagship **最佳化評估** page
-(pick a customer → runs the optimizer + evaluation + time-slot matching → a
-product-grade dual-sided result), and coexists with the Streamlit dashboard
-(other pages still live there). Files are in [`web/`](web/); the optimizer's
-`min_site_allocation_percent` / `min_sites_per_customer` map to the reference
-solar tool's 最小匹配比例 / 最少匹配間數.
+up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
+(farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live), and the
+flagship **最佳化評估** page (pick a customer → one MILP run feeds a
+product-grade dual-sided result + per-farm detail + time-slot breakdown). Files
+are in [`web/`](web/); the optimizer's `min_site_allocation_percent` /
+`min_sites_per_customer` map to the reference solar tool's 最小匹配比例 / 最少匹配間數.
 
 Trigger a matching run and inspect analytics:
 
@@ -115,15 +116,15 @@ curl 'http://localhost:8000/api/v1/analytics/customers?period=2024-01'
 
 ## Docker usage
 
-Brings up PostgreSQL + API + dashboard:
+Brings up PostgreSQL + the API (which also serves the SPA):
 
 ```bash
 docker compose up --build          # or: make docker-up
 make docker-seed                   # load demo data into the container DB
 ```
 
+- Web UI (SPA) → http://localhost:8000/app/
 - API / Swagger → http://localhost:8000/docs
-- Streamlit     → http://localhost:8501
 - The API service runs `alembic upgrade head` on start.
 
 ## Cloud deployment
@@ -195,8 +196,7 @@ python -m scripts.seed --source taipower --months 24
 ([#8931](https://data.gov.tw/dataset/8931), ~10-min cadence) and returns the
 current wind units and renewable-type totals — **instantaneous MW**, fetched
 read-through with a short cache, never persisted and never used for matching.
-`?force=true` bypasses the cache. The Streamlit dashboard's **Live Renewables**
-page renders it.
+`?force=true` bypasses the cache. The SPA's **即時再生能源** page renders it.
 
 Taipower publishes only supply-side data, so customers / contracts / consumption
 stay empty for this source. The dataset covers Taipower's own (mostly onshore)
@@ -217,13 +217,14 @@ Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
 | POST/GET | `/api/v1/matching/runs`, `/runs/{id}` | Run & inspect matching |
 | GET | `/api/v1/matching/results` | Allocation results |
 | GET | `/api/v1/analytics/customers`, `/wind-farms`, `/summary` | Analytics |
-| GET | `/api/v1/analytics/evaluation?customer_id=&start=&end=` | Dual-sided sales evaluation (seller gross margin + buyer RE%/cost); dashboard "Evaluation" page renders it |
-| GET | `/api/v1/matching/optimize?period=&min_sites=&min_site_allocation_percent=` | Global economic-optimization matching (MILP): maximize retailer gross margin with RE targets as constraints; dashboard "Optimization" page renders it |
-| GET | `/api/v1/matching/slots?period=` | Per-time-slot (Taipower TOU) matching: peak/half-peak/off-peak × summer/non-summer, cross-slot RE and per-slot economics; dashboard "時段媒合" page renders it |
+| GET | `/api/v1/analytics/evaluation?customer_id=&start=&end=` | Dual-sided sales evaluation (seller gross margin + buyer RE%/cost) |
+| GET | `/api/v1/matching/optimize?period=&min_sites=&min_site_allocation_percent=` | Global economic-optimization matching (MILP): maximize retailer gross margin with RE targets as constraints |
+| GET | `/api/v1/matching/slots?period=` | Per-time-slot (Taipower TOU) matching: peak/half-peak/off-peak × summer/non-summer, cross-slot RE and per-slot economics |
+| GET | `/api/v1/analytics/customer-optimization?customer_id=&period=&min_sites=&min_site_allocation_percent=&re_target_percent=&transfer_price_per_kwh=` | Unified per-customer optimization: one MILP run feeds the SPA's 最佳化評估 page (seller/buyer economics + per-farm + time-slot, all consistent) |
 
 ## Screenshots
 
-_TODO: add dashboard screenshots (Overview / Matching pages)._
+_TODO: add SPA screenshots (Overview / 最佳化評估 pages)._
 
 ## Known limitations
 
@@ -263,8 +264,8 @@ Phase 1 MVP (this release) → Phase 2 public data & quality → Phase 3 optimis
 企業客戶、綠電合約，並以**可解釋、deterministic 的媒合引擎**，依「實際發電量、實際
 用電量、合約上限與優先順序」計算每家企業每月實際取得的綠電與 **RE 目標達成率**。
 
-- 技術棧：FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL · Streamlit，
-  搭配 Docker、GitHub Actions CI、Ruff/Black/mypy、pytest（媒合核心覆蓋率 ≥ 80%）。
-- 快速開始：`make install` → `make seed` → `make run`（API）→ `make dashboard`（儀表板）。
+- 技術棧：FastAPI · SQLAlchemy 2 · Pydantic 2 · Alembic · PostgreSQL,搭配零相依
+  靜態 SPA 前端、Docker、GitHub Actions CI、Ruff/Black/mypy、pytest（媒合核心覆蓋率 ≥ 80%）。
+- 快速開始：`make install` → `make seed` → `make run`（API + SPA)→ 開 http://localhost:8000/app/ 。
 - 重要聲明：Demo 資料皆為**模擬資料**，亦非正式的結算、憑證移轉或交易系統。公開資料的使用須遵守來源網站規範，本專案不繞過
   任何驗證、robots.txt 或存取限制。

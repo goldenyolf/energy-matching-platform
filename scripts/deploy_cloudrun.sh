@@ -3,7 +3,7 @@
 # Deploy the Energy Matching Platform to Google Cloud Run.
 #
 # Builds ONE image from the Dockerfile, runs DB migrations as a Cloud Run Job,
-# then deploys two services (API + Streamlit dashboard) and seeds demo data.
+# then deploys the API service (which also serves the SPA at /app) and seeds demo data.
 # Database is external PostgreSQL (Neon recommended) via DATABASE_URL.
 #
 # Prerequisites:
@@ -59,18 +59,7 @@ gcloud run deploy emp-api \
 
 API_URL="$(gcloud run services describe emp-api --region "${REGION}" \
   --format 'value(status.url)')"
-echo "==> API deployed at ${API_URL}"
-
-echo "==> Deploying dashboard service (emp-dashboard)"
-gcloud run deploy emp-dashboard \
-  --image "${IMAGE}" --region "${REGION}" --allow-unauthenticated \
-  --session-affinity --timeout 3600 --max-instances 1 \
-  --set-env-vars "PYTHONPATH=/app,API_BASE_URL=${API_URL}" \
-  --command sh \
-  --args '-c,streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
-
-DASH_URL="$(gcloud run services describe emp-dashboard --region "${REGION}" \
-  --format 'value(status.url)')"
+echo "==> API deployed at ${API_URL} (SPA at ${API_URL}/app/)"
 
 if [ "${SEED}" = "true" ]; then
   echo "==> Seeding demo data (Cloud Run Job)"
@@ -84,6 +73,6 @@ fi
 echo ""
 echo "======================================================================"
 echo " Done."
+echo "  Web UI (SPA)  : ${API_URL}/app/"
 echo "  API / Swagger : ${API_URL}/docs"
-echo "  Dashboard     : ${DASH_URL}"
 echo "======================================================================"

@@ -1,25 +1,24 @@
 # Deployment (Render + Neon Postgres)
 
-This guide deploys the platform as **two Render web services** (API + Streamlit
-dashboard) built from the repo's `Dockerfile`, backed by a **Neon** serverless
-PostgreSQL database. Both platforms have a usable free tier.
+This guide deploys the platform as **a single Render web service** (the FastAPI
+app, which also serves the static SPA at `/app`) built from the repo's
+`Dockerfile`, backed by a **Neon** serverless PostgreSQL database. Both have a
+usable free tier.
 
-> Why this combo: Streamlit is a persistent WebSocket service, so it needs a
-> container/always-on host (not pure serverless). Render runs the Dockerfile
-> directly; Neon gives a durable free Postgres that's just a connection string.
+> Why this combo: Render runs the Dockerfile directly; Neon gives a durable free
+> Postgres that's just a connection string. The SPA is static files served
+> same-origin by the API, so there's no separate frontend service and no CORS.
 
 ## Architecture on the cloud
 
 ```mermaid
 flowchart LR
-    U[Browser] -->|:443| D[emp-dashboard<br/>Streamlit on Render]
-    U -->|:443| A[emp-api<br/>FastAPI on Render]
-    D -->|API_BASE_URL<br/>server-side HTTP| A
+    U[Browser] -->|:443| A[emp-api<br/>FastAPI + SPA on Render]
     A -->|DATABASE_URL<br/>SSL| N[(Neon PostgreSQL)]
 ```
 
-The dashboard calls the API **server-side** (Python `requests`), so there is no
-browser CORS to configure.
+The SPA is served same-origin by the API (`/app`), so there is no separate
+frontend service and no browser CORS to configure.
 
 ## Prerequisites
 
@@ -52,12 +51,10 @@ browser CORS to configure.
 ## Step 2 — Deploy the services (Render Blueprint)
 
 1. Render → **New** → **Blueprint** → connect this GitHub repo.
-2. Render reads [`render.yaml`](../render.yaml) and proposes two services:
-   **emp-api** and **emp-dashboard**. Click **Apply**.
-3. When prompted for the `sync: false` variables, set:
-   - **emp-api** → `DATABASE_URL` = the Neon URL from Step 1.
-   - **emp-dashboard** → `API_BASE_URL` = the API's URL, e.g.
-     `https://emp-api.onrender.com` (visible on the emp-api service page).
+2. Render reads [`render.yaml`](../render.yaml) and proposes the **emp-api**
+   service. Click **Apply**.
+3. When prompted for the `sync: false` variable, set:
+   - **emp-api** → `DATABASE_URL` = the Neon **direct** URL from Step 1.
 
 On first boot, **emp-api** runs `alembic upgrade head` automatically, so the
 schema is created in Neon.
@@ -79,8 +76,7 @@ boot): `python -m scripts.seed --reset && python -m scripts.generate_slot_profil
 
 ## Step 4 — Use it
 
-- **Web UI (SPA)** → `https://emp-api.onrender.com/app/` ← product-grade evaluation UI, served by the API
-- Dashboard (Streamlit) → `https://emp-dashboard.onrender.com`
+- **Web UI (SPA)** → `https://emp-api.onrender.com/app/` ← the whole product UI, served by the API
 - API / Swagger → `https://emp-api.onrender.com/docs`
 - Health → `https://emp-api.onrender.com/health`
 
@@ -106,5 +102,3 @@ boot): `python -m scripts.seed --reset && python -m scripts.generate_slot_profil
   Cloud Run services (scale-to-zero, pay-per-use). Set `--port` to `$PORT`, add
   the Cloud SQL connector or use Neon over SSL, and run `alembic upgrade head`
   as a pre-deploy step or Cloud Run Job.
-- **Streamlit Community Cloud (dashboard only) + Render (API):** free Streamlit
-  hosting for the dashboard, with `API_BASE_URL` pointing at the Render API.

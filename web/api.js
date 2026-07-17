@@ -42,7 +42,12 @@
     ApiError: ApiError,
     customers: function () { return get("/customers", { limit: 1000 }); },
     windFarms: function () { return get("/wind-farms", { limit: 1000 }); },
+    contracts: function () { return get("/contracts", { limit: 1000 }); },
     generation: function () { return get("/generation", { limit: 5000 }); },
+    analyticsSummary: function (period) { return get("/analytics/summary", { period: period }); },
+    analyticsCustomers: function (period) { return get("/analytics/customers", { period: period }); },
+    analyticsWindFarms: function (period) { return get("/analytics/wind-farms", { period: period }); },
+    liveRenewables: function (force) { return get("/live/renewables", force ? { force: "true" } : {}); },
     optimize: function (period, minSites, minPct) {
       return get("/matching/optimize", {
         period: period,
