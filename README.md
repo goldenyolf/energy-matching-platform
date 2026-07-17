@@ -208,6 +208,7 @@ Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
 | GET | `/api/v1/analytics/customers`, `/wind-farms`, `/summary` | Analytics |
 | GET | `/api/v1/analytics/evaluation?customer_id=&start=&end=` | Dual-sided sales evaluation (seller gross margin + buyer RE%/cost); dashboard "Evaluation" page renders it |
 | GET | `/api/v1/matching/optimize?period=&min_sites=&min_site_allocation_percent=` | Global economic-optimization matching (MILP): maximize retailer gross margin with RE targets as constraints; dashboard "Optimization" page renders it |
+| GET | `/api/v1/matching/slots?period=` | Per-time-slot (Taipower TOU) matching: peak/half-peak/off-peak × summer/non-summer, cross-slot RE and per-slot economics; dashboard "時段媒合" page renders it |
 
 ## Screenshots
 
@@ -215,7 +216,10 @@ _TODO: add dashboard screenshots (Overview / Matching pages)._
 
 ## Known limitations
 
-- Monthly matching only (no 8760-hour time-matching yet).
+- Monthly matching plus a Taipower three-tier time-of-use slot matcher
+  (peak/half-peak/off-peak × summer/non-summer, `GET /matching/slots`). Full
+  8760-hour matching and Taipower secondary (二次匹配) redistribution are future
+  work (P4b).
 - Two matching strategies: deterministic priority (greedy) and global economic
   optimization (MILP, `GET /matching/optimize`). The greedy engine is the audit
   baseline; the optimizer maximizes retailer gross margin under RE and structural
