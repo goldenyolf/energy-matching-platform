@@ -106,6 +106,10 @@ def optimize(
     return _get(f"{V1}/matching/optimize", **params)
 
 
+def slot_matching(period: str) -> dict:
+    return _get(f"{V1}/matching/slots", period=period)
+
+
 def live_renewables(force: bool = False) -> dict:
     params = {"force": "true"} if force else {}
     return _get(f"{V1}/live/renewables", **params)
