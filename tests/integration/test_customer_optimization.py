@@ -78,24 +78,23 @@ def test_panels_are_mutually_consistent(db, seeded):
     assert r.seller.gross_profit == pytest.approx(
         r.seller.sales_revenue - r.seller.procurement_cost, abs=1.0
     )
-    # slot-matched green + time-mismatch surplus == total green; RE capped ≤ 100%
+    # P4b: all green is allocated per-slot, so the slot rows sum to total green;
+    # RE per slot is physically capped at ≤ 100%.
     slot_sum = round(sum(s.allocated_mwh for s in r.slot_breakdown), 3)
-    assert slot_sum + r.time_mismatch_surplus_mwh == pytest.approx(
-        r.buyer.green_mwh, abs=1e-2
-    )
+    assert slot_sum == pytest.approx(r.buyer.green_mwh, abs=1e-2)
     for s in r.slot_breakdown:
         assert s.re_percent <= 100.0 + 1e-6
     assert r.season == "non_summer"
     assert len(r.slot_breakdown) == 3
 
 
-def test_offpeak_surplus_is_flagged(db, seeded):
-    # farm generates most at off-peak (60) but that customer uses little off-peak
-    # (20), so some monthly green cannot land within the off-peak cap.
+def test_offpeak_shortfall_is_flagged(db, seeded):
+    # farm generates most at off-peak (60) but the customer uses little off-peak
+    # (20), so its 100% RE target cannot be met within per-slot caps -> shortfall.
     r = compute_customer_optimization(
         db, seeded.id, "2024-01", CustomerOptimizeOptions()
     )
-    assert r.time_mismatch_surplus_mwh > 0
+    assert r.time_mismatch_surplus_mwh > 0  # RE-target shortfall from time mismatch
     off = [s for s in r.slot_breakdown if s.slot == "off_peak"][0]
     assert off.re_percent <= 100.0 + 1e-6
 

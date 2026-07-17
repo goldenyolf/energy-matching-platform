@@ -400,7 +400,7 @@
       '<div class="headactions"><button class="btn primary" id="rerun2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>再次評估</button></div></div>';
 
     html += '<div style="margin:-4px 0 16px;font-size:12px;color:var(--muted);line-height:1.6">' +
-      '四塊皆由<b style="color:var(--brand)">同一次 MILP 最佳化</b>導出,數值一致;時段別為依案場時段發電占比推估(受各時段用電上限)。</div>';
+      '四塊皆由<b style="color:var(--brand)">同一次逐時段 MILP</b>導出,數值一致;時段別為最優精確值(逐時段轉供 + 台電二次匹配)。</div>';
 
     // KPI strip
     html += '<div class="kpis">' +
@@ -486,8 +486,8 @@
     var surplus = r.time_mismatch_surplus_mwh || 0;
     html += '<div class="slotnote">' +
       (peakRe != null ? "風電離峰(夜間)發電多、尖峰用電在日間 → <b>尖峰 RE 僅 " + pct(peakRe) + "%</b>。" : "") +
-      (surplus > 0.5 ? "另有 <b>" + nfmt(surplus, 0) + " MWh</b> 離峰過剩綠電無法於該時段媒合(時段錯配)。" : "") +
-      "月度加總會高估;逐時段才是真實達成。</div>";
+      (surplus > 0.5 ? "尚差 <b>" + nfmt(surplus, 0) + " MWh</b> 因時段錯配無法媒合(離峰過剩發電對不上日間用電),RE 目標未達。" : "") +
+      "月度加總會高估;逐時段最佳化才是真實達成。</div>";
     html += "</section>";
 
     html += "</div></div>"; // grid

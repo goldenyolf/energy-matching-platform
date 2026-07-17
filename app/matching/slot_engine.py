@@ -38,6 +38,9 @@ class SlotCustomerDemand:
     customer_id: int
     slot: TimeSlot
     consumed_mwh: float
+    green_target_type: str | None = None
+    re_target_percent: float | None = None
+    target_energy_mwh: float | None = None
 
 
 @dataclass
