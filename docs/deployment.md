@@ -54,19 +54,25 @@ browser CORS to configure.
 On first boot, **emp-api** runs `alembic upgrade head` automatically, so the
 schema is created in Neon.
 
-## Step 3 — Seed demo data (once)
+## Step 3 — Migrate + seed demo data (once)
 
-Open **emp-api** → **Shell** tab and run:
+Quickest path — run from **your machine** against the Neon URL. This both
+verifies the migrations on real Postgres and loads the demo + time-slot data:
 
 ```bash
-python -m scripts.seed --reset
+export DATABASE_URL="postgresql+psycopg://user:pass@ep-xxx.../neondb?sslmode=require"
+alembic upgrade head                      # create schema (idempotent; Render also runs this on boot)
+python -m scripts.seed --reset            # demo: 3 farms, 5 customers, 8 contracts, 12 months
+python -m scripts.generate_slot_profiles  # split monthly into peak/half/off-peak (needed for the SPA time-slot panel)
 ```
 
-(Or hit the API from your machine to create data via `POST /api/v1/...`.)
+Alternatively use **emp-api → Shell** on Render (schema is already migrated on
+boot): `python -m scripts.seed --reset && python -m scripts.generate_slot_profiles`.
 
 ## Step 4 — Use it
 
-- Dashboard → `https://emp-dashboard.onrender.com`
+- **Web UI (SPA)** → `https://emp-api.onrender.com/app/` ← product-grade evaluation UI, served by the API
+- Dashboard (Streamlit) → `https://emp-dashboard.onrender.com`
 - API / Swagger → `https://emp-api.onrender.com/docs`
 - Health → `https://emp-api.onrender.com/health`
 
