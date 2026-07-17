@@ -21,7 +21,7 @@ services:
     dockerCommand: sh scripts/start-api.sh
     envVars:
       - key: DATABASE_URL
-        sync: false            # paste your Neon URL: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
+        sync: false            # Neon DIRECT endpoint (no `-pooler`): postgresql+psycopg://USER:PASS@ep-xxx.REGION.aws.neon.tech/DB?sslmode=require  (pooler drops SNI on Render's IP-based egress → "database does not exist")
       - key: ENVIRONMENT
         value: production
       # --- Alternative: use Render Postgres instead of Neon (see block below) ---

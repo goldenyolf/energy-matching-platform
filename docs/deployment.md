@@ -41,6 +41,14 @@ browser CORS to configure.
    ```
    Save this — it's your `DATABASE_URL`.
 
+   > ⚠️ **Use Neon's DIRECT endpoint, not the pooled one.** If your string has
+   > `-pooler` in the host, **remove it**
+   > (`ep-xxx-pooler.c-3...` → `ep-xxx.c-3...`). Render's free network connects by
+   > resolved IP, which drops the SNI hostname Neon's pooler needs to route your
+   > project — the pooled URL then fails with `database "neondb" does not exist`.
+   > The direct endpoint is fine for this demo's load. (Also avoid
+   > `options=endpoint%3D...`: the `%` breaks Alembic's ini parser.)
+
 ## Step 2 — Deploy the services (Render Blueprint)
 
 1. Render → **New** → **Blueprint** → connect this GitHub repo.
