@@ -28,17 +28,5 @@ services:
       db:
         condition: service_healthy
 
-  dashboard:
-    build: .
-    environment:
-      API_BASE_URL: http://api:8000
-    command: >
-      streamlit run dashboard/總覽.py
-      --server.port 8501 --server.address 0.0.0.0
-    ports:
-      - "8501:8501"
-    depends_on:
-      - api
-
 volumes:
   pgdata:

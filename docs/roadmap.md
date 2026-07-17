@@ -8,7 +8,8 @@
 - REST API (FastAPI + Swagger) with request/response schemas and error handling.
 - CSV import + replaceable `DataSource` interface + deterministic mock generator.
 - One-click seed with a rich demo scenario (under/over-supply, priorities, etc.).
-- Streamlit dashboard (Overview, Wind Farms, Customers, Contracts, Matching).
+- Web UI: a dependency-free static SPA (`web/`) served by the API at `/app` —
+  overview, farms, customers, contracts, optimization evaluation, live renewables.
 - Alembic migrations, Docker Compose, Makefile, pre-commit, CI, tests (≥80 % on
   the matching core).
 

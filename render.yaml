@@ -1,4 +1,4 @@
-# Render Blueprint — deploys the API + Streamlit dashboard from the Dockerfile.
+# Render Blueprint — deploys the FastAPI service (API + static SPA at /app) from the Dockerfile.
 #
 # Database: bring your own PostgreSQL via DATABASE_URL (Neon recommended — see
 # docs/deployment.md), OR uncomment the `databases:` block at the bottom to use
@@ -29,22 +29,6 @@ services:
       #   fromDatabase:
       #     name: emp-postgres
       #     property: connectionString
-
-  # ---- Streamlit dashboard ---------------------------------------------------
-  - type: web
-    name: emp-dashboard
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    region: singapore
-    plan: free
-    healthCheckPath: /_stcore/health
-    dockerCommand: sh scripts/start-dashboard.sh
-    envVars:
-      - key: PYTHONPATH
-        value: /app            # so `from dashboard import ...` resolves in the image
-      - key: API_BASE_URL
-        sync: false            # set to the API service URL, e.g. https://emp-api.onrender.com
 
 # ---- Optional: Render-managed Postgres (instead of Neon) ---------------------
 # Uncomment this block AND the `fromDatabase` env var above to use it.

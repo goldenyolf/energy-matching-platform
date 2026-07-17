@@ -3,7 +3,7 @@ BIN := .venv/bin
 PYTHON := $(BIN)/python
 MONTHS := 12
 
-.PHONY: help install seed seed-taipower test lint format typecheck run dashboard \
+.PHONY: help install seed seed-taipower test lint format typecheck run \
         migrate revision docker-up docker-down docker-seed clean
 
 help: ## Show this help
@@ -11,8 +11,8 @@ help: ## Show this help
 	  awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 install: ## Create venv (uv preferred) and install deps
-	@command -v uv >/dev/null 2>&1 && uv venv --python 3.12 && uv pip install -e ".[dashboard,dev]" || \
-	  (python3 -m venv .venv && $(BIN)/pip install --upgrade pip && $(BIN)/pip install -e ".[dashboard,dev]")
+	@command -v uv >/dev/null 2>&1 && uv venv --python 3.12 && uv pip install -e ".[dev]" || \
+	  (python3 -m venv .venv && $(BIN)/pip install --upgrade pip && $(BIN)/pip install -e ".[dev]")
 
 seed: ## Load demo data (drops & recreates tables first)
 	$(PYTHON) -m scripts.seed --reset
@@ -40,9 +40,6 @@ typecheck: ## Static type checking
 
 run: ## Start the FastAPI backend (http://localhost:8000)
 	$(BIN)/uvicorn app.main:app --reload
-
-dashboard: ## Start the Streamlit dashboard (http://localhost:8501)
-	PYTHONPATH=. $(BIN)/streamlit run dashboard/總覽.py
 
 migrate: ## Apply DB migrations
 	$(BIN)/alembic upgrade head

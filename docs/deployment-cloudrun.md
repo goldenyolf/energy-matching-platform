@@ -1,15 +1,13 @@
 # Deployment (Google Cloud Run + Neon Postgres)
 
-Deploy the platform as **two Cloud Run services** (API + Streamlit dashboard)
-built from the same `Dockerfile`, backed by **Neon** serverless PostgreSQL.
-Cloud Run scales to zero (pay-per-use) and `asia-east1` is in Taiwan (Changhua),
-so latency is excellent.
+Deploy the platform as **one Cloud Run service** (the FastAPI app, which also
+serves the static SPA at `/app`) built from the `Dockerfile`, backed by **Neon**
+serverless PostgreSQL. Cloud Run scales to zero (pay-per-use) and `asia-east1` is
+in Taiwan (Changhua), so latency is excellent.
 
 ```mermaid
 flowchart LR
-    U[Browser] --> D[emp-dashboard<br/>Cloud Run]
-    U --> A[emp-api<br/>Cloud Run]
-    D -->|API_BASE_URL| A
+    U[Browser] --> A[emp-api<br/>FastAPI + SPA on Cloud Run]
     A -->|DATABASE_URL / SSL| N[(Neon PostgreSQL)]
     B[Cloud Build] -->|image| AR[(Artifact Registry)]
     AR --> A
@@ -39,7 +37,7 @@ export DATABASE_URL="postgresql+psycopg://user:pass@ep-xxx.aws.neon.tech/neondb?
 Optional overrides: `REGION` (default `asia-east1`), `REPO`, `IMAGE_TAG`,
 `SEED` (default `true`).
 
-At the end it prints the API (`…/docs`) and dashboard URLs.
+At the end it prints the API/Swagger and SPA (`…/app/`) URLs.
 
 ## What the script does (step by step)
 
@@ -48,11 +46,9 @@ At the end it prints the API (`…/docs`) and dashboard URLs.
 3. **Build & push** one image from the `Dockerfile` via Cloud Build.
 4. **Migrate** — a one-off **Cloud Run Job** runs `alembic upgrade head` against
    Neon (kept out of the serving container to avoid start-up races).
-5. **Deploy `emp-api`** — binds `$PORT`, `DATABASE_URL` set, public.
-6. **Deploy `emp-dashboard`** — `PYTHONPATH=/app`, `API_BASE_URL` set to the API
-   URL, `--session-affinity` + `--timeout 3600` + `--max-instances 1` so
-   Streamlit's WebSocket stays on one instance.
-7. **Seed** — a one-off Cloud Run Job runs `python -m scripts.seed --reset`.
+5. **Deploy `emp-api`** — binds `$PORT`, `DATABASE_URL` set, public; also serves
+   the static SPA at `/app`.
+6. **Seed** — a one-off Cloud Run Job runs `python -m scripts.seed --reset`.
 
 ## Manual equivalent (if you prefer running commands yourself)
 
@@ -74,20 +70,13 @@ gcloud run deploy emp-api --image "$IMAGE" --region $REGION --allow-unauthentica
   --command sh --args '-c,uvicorn app.main:app --host 0.0.0.0 --port $PORT'
 
 API_URL=$(gcloud run services describe emp-api --region $REGION --format 'value(status.url)')
-
-gcloud run deploy emp-dashboard --image "$IMAGE" --region $REGION --allow-unauthenticated \
-  --session-affinity --timeout 3600 --max-instances 1 \
-  --set-env-vars "PYTHONPATH=/app,API_BASE_URL=$API_URL" \
-  --command sh --args '-c,streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
+echo "Web UI (SPA): $API_URL/app/"
 ```
 
 ## Notes & gotchas
 
 - **`$PORT`** — Cloud Run injects it; both services must bind to it (the commands
   above do). It is passed literally so the container's `sh` expands it at runtime.
-- **Streamlit WebSockets** — `--session-affinity`, a long `--timeout`, and
-  `--max-instances 1` keep the dashboard's socket on a single instance. For more
-  scale you'd move to a stateless frontend.
 - **Secrets** — for production, prefer **Secret Manager** over `--set-env-vars`
   for `DATABASE_URL` (`--set-secrets DATABASE_URL=emp-db-url:latest`).
 - **Cold starts** — scale-to-zero means the first request after idle is slower;
