@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.v1.health import router as health_router
@@ -53,4 +56,11 @@ def root() -> dict[str, str]:
         "version": __version__,
         "docs": "/docs",
         "health": "/health",
+        "app": "/app/",
     }
+
+
+# Static SPA (v1) served same-origin at /app so it can call /api/v1 without CORS.
+_WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+if _WEB_DIR.is_dir():
+    app.mount("/app", StaticFiles(directory=str(_WEB_DIR), html=True), name="spa")

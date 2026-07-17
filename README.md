@@ -94,6 +94,17 @@ make run
 make dashboard
 ```
 
+### New web UI (static SPA)
+
+A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
+**same-origin by the API** at **http://localhost:8000/app/** once `make run` is
+up — no extra process. It currently ships the flagship **最佳化評估** page
+(pick a customer → runs the optimizer + evaluation + time-slot matching → a
+product-grade dual-sided result), and coexists with the Streamlit dashboard
+(other pages still live there). Files are in [`web/`](web/); the optimizer's
+`min_site_allocation_percent` / `min_sites_per_customer` map to the reference
+solar tool's 最小匹配比例 / 最少匹配間數.
+
 Trigger a matching run and inspect analytics:
 
 ```bash
