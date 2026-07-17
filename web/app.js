@@ -371,7 +371,7 @@
     var rCls = roiCls(t.roi_percent);
     var html = '<div class="kpis" style="grid-template-columns:repeat(4,1fr)">' +
       kpi("總 CAPEX", yi(t.capex) + "<small>億</small>", nfmt(t.capacity_mw, 0) + " MW 裝置容量", "hl") +
-      kpi("年淨利", '<span class="' + netCls + '">' + yi(t.annual_net) + "</span><small>億</small>", "年收入 − O&amp;M") +
+      kpi("年淨利", '<span class="' + netCls + '">' + yi(t.annual_net) + "</span><small>億</small>", "年收入 − O&M") +
       kpi("組合 ROI", '<span class="' + rCls + '">' + pct(t.roi_percent, 1) + "</span><small>%/年</small>", "年淨利 / CAPEX") +
       kpi("組合回收期", t.payback_years == null ? '<span class="neg">–</span>' : nfmt(t.payback_years, 1) + "<small>年</small>", t.payback_years == null ? "當前假設下無法回收" : "靜態回收(未折現)") +
       "</div>";

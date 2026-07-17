@@ -100,9 +100,10 @@ make run
 A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 **same-origin by the API** at **http://localhost:8000/app/** once `make run` is
 up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
-(farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live), and the
-flagship **最佳化評估** page (pick a customer → one MILP run feeds a
-product-grade dual-sided result + per-farm detail + time-slot breakdown). Files
+(farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live),
+投資效益 (investment ROI / payback), and the flagship **最佳化評估** page (pick a
+customer → one MILP run feeds a product-grade dual-sided result + per-farm detail
++ time-slot breakdown). Files
 are in [`web/`](web/); the optimizer's `min_site_allocation_percent` /
 `min_sites_per_customer` map to the reference solar tool's 最小匹配比例 / 最少匹配間數.
 
@@ -224,14 +225,25 @@ Interactive Swagger UI at `/docs`. Endpoints under `/api/v1`:
 
 ## Screenshots
 
-_TODO: add SPA screenshots (Overview / 最佳化評估 pages)._
+Dependency-free static SPA served same-origin by the API at `/app/` (demo data,
+light theme).
+
+**總覽 (Overview)** — platform-wide generation, allocation, RE attainment and
+per-farm utilisation for a period.
+
+![Overview dashboard](docs/images/dashboard-overview.png)
+
+**投資效益 (Investment ROI / payback)** — per-farm and portfolio CAPEX, annual
+net, ROI and static payback; per-MW build cost and O&M rate are overridable.
+
+![Investment ROI / payback](docs/images/investment.png)
 
 ## Known limitations
 
 - Monthly matching plus a Taipower three-tier time-of-use slot matcher
-  (peak/half-peak/off-peak × summer/non-summer, `GET /matching/slots`). Full
-  8760-hour matching and Taipower secondary (二次匹配) redistribution are future
-  work (P4b).
+  (peak/half-peak/off-peak × summer/non-summer, `GET /matching/slots`), and a
+  joint per-slot MILP with Taipower secondary (二次匹配) redistribution that
+  minimises time-mismatch surplus (P4b). Full 8760-hour matching is future work.
 - Two matching strategies: deterministic priority (greedy) and global economic
   optimization (MILP, `GET /matching/optimize`). The greedy engine is the audit
   baseline; the optimizer maximizes retailer gross margin under RE and structural
