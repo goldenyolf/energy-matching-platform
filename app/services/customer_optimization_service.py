@@ -1,8 +1,10 @@
-"""Unified per-customer optimization evaluation (v1.1).
+"""Unified per-customer optimization evaluation (v1.1 + P4b).
 
-Runs the P3 MILP optimizer once for the period, focuses on one customer, and
-derives seller/buyer economics, per-farm allocation, and a time-slot breakdown
-from that single allocation — so all panels are mutually consistent. Supports
+Primary path (P4b): run the joint per-time-slot MILP for the period, focus one
+customer, and derive seller/buyer economics, per-farm allocation, and the
+time-slot breakdown from that single per-slot allocation — so every panel is
+mutually consistent and time-slot values are exact/optimal (not derived). Falls
+back to the monthly P3 optimizer when the period has no time-slot data. Supports
 overriding the customer's RE target and using a single green transfer price.
 Compute-only (no persistence).
 """
@@ -10,6 +12,7 @@ Compute-only (no persistence).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,8 +21,11 @@ from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.matching.engine import ContractInput, CustomerDemand, FarmSupply
 from app.matching.optimizer import OptimizeOptions, optimize_period
+from app.matching.slot_engine import SlotCustomerDemand, SlotFarmSupply
+from app.matching.slot_optimizer import SlotOptimizeOptions, optimize_slots
 from app.matching.tou import SLOT_ORDER, grey_price, season_of
 from app.models import ConsumptionData, Contract, Customer, GenerationData, WindFarm
+from app.models.enums import Season
 from app.schemas.customer_optimization import (
     BuyerSide,
     CustomerOptimizationResult,
@@ -44,111 +50,50 @@ class CustomerOptimizeOptions:
     transfer_price_per_kwh: float | None = None
 
 
-def compute_customer_optimization(
-    db: Session, customer_id: int, period: str, options: CustomerOptimizeOptions
-) -> CustomerOptimizationResult:
-    customer = db.get(Customer, customer_id)
-    if customer is None:
-        raise NotFoundError(f"customer {customer_id} not found")
-
-    start, end = period_bounds(period)
-    gen = _sum_generation(db, start, end)
-    con = _sum_consumption(db, start, end)
-    farms_orm = {
+def _load(db: Session) -> tuple[dict[int, WindFarm], dict[int, Contract]]:
+    farms = {
         f.id: f for f in db.execute(select(WindFarm).order_by(WindFarm.id)).scalars()
     }
-    contracts_orm = {c.id: c for c in db.execute(select(Contract)).scalars()}
+    contracts = {c.id: c for c in db.execute(select(Contract)).scalars()}
+    return farms, contracts
 
-    farms = [
-        FarmSupply(
-            farm_id=f.id,
-            generated_mwh=gen.get(f.id, 0.0),
-            feed_in_price_per_kwh=f.feed_in_price_per_kwh,
+
+def _has_slot_data(db: Session, start: date, end: date) -> bool:
+    gen = db.execute(
+        select(GenerationData.id).where(
+            GenerationData.period_start >= start,
+            GenerationData.period_start <= end,
+            GenerationData.time_slot.is_not(None),
         )
-        for f in farms_orm.values()
-    ]
-    demands = []
-    for c in db.execute(select(Customer).order_by(Customer.id)).scalars():
-        if c.id == customer_id and options.re_target_percent is not None:
-            demands.append(
-                CustomerDemand(
-                    customer_id=c.id,
-                    consumed_mwh=con.get(c.id, 0.0),
-                    green_target_type="re_percent",
-                    re_target_percent=options.re_target_percent,
-                    target_energy_mwh=None,
-                )
-            )
-        else:
-            demands.append(
-                CustomerDemand(
-                    customer_id=c.id,
-                    consumed_mwh=con.get(c.id, 0.0),
-                    green_target_type=c.green_target_type.value,
-                    re_target_percent=c.re_target_percent,
-                    target_energy_mwh=c.target_energy_mwh,
-                )
-            )
-    contracts = [
-        ContractInput(
-            contract_id=c.id,
-            contract_number=c.contract_number,
-            wind_farm_id=c.wind_farm_id,
-            customer_id=c.customer_id,
-            start_date=c.start_date,
-            end_date=c.end_date,
-            status=c.status.value,
-            priority=c.priority,
-            contracted_energy_mwh=c.contracted_energy_mwh,
-            contracted_percentage=c.contracted_percentage,
-            price_per_kwh=c.price_per_kwh,
+    ).first()
+    con = db.execute(
+        select(ConsumptionData.id).where(
+            ConsumptionData.period_start >= start,
+            ConsumptionData.period_start <= end,
+            ConsumptionData.time_slot.is_not(None),
         )
-        for c in contracts_orm.values()
-    ]
+    ).first()
+    return gen is not None and con is not None
 
-    opts = OptimizeOptions(
-        min_sites_per_customer=options.min_sites_per_customer,
-        min_site_allocation_percent=options.min_site_allocation_percent,
-        default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
-    )
-    outcome = optimize_period(period, start, end, farms, demands, contracts, opts)
 
+def _build_result(
+    *,
+    customer: Customer,
+    period: str,
+    season: Season,
+    solver_status: str,
+    options: CustomerOptimizeOptions,
+    procurement: float,
+    revenue: float,
+    green_mwh: float,
+    consumption: float,
+    used_default: bool,
+    farm_out: list[FarmAllocationOut],
+    slot_out: list[SlotRowOut],
+    surplus: float,
+) -> CustomerOptimizationResult:
     grey = settings.grey_price_per_kwh
-    default_feed = settings.default_feed_in_price_per_kwh
-    focus = [
-        a
-        for a in outcome.allocations
-        if a.customer_id == customer_id and a.allocated_mwh > 0
-    ]
-
-    def feed_of(farm_id: int) -> float:
-        f = farms_orm.get(farm_id)
-        v = f.feed_in_price_per_kwh if f else None
-        return v if v is not None else default_feed
-
-    def price_of(alloc) -> float:
-        if options.transfer_price_per_kwh is not None:
-            return options.transfer_price_per_kwh
-        c = contracts_orm.get(alloc.contract_id)
-        p = c.price_per_kwh if c else None
-        return p if p is not None else feed_of(alloc.wind_farm_id)
-
-    used_default = False
-    green_kwh = procurement = revenue = 0.0
-    for a in focus:
-        kwh = a.allocated_mwh * _KWH
-        f = farms_orm.get(a.wind_farm_id)
-        if f is None or f.feed_in_price_per_kwh is None:
-            used_default = True
-        green_kwh += kwh
-        procurement += kwh * feed_of(a.wind_farm_id)
-        revenue += kwh * price_of(a)
-
-    consumption = 0.0
-    for cs in outcome.customer_summaries:
-        if cs.customer_id == customer_id:
-            consumption = cs.consumption_mwh
-    green_mwh = green_kwh / _KWH
+    green_kwh = green_mwh * _KWH
     grey_mwh = max(0.0, consumption - green_mwh)
     total_kwh = consumption * _KWH
     gross_profit = revenue - procurement
@@ -156,92 +101,11 @@ def compute_customer_optimization(
     re_percent = (green_mwh / consumption * 100.0) if consumption else 0.0
     avg_price = ((revenue + grey_mwh * _KWH * grey) / total_kwh) if total_kwh else 0.0
     added_cost = revenue - green_kwh * grey
-
-    # per-farm aggregate for the focus customer
-    by_farm: dict[int, dict] = {}
-    for a in focus:
-        e = by_farm.setdefault(
-            a.wind_farm_id,
-            {"alloc": 0.0, "contract": a.contract_number, "reason": a.reason},
-        )
-        e["alloc"] += a.allocated_mwh
-    farm_out = []
-    for fid in sorted(by_farm, key=lambda k: -by_farm[k]["alloc"]):
-        e = by_farm[fid]
-        f = farms_orm.get(fid)
-        farm_out.append(
-            FarmAllocationOut(
-                wind_farm_id=fid,
-                wind_farm_code=(f.code if f else str(fid)),
-                wind_farm_name=(f.name if f else ""),
-                allocated_mwh=round(e["alloc"], 6),
-                share_percent=(
-                    round(e["alloc"] / green_mwh * 100.0, 4) if green_mwh else 0.0
-                ),
-                contract_number=e["contract"],
-                reason=e["reason"],
-            )
-        )
-
-    # time-slot breakdown derived from the same monthly allocation
-    season = season_of(start.month)
-    slot_gen: dict[tuple, float] = {}
-    for g in db.execute(
-        select(GenerationData).where(
-            GenerationData.period_start >= start,
-            GenerationData.period_start <= end,
-            GenerationData.time_slot.is_not(None),
-        )
-    ).scalars():
-        slot_gen[(g.wind_farm_id, g.time_slot)] = (
-            slot_gen.get((g.wind_farm_id, g.time_slot), 0.0) + g.generated_energy_mwh
-        )
-    slot_con: dict = {}
-    for row in db.execute(
-        select(ConsumptionData).where(
-            ConsumptionData.customer_id == customer_id,
-            ConsumptionData.period_start >= start,
-            ConsumptionData.period_start <= end,
-            ConsumptionData.time_slot.is_not(None),
-        )
-    ).scalars():
-        slot_con[row.time_slot] = (
-            slot_con.get(row.time_slot, 0.0) + row.consumed_energy_mwh
-        )
-
-    green_slot = dict.fromkeys(SLOT_ORDER, 0.0)
-    for fid, e in by_farm.items():
-        totals = [slot_gen.get((fid, s), 0.0) for s in SLOT_ORDER]
-        tot = sum(totals)
-        for i, s in enumerate(SLOT_ORDER):
-            ratio = (totals[i] / tot) if tot > 0 else (1.0 / len(SLOT_ORDER))
-            green_slot[s] += e["alloc"] * ratio
-
-    slot_out = []
-    slot_matched = 0.0
-    for s in SLOT_ORDER:
-        cons = slot_con.get(s, 0.0)
-        # A slot cannot receive more green than it consumes (patent eq.5): green
-        # distributed to a slot by generation share is capped at that slot's use.
-        gr = min(green_slot[s], cons)
-        slot_matched += gr
-        slot_out.append(
-            SlotRowOut(
-                slot=s.value,
-                grey_price_per_kwh=grey_price(season, s),
-                consumption_mwh=round(cons, 6),
-                allocated_mwh=round(gr, 6),
-                re_percent=round(gr / cons * 100.0, 4) if cons else 0.0,
-            )
-        )
-    # Monthly green that cannot land within per-slot caps (off-peak wind surplus)
-    time_mismatch_surplus = max(0.0, green_mwh - slot_matched)
-
     return CustomerOptimizationResult(
         period=period,
         season=season.value,
-        solver_status=outcome.solver_status,
-        customer_id=customer_id,
+        solver_status=solver_status,
+        customer_id=customer.id,
         customer_code=customer.code,
         company_name=customer.company_name,
         re_target_percent=(
@@ -269,5 +133,338 @@ def compute_customer_optimization(
         ),
         allocations=farm_out,
         slot_breakdown=slot_out,
-        time_mismatch_surplus_mwh=round(time_mismatch_surplus, 3),
+        time_mismatch_surplus_mwh=round(surplus, 3),
+    )
+
+
+def compute_customer_optimization(
+    db: Session, customer_id: int, period: str, options: CustomerOptimizeOptions
+) -> CustomerOptimizationResult:
+    customer = db.get(Customer, customer_id)
+    if customer is None:
+        raise NotFoundError(f"customer {customer_id} not found")
+    start, end = period_bounds(period)
+    if _has_slot_data(db, start, end):
+        return _compute_slot(db, customer, period, start, end, options)
+    return _compute_monthly(db, customer, period, start, end, options)
+
+
+# --------------------------------------------------------------------------- #
+# P4b — joint per-time-slot MILP (primary)                                     #
+# --------------------------------------------------------------------------- #
+def _compute_slot(
+    db: Session,
+    customer: Customer,
+    period: str,
+    start: date,
+    end: date,
+    options: CustomerOptimizeOptions,
+) -> CustomerOptimizationResult:
+    focus_id = customer.id
+    farms_orm, contracts_orm = _load(db)
+    customers = {c.id: c for c in db.execute(select(Customer)).scalars()}
+
+    slot_farms = [
+        SlotFarmSupply(g.wind_farm_id, g.time_slot, g.generated_energy_mwh)
+        for g in db.execute(
+            select(GenerationData).where(
+                GenerationData.period_start >= start,
+                GenerationData.period_start <= end,
+                GenerationData.time_slot.is_not(None),
+            )
+        ).scalars()
+        if g.time_slot is not None
+    ]
+    slot_demands = []
+    for c in db.execute(
+        select(ConsumptionData).where(
+            ConsumptionData.period_start >= start,
+            ConsumptionData.period_start <= end,
+            ConsumptionData.time_slot.is_not(None),
+        )
+    ).scalars():
+        if c.time_slot is None:
+            continue
+        cust = customers.get(c.customer_id)
+        slot_demands.append(
+            SlotCustomerDemand(
+                c.customer_id,
+                c.time_slot,
+                c.consumed_energy_mwh,
+                green_target_type=(cust.green_target_type.value if cust else None),
+                re_target_percent=(cust.re_target_percent if cust else None),
+                target_energy_mwh=(cust.target_energy_mwh if cust else None),
+            )
+        )
+    contracts = [_to_contract_input(c) for c in contracts_orm.values()]
+
+    override = (
+        {focus_id: options.re_target_percent}
+        if options.re_target_percent is not None
+        else None
+    )
+    outcome = optimize_slots(
+        period,
+        start,
+        end,
+        slot_farms,
+        slot_demands,
+        contracts,
+        SlotOptimizeOptions(
+            min_sites_per_customer=options.min_sites_per_customer,
+            min_site_allocation_percent=options.min_site_allocation_percent,
+            re_target_percent_override=override,
+            default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
+        ),
+    )
+    season = season_of(start.month)
+    default_feed = settings.default_feed_in_price_per_kwh
+
+    def feed_of(farm_id: int) -> float:
+        f = farms_orm.get(farm_id)
+        v = f.feed_in_price_per_kwh if f else None
+        return v if v is not None else default_feed
+
+    def price_of(contract_id: int, farm_id: int) -> float:
+        if options.transfer_price_per_kwh is not None:
+            return options.transfer_price_per_kwh
+        c = contracts_orm.get(contract_id)
+        p = c.price_per_kwh if c else None
+        return p if p is not None else feed_of(farm_id)
+
+    focus = [
+        a
+        for a in outcome.allocations
+        if a.customer_id == focus_id and a.allocated_mwh > 0
+    ]
+    used_default = False
+    green_kwh = procurement = revenue = 0.0
+    by_farm: dict[int, dict] = {}
+    for a in focus:
+        kwh = a.allocated_mwh * _KWH
+        f = farms_orm.get(a.wind_farm_id)
+        if f is None or f.feed_in_price_per_kwh is None:
+            used_default = True
+        green_kwh += kwh
+        procurement += kwh * feed_of(a.wind_farm_id)
+        revenue += kwh * price_of(a.contract_id, a.wind_farm_id)
+        e = by_farm.setdefault(
+            a.wind_farm_id,
+            {"alloc": 0.0, "contract": a.contract_number, "reason": a.reason},
+        )
+        e["alloc"] += a.allocated_mwh
+    green_mwh = green_kwh / _KWH
+
+    total = {t.customer_id: t for t in outcome.customer_totals}.get(focus_id)
+    consumption = total.consumption_mwh if total else 0.0
+    surplus = total.re_shortfall_mwh if total else 0.0
+
+    farm_out = [
+        FarmAllocationOut(
+            wind_farm_id=fid,
+            wind_farm_code=(farms_orm[fid].code if fid in farms_orm else str(fid)),
+            wind_farm_name=(farms_orm[fid].name if fid in farms_orm else ""),
+            allocated_mwh=round(by_farm[fid]["alloc"], 6),
+            share_percent=(
+                round(by_farm[fid]["alloc"] / green_mwh * 100.0, 4)
+                if green_mwh
+                else 0.0
+            ),
+            contract_number=by_farm[fid]["contract"],
+            reason=by_farm[fid]["reason"],
+        )
+        for fid in sorted(by_farm, key=lambda k: -by_farm[k]["alloc"])
+    ]
+    focus_slot = {r.slot: r for r in outcome.customer_slot if r.customer_id == focus_id}
+    slot_out = [
+        SlotRowOut(
+            slot=s.value,
+            grey_price_per_kwh=grey_price(season, s),
+            consumption_mwh=(
+                round(focus_slot[s].consumption_mwh, 6) if s in focus_slot else 0.0
+            ),
+            allocated_mwh=(
+                round(focus_slot[s].allocated_mwh, 6) if s in focus_slot else 0.0
+            ),
+            re_percent=(round(focus_slot[s].re_percent, 4) if s in focus_slot else 0.0),
+        )
+        for s in SLOT_ORDER
+    ]
+    return _build_result(
+        customer=customer,
+        period=period,
+        season=season,
+        solver_status=outcome.solver_status,
+        options=options,
+        procurement=procurement,
+        revenue=revenue,
+        green_mwh=green_mwh,
+        consumption=consumption,
+        used_default=used_default,
+        farm_out=farm_out,
+        slot_out=slot_out,
+        surplus=surplus,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Fallback — monthly P3 optimizer (when no time-slot data)                     #
+# --------------------------------------------------------------------------- #
+def _to_contract_input(c: Contract) -> ContractInput:
+    return ContractInput(
+        contract_id=c.id,
+        contract_number=c.contract_number,
+        wind_farm_id=c.wind_farm_id,
+        customer_id=c.customer_id,
+        start_date=c.start_date,
+        end_date=c.end_date,
+        status=c.status.value,
+        priority=c.priority,
+        contracted_energy_mwh=c.contracted_energy_mwh,
+        contracted_percentage=c.contracted_percentage,
+        price_per_kwh=c.price_per_kwh,
+    )
+
+
+def _compute_monthly(
+    db: Session,
+    customer: Customer,
+    period: str,
+    start: date,
+    end: date,
+    options: CustomerOptimizeOptions,
+) -> CustomerOptimizationResult:
+    focus_id = customer.id
+    gen = _sum_generation(db, start, end)
+    con = _sum_consumption(db, start, end)
+    farms_orm, contracts_orm = _load(db)
+
+    farms = [
+        FarmSupply(
+            farm_id=f.id,
+            generated_mwh=gen.get(f.id, 0.0),
+            feed_in_price_per_kwh=f.feed_in_price_per_kwh,
+        )
+        for f in farms_orm.values()
+    ]
+    demands = []
+    for c in db.execute(select(Customer).order_by(Customer.id)).scalars():
+        override = c.id == focus_id and options.re_target_percent is not None
+        demands.append(
+            CustomerDemand(
+                customer_id=c.id,
+                consumed_mwh=con.get(c.id, 0.0),
+                green_target_type=(
+                    "re_percent" if override else c.green_target_type.value
+                ),
+                re_target_percent=(
+                    options.re_target_percent if override else c.re_target_percent
+                ),
+                target_energy_mwh=(None if override else c.target_energy_mwh),
+            )
+        )
+    contracts = [_to_contract_input(c) for c in contracts_orm.values()]
+
+    outcome = optimize_period(
+        period,
+        start,
+        end,
+        farms,
+        demands,
+        contracts,
+        OptimizeOptions(
+            min_sites_per_customer=options.min_sites_per_customer,
+            min_site_allocation_percent=options.min_site_allocation_percent,
+            default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
+        ),
+    )
+    season = season_of(start.month)
+    default_feed = settings.default_feed_in_price_per_kwh
+
+    def feed_of(farm_id: int) -> float:
+        f = farms_orm.get(farm_id)
+        v = f.feed_in_price_per_kwh if f else None
+        return v if v is not None else default_feed
+
+    def price_of(contract_id: int, farm_id: int) -> float:
+        if options.transfer_price_per_kwh is not None:
+            return options.transfer_price_per_kwh
+        c = contracts_orm.get(contract_id)
+        p = c.price_per_kwh if c else None
+        return p if p is not None else feed_of(farm_id)
+
+    focus = [
+        a
+        for a in outcome.allocations
+        if a.customer_id == focus_id and a.allocated_mwh > 0
+    ]
+    used_default = False
+    green_kwh = procurement = revenue = 0.0
+    by_farm: dict[int, dict] = {}
+    for a in focus:
+        kwh = a.allocated_mwh * _KWH
+        f = farms_orm.get(a.wind_farm_id)
+        if f is None or f.feed_in_price_per_kwh is None:
+            used_default = True
+        green_kwh += kwh
+        procurement += kwh * feed_of(a.wind_farm_id)
+        revenue += kwh * price_of(a.contract_id, a.wind_farm_id)
+        e = by_farm.setdefault(
+            a.wind_farm_id,
+            {"alloc": 0.0, "contract": a.contract_number, "reason": a.reason},
+        )
+        e["alloc"] += a.allocated_mwh
+    green_mwh = green_kwh / _KWH
+
+    consumption = 0.0
+    for cs in outcome.customer_summaries:
+        if cs.customer_id == focus_id:
+            consumption = cs.consumption_mwh
+
+    farm_out = [
+        FarmAllocationOut(
+            wind_farm_id=fid,
+            wind_farm_code=(farms_orm[fid].code if fid in farms_orm else str(fid)),
+            wind_farm_name=(farms_orm[fid].name if fid in farms_orm else ""),
+            allocated_mwh=round(by_farm[fid]["alloc"], 6),
+            share_percent=(
+                round(by_farm[fid]["alloc"] / green_mwh * 100.0, 4)
+                if green_mwh
+                else 0.0
+            ),
+            contract_number=by_farm[fid]["contract"],
+            reason=by_farm[fid]["reason"],
+        )
+        for fid in sorted(by_farm, key=lambda k: -by_farm[k]["alloc"])
+    ]
+
+    # no time-slot data → empty slot breakdown (each slot 0)
+    slot_out = [
+        SlotRowOut(
+            slot=s.value,
+            grey_price_per_kwh=grey_price(season, s),
+            consumption_mwh=0.0,
+            allocated_mwh=0.0,
+            re_percent=0.0,
+        )
+        for s in SLOT_ORDER
+    ]
+    tgt = customer.re_target_percent / 100.0 * consumption
+    if options.re_target_percent is not None:
+        tgt = options.re_target_percent / 100.0 * consumption
+    surplus = max(0.0, min(consumption, tgt) - green_mwh)
+    return _build_result(
+        customer=customer,
+        period=period,
+        season=season,
+        solver_status=outcome.solver_status,
+        options=options,
+        procurement=procurement,
+        revenue=revenue,
+        green_mwh=green_mwh,
+        consumption=consumption,
+        used_default=used_default,
+        farm_out=farm_out,
+        slot_out=slot_out,
+        surplus=surplus,
     )
