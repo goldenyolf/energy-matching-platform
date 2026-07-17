@@ -1,4 +1,4 @@
-"""Wind Farms page."""
+"""風場頁面。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import streamlit as st
 
 from dashboard import api_client as api
 
-st.set_page_config(page_title="Wind Farms", page_icon="🌬️", layout="wide")
-st.title("🌬️ Wind Farms")
+st.set_page_config(page_title="風場", page_icon="🌬️", layout="wide")
+st.title("🌬️ 風場")
 
 period = st.sidebar.text_input("分析月份 (YYYY-MM)", value="2024-01")
 
@@ -35,7 +35,17 @@ st.dataframe(
             "commercial_operation_date",
             "status",
         ]
-    ],
+    ].rename(
+        columns={
+            "code": "代碼",
+            "name": "名稱",
+            "operator_name": "營運商",
+            "location": "場址",
+            "installed_capacity_mw": "裝置容量 (MW)",
+            "commercial_operation_date": "商轉日期",
+            "status": "狀態",
+        }
+    ),
     use_container_width=True,
 )
 
@@ -54,7 +64,19 @@ for f in farms:
         }
     )
 df = pd.DataFrame(rows)
-st.dataframe(df, use_container_width=True)
+st.dataframe(
+    df.rename(
+        columns={
+            "code": "代碼",
+            "name": "名稱",
+            "generated_mwh": "發電量 (MWh)",
+            "allocated_mwh": "已分配 (MWh)",
+            "unallocated_mwh": "未分配 (MWh)",
+            "utilization_percent": "利用率 (%)",
+        }
+    ),
+    use_container_width=True,
+)
 st.bar_chart(df.set_index("name")[["allocated_mwh", "unallocated_mwh"]])
 
 with st.expander("查看某風場的逐月發電資料"):
@@ -62,5 +84,13 @@ with st.expander("查看某風場的逐月發電資料"):
     chosen = st.selectbox("選擇風場", list(codes))
     gen = api.generation(codes[chosen])
     if gen:
-        g = pd.DataFrame(gen)[["period_start", "generated_energy_mwh", "data_source"]]
+        g = pd.DataFrame(gen)[
+            ["period_start", "generated_energy_mwh", "data_source"]
+        ].rename(
+            columns={
+                "period_start": "期間",
+                "generated_energy_mwh": "發電量 (MWh)",
+                "data_source": "資料來源",
+            }
+        )
         st.dataframe(g, use_container_width=True)

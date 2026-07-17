@@ -33,7 +33,7 @@ services:
     environment:
       API_BASE_URL: http://api:8000
     command: >
-      streamlit run dashboard/Home.py
+      streamlit run dashboard/總覽.py
       --server.port 8501 --server.address 0.0.0.0
     ports:
       - "8501:8501"

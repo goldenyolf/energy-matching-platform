@@ -78,7 +78,7 @@ API_URL=$(gcloud run services describe emp-api --region $REGION --format 'value(
 gcloud run deploy emp-dashboard --image "$IMAGE" --region $REGION --allow-unauthenticated \
   --session-affinity --timeout 3600 --max-instances 1 \
   --set-env-vars "PYTHONPATH=/app,API_BASE_URL=$API_URL" \
-  --command sh --args '-c,streamlit run dashboard/Home.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
+  --command sh --args '-c,streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
 ```
 
 ## Notes & gotchas

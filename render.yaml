@@ -38,7 +38,7 @@ services:
     region: singapore
     plan: free
     healthCheckPath: /_stcore/health
-    dockerCommand: sh -c "streamlit run dashboard/Home.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false"
+    dockerCommand: sh -c "streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false"
     envVars:
       - key: PYTHONPATH
         value: /app            # so `from dashboard import ...` resolves in the image

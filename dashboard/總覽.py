@@ -1,4 +1,4 @@
-"""Energy Matching Platform — Streamlit dashboard (Overview page)."""
+"""綠電媒合平台 — Streamlit 儀表板(總覽頁)。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import streamlit as st
 
 from dashboard import api_client as api
 
-st.set_page_config(page_title="Energy Matching Platform", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="綠電媒合平台", page_icon="⚡", layout="wide")
 
 
 def period_selector() -> str:
@@ -15,7 +15,7 @@ def period_selector() -> str:
     return st.sidebar.text_input("分析月份 (YYYY-MM)", value=default)
 
 
-st.title("⚡ Energy Matching Platform")
+st.title("⚡ 綠電媒合平台")
 st.caption(
     "台灣綠電交易媒合 MVP — 風場、企業綠電合約、綠電分配與 RE 目標分析。"
     "本平台資料為模擬資料，與任何能源公司無官方關係。"
@@ -72,6 +72,6 @@ with col_right:
         st.bar_chart(df[["utilization_percent"]])
 
 st.info(
-    "使用左側頁面切換到 Wind Farms / Customers / Contracts / Matching。"
+    "使用左側頁面切換到 風場 / 企業客戶 / 綠電合約 / 媒合 / 售電評估 / 最佳化媒合。"
     "若尚未載入資料，請先執行 `make seed`。"
 )

@@ -60,7 +60,17 @@ if st.button("執行最佳化", type="primary"):
 
     st.markdown("**分配明細**")
     st.dataframe(
-        pd.DataFrame(opt["allocations"]),
+        pd.DataFrame(opt["allocations"]).rename(
+            columns={
+                "contract_id": "合約 ID",
+                "contract_number": "合約編號",
+                "wind_farm_id": "風場 ID",
+                "customer_id": "客戶 ID",
+                "allocated_mwh": "已分配 (MWh)",
+                "contract_limit_mwh": "合約上限 (MWh)",
+                "reason": "分配原因",
+            }
+        ),
         use_container_width=True,
         hide_index=True,
     )

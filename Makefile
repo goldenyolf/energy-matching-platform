@@ -42,7 +42,7 @@ run: ## Start the FastAPI backend (http://localhost:8000)
 	$(BIN)/uvicorn app.main:app --reload
 
 dashboard: ## Start the Streamlit dashboard (http://localhost:8501)
-	PYTHONPATH=. $(BIN)/streamlit run dashboard/Home.py
+	PYTHONPATH=. $(BIN)/streamlit run dashboard/總覽.py
 
 migrate: ## Apply DB migrations
 	$(BIN)/alembic upgrade head

@@ -6,7 +6,7 @@ import streamlit as st
 
 from dashboard import api_client as api
 
-st.set_page_config(page_title="Evaluation", page_icon="📈", layout="wide")
+st.set_page_config(page_title="售電評估", page_icon="📈", layout="wide")
 st.title("📈 售電評估")
 
 try:
@@ -40,12 +40,17 @@ with seller:
     st.subheader("售電端")
     st.metric("收購成本 (NTD)", f"{r['seller']['procurement_cost']:,.0f}")
     st.metric("售電收入 (NTD)", f"{r['seller']['sales_revenue']:,.0f}")
-    st.metric("售電毛利 (NTD)", f"{r['seller']['gross_profit']:,.0f}",
-              delta=f"{r['seller']['gross_margin_percent']:.2f}%")
+    st.metric(
+        "售電毛利 (NTD)",
+        f"{r['seller']['gross_profit']:,.0f}",
+        delta=f"{r['seller']['gross_margin_percent']:.2f}%",
+    )
 with buyer:
     st.subheader("用電端")
     st.metric("RE 比例", f"{r['buyer']['re_percent']:.2f}%")
-    st.metric("綠電 / 灰電 (MWh)",
-              f"{r['buyer']['green_mwh']:,.1f} / {r['buyer']['grey_mwh']:,.1f}")
+    st.metric(
+        "綠電 / 灰電 (MWh)",
+        f"{r['buyer']['green_mwh']:,.1f} / {r['buyer']['grey_mwh']:,.1f}",
+    )
     st.metric("用電平均單價 (NTD/kWh)", f"{r['buyer']['avg_price_per_kwh']:.4f}")
     st.metric("增加用電成本 (NTD)", f"{r['buyer']['added_cost']:,.0f}")

@@ -1,4 +1,4 @@
-"""Customers page."""
+"""企業客戶頁面。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import streamlit as st
 
 from dashboard import api_client as api
 
-st.set_page_config(page_title="Customers", page_icon="🏢", layout="wide")
-st.title("🏢 Customers")
+st.set_page_config(page_title="企業客戶", page_icon="🏢", layout="wide")
+st.title("🏢 企業客戶")
 
 period = st.sidebar.text_input("分析月份 (YYYY-MM)", value="2024-01")
 
@@ -34,7 +34,16 @@ st.dataframe(
             "re_target_percent",
             "target_year",
         ]
-    ],
+    ].rename(
+        columns={
+            "code": "代碼",
+            "company_name": "公司名稱",
+            "industry": "產業",
+            "annual_consumption_mwh": "年用電量 (MWh)",
+            "re_target_percent": "RE 目標 (%)",
+            "target_year": "目標年",
+        }
+    ),
     use_container_width=True,
 )
 
@@ -51,7 +60,17 @@ if analytics:
             "gap_to_target_mwh",
             "target_met",
         ]
-    ]
+    ].rename(
+        columns={
+            "company_name": "公司名稱",
+            "consumption_mwh": "用電量 (MWh)",
+            "allocated_mwh": "已分配 (MWh)",
+            "achieved_re_percent": "RE 達成率 (%)",
+            "re_target_percent": "RE 目標 (%)",
+            "gap_to_target_mwh": "目標缺口 (MWh)",
+            "target_met": "是否達標",
+        }
+    )
     st.dataframe(show, use_container_width=True)
     st.markdown("#### 綠電覆蓋率 vs. RE 目標 (%)")
     st.bar_chart(

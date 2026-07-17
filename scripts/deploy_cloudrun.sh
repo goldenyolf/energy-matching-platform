@@ -67,7 +67,7 @@ gcloud run deploy emp-dashboard \
   --session-affinity --timeout 3600 --max-instances 1 \
   --set-env-vars "PYTHONPATH=/app,API_BASE_URL=${API_URL}" \
   --command sh \
-  --args '-c,streamlit run dashboard/Home.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
+  --args '-c,streamlit run dashboard/總覽.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false'
 
 DASH_URL="$(gcloud run services describe emp-dashboard --region "${REGION}" \
   --format 'value(status.url)')"

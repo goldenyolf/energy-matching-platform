@@ -1,4 +1,4 @@
-"""Contracts page."""
+"""綠電合約頁面。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import streamlit as st
 
 from dashboard import api_client as api
 
-st.set_page_config(page_title="Contracts", page_icon="📄", layout="wide")
-st.title("📄 Contracts (PPA)")
+st.set_page_config(page_title="綠電合約", page_icon="📄", layout="wide")
+st.title("📄 綠電合約 (PPA)")
 
 period = st.sidebar.text_input("分析月份 (YYYY-MM)", value="2024-01")
 
@@ -41,7 +41,23 @@ for c in contracts:
         }
     )
 st.subheader("合約清單")
-st.dataframe(pd.DataFrame(rows), use_container_width=True)
+st.dataframe(
+    pd.DataFrame(rows).rename(
+        columns={
+            "contract_number": "合約編號",
+            "wind_farm": "風場",
+            "customer": "客戶",
+            "start_date": "起始日",
+            "end_date": "結束日",
+            "energy_mwh": "合約電量 (MWh)",
+            "percentage": "合約比例 (%)",
+            "price_per_kwh": "售電價 (NTD/kWh)",
+            "priority": "優先序",
+            "status": "狀態",
+        }
+    ),
+    use_container_width=True,
+)
 
 st.subheader(f"合約使用率 · {period}")
 st.caption("使用率 = 該月實際分配量 ÷ 合約月度上限（透過對該月執行媒合取得）。")
@@ -59,6 +75,12 @@ if st.button("計算合約使用率"):
                 summary.groupby("contract_id")["allocated_energy_mwh"]
                 .sum()
                 .reset_index()
+                .rename(
+                    columns={
+                        "contract_id": "合約 ID",
+                        "allocated_energy_mwh": "已分配 (MWh)",
+                    }
+                )
             )
             st.dataframe(agg, use_container_width=True)
-        st.success(f"已執行 {period} 媒合（run #{run['id']}）。")
+        st.success(f"已執行 {period} 媒合（媒合 #{run['id']}）。")
