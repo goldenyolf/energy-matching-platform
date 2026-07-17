@@ -15,8 +15,9 @@ from app.schemas.matching import (
     MatchingRunRead,
 )
 from app.schemas.optimization import OptimizationResult
+from app.schemas.slot_matching import SlotMatchingResult
 from app.services import matching_service as svc
-from app.services import optimize_service
+from app.services import optimize_service, slot_matching_service
 
 router = APIRouter(prefix="/matching", tags=["matching"])
 
@@ -82,3 +83,12 @@ def optimize(
         default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
     )
     return optimize_service.compute_optimized(db, period, options)
+
+
+@router.get("/slots", response_model=SlotMatchingResult)
+def slots(
+    period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
+    db: Session = Depends(get_db),
+) -> SlotMatchingResult:
+    """Per-time-slot (TOU) matching for a period (compute-only)."""
+    return slot_matching_service.compute_slot_outcome(db, period)
