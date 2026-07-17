@@ -29,3 +29,14 @@ class MatchingRunStatus(StrEnum):
 class GreenTargetType(StrEnum):
     RE_PERCENT = "re_percent"
     ENERGY = "energy"
+
+
+class TimeSlot(StrEnum):
+    PEAK = "peak"
+    HALF_PEAK = "half_peak"
+    OFF_PEAK = "off_peak"
+
+
+class Season(StrEnum):
+    SUMMER = "summer"
+    NON_SUMMER = "non_summer"

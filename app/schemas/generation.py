@@ -6,6 +6,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.enums import TimeSlot
+
 
 class GenerationBase(BaseModel):
     wind_farm_id: int
@@ -13,6 +15,7 @@ class GenerationBase(BaseModel):
     period_end: date
     generated_energy_mwh: float = Field(..., ge=0)
     data_source: str = "mock"
+    time_slot: TimeSlot | None = None
 
     @model_validator(mode="after")
     def _check(self) -> GenerationBase:

@@ -101,3 +101,33 @@ utilization_percent = allocated_from_farm / farm_generation × 100
 
 **可重現性**:單執行緒求解(`PULP_CBC_CMD(threads=1, msg=0)`)、合約以穩定序建模、
 目標以 ε 項破平局,同一輸入(即使重新排序)求解結果逐筆相同。
+
+## 時段時間電價媒合(slot matcher)
+
+`app/matching/slot_engine.py::match_slots` 是第三種媒合路徑,與月度引擎、MILP 最佳化並存
+(月度引擎不受影響)。時段定義為尖峰 / 半尖峰 / 離峰(`TimeSlot`),季別由月份推導
+(`app/matching/tou.py::season_of`):6–9 月為夏月,其餘為非夏月;整個期間同一季。
+
+演算法依 `SLOT_ORDER`(尖峰 → 半尖峰 → 離峰)逐時段、逐合格合約(依 priority/start_date/
+contract_number 穩定排序)貪婪分配:
+`alloc = min(該時段場剩餘發電, 該時段客戶剩餘用電, 合約% 上限, 合約月度能量預算)`。
+`contracted_percentage` 是該時段發電量的百分比上限(逐時段各自計算);`contracted_energy_mwh`
+則是**跨三時段共用的月度能量預算**,尖峰時段依 `SLOT_ORDER` 優先取用。跨時段的客戶/案場
+summary 把各時段 allocated 與 consumption 加總後再算 RE%,即專利式6 的跨時段 RE 聚合。
+
+月度引擎的 `_sum_generation`/`_sum_consumption`(`app/services/matching_service.py`)加總的是
+該月**所有**列,不分 `time_slot`,因此時段列(三時段加總即為月度總量)不會破壞月度引擎的正確性;
+但這仰賴一個**僅靠慣例維持**的互斥不變量——同一(案場/客戶, 月份)只能存在月度列**或**時段列
+其中一種,不能兩者並存。產生器(`scripts/generate_slot_profiles.py`)會刪除月度列以維持此不變量,
+但其他寫入路徑(`POST /generation`、CSV 匯入)並未強制檢查,若在已有時段列的情況下又插入月度列,
+會導致月度引擎重複計算。
+
+`app/services/slot_matching_service.py` 計算時段別經濟:用電端均價與增加成本以**逐時段灰電價**
+(`tou.grey_price(season, slot)`)計算,體現尖峰灰電貴、尖峰供綠電更省的經濟意義;售電端毛利
+則沿用單一費率的綠電轉供價(`contract.price_per_kwh`),不逐時段。
+
+**專利對應**:本階段實作專利式2/3/4(逐時段轉供量 = min(發電分配, 用電分配))、式5
+(`T_slot ≤ G_slot`,任一時段轉供量不超過該時段發電分配)、式6(跨時段 RE 聚合)以及時間電價
+(逐時段灰電計價)。沿用 P3 的 `min_th`(`min_site_allocation_percent`)與 `limit_gen`
+(`min_sites_per_customer`)概念、P2 的售電端毛利計算。台電**二次匹配**(同時段餘電再分配)與
+式7(最小化餘電目標式)留待 P4b。

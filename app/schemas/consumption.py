@@ -6,6 +6,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.enums import TimeSlot
+
 
 class ConsumptionBase(BaseModel):
     customer_id: int
@@ -13,6 +15,7 @@ class ConsumptionBase(BaseModel):
     period_end: date
     consumed_energy_mwh: float = Field(..., ge=0)
     data_source: str = "mock"
+    time_slot: TimeSlot | None = None
 
     @model_validator(mode="after")
     def _check(self) -> ConsumptionBase:
