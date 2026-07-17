@@ -56,7 +56,8 @@
   }
   function route() {
     var r = parseHash();
-    if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); }
+    if (r.route === "farms") { renderFarms(); setActive("farms"); }
+    else if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); }
     else { renderEvaluate(); setActive("evaluate"); }
   }
   nav.addEventListener("click", function (e) {
@@ -81,6 +82,62 @@
       '<div class="placeholder"><div class="big">' + s[0] + "</div>" +
       "<h2>此頁目前於 Streamlit 儀表板檢視</h2>" +
       "<p>" + esc(s[2]) + " 這一頁尚未移轉到新版介面;請於 Streamlit 儀表板(預設 http://localhost:8501)操作。新版將於後續逐頁移轉。</p></div>";
+  }
+
+  // ---------- 發電案場管理 ----------
+  function statusPill(s) {
+    var m = {
+      operational: ["運轉中", "ok"], under_construction: ["建置中", "warnp"],
+      planning: ["規劃中", "warnp"], decommissioned: ["除役", "warnp"],
+    };
+    var x = m[s] || [s || "–", "warnp"];
+    return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + esc(x[0]) + "</span>";
+  }
+
+  function renderFarms() {
+    crumb.textContent = "發電案場管理";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>發電案場管理</h1></div>' +
+      '<div class="meta"><span>風場基本資料、裝置容量、躉售價與各時段發電量。</span></div></div>' +
+      '<div id="farms-body"><div class="placeholder">載入中…</div></div>';
+    var body = document.getElementById("farms-body");
+    Promise.all([api.windFarms(), api.generation()]).then(function (r) {
+      var farms = r[0], gen = r[1];
+      var agg = {};
+      gen.forEach(function (g) {
+        var a = agg[g.wind_farm_id] || (agg[g.wind_farm_id] = { total: 0, peak: 0, half_peak: 0, off_peak: 0 });
+        a.total += g.generated_energy_mwh || 0;
+        if (g.time_slot && a[g.time_slot] != null) a[g.time_slot] += g.generated_energy_mwh || 0;
+      });
+      var totCap = farms.reduce(function (s, f) { return s + (f.installed_capacity_mw || 0); }, 0);
+      var totGen = Object.keys(agg).reduce(function (s, k) { return s + agg[k].total; }, 0);
+      var prices = farms.map(function (f) { return f.feed_in_price_per_kwh; }).filter(function (v) { return v != null; });
+      var avgPrice = prices.length ? prices.reduce(function (s, v) { return s + v; }, 0) / prices.length : null;
+
+      var html = '<div class="kpis" style="grid-template-columns:repeat(4,1fr)">' +
+        kpi("案場數", farms.length + "<small>場</small>", "已納入媒合", "hl") +
+        kpi("總裝置容量", nfmt(totCap, 1) + "<small>MW</small>", "跨全部案場") +
+        kpi("總發電量", nfmt(totGen, 0) + "<small>MWh</small>", "資料區間累積") +
+        kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
+        "</div>";
+      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span></div><div class=\"tablewrap\"><table>" +
+        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th></tr></thead><tbody>";
+      farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
+        var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
+        html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td>" +
+          "<td style=\"text-align:left\">" + esc(f.operator_name || "–") + "</td>" +
+          "<td style=\"text-align:left\">" + esc(f.location || "–") + "</td>" +
+          "<td class=\"num\">" + nfmt(f.installed_capacity_mw, 1) + "</td>" +
+          "<td class=\"num\">" + esc(f.commercial_operation_date || "–") + "</td>" +
+          "<td class=\"num\">" + (f.feed_in_price_per_kwh != null ? price(f.feed_in_price_per_kwh) : "–") + "</td>" +
+          "<td>" + statusPill(f.status) + "</td>" +
+          "<td class=\"num\">" + nfmt(a.peak, 0) + "</td><td class=\"num\">" + nfmt(a.half_peak, 0) + "</td><td class=\"num\">" + nfmt(a.off_peak, 0) + "</td>" +
+          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(a.total, 0) + "</td></tr>";
+      });
+      html += "</tbody></table></div></section>";
+      html += '<div class="foot-note">' + iconInfo() + "示範資料為模擬。各時段發電由 generate_slot_profiles 依風電典型占比拆分(離峰較高)。</div>";
+      body.innerHTML = html;
+    }).catch(function (err) { body.innerHTML = errbox("載入發電案場", err); });
   }
 
   // ---------- flagship: 最佳化評估 ----------
