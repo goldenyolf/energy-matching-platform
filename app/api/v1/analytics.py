@@ -14,9 +14,11 @@ from app.schemas.analytics import (
 )
 from app.schemas.customer_optimization import CustomerOptimizationResult
 from app.schemas.evaluation import EvaluationResult
+from app.schemas.investment import InvestmentResult
 from app.services import analytics_service as svc
 from app.services import customer_optimization_service as copt_svc
 from app.services import evaluation as eval_svc
+from app.services import investment_service as inv_svc
 from app.services.customer_optimization_service import CustomerOptimizeOptions
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -79,3 +81,19 @@ def customer_optimization(
         transfer_price_per_kwh=transfer_price_per_kwh,
     )
     return copt_svc.compute_customer_optimization(db, customer_id, period, opts)
+
+
+@router.get("/investment", response_model=InvestmentResult)
+def investment(
+    capex_per_mw: float | None = Query(None, gt=0.0),
+    om_rate_percent: float | None = Query(None, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+) -> InvestmentResult:
+    """Per-farm and portfolio ROI / payback. CAPEX and O&M rate overridable."""
+    return inv_svc.compute_investment(
+        db,
+        capex_per_mw=(settings.capex_per_mw if capex_per_mw is None else capex_per_mw),
+        om_rate_percent=(
+            settings.om_rate_percent if om_rate_percent is None else om_rate_percent
+        ),
+    )
