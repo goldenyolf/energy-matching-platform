@@ -247,6 +247,16 @@ badge marks it as live, in contrast to the amber 示範資料 on the demo pages.
 
 ![Live renewables (real Taipower feed)](docs/images/live-renewables.png)
 
+**手機 / RWD** — the SPA is fully responsive: the sidebar collapses to a sticky
+horizontal nav bar, KPI strips reflow to two columns, and wide tables scroll
+inside their own cards (the page body never scrolls horizontally).
+
+<p>
+  <img src="docs/images/mobile-overview.png" alt="Overview on a phone" width="300">
+  &nbsp;
+  <img src="docs/images/mobile-investment.png" alt="Investment on a phone" width="300">
+</p>
+
 ## Known limitations
 
 - Monthly matching plus a Taipower three-tier time-of-use slot matcher
