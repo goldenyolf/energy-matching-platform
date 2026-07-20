@@ -140,7 +140,7 @@
           kpi("總用電量", nfmt(s.total_consumption_mwh, 0) + "<small>MWh</small>", "") +
           kpi("客戶", s.customer_count + "<small>戶</small>", "達標 " + s.customers_meeting_target + " / " + s.customer_count) +
           kpi("風場", s.wind_farm_count + "<small>場</small>", "") +
-          "</div><div class=\"grid\">";
+          "</div><div class=\"stack\">";
         html += '<section class="card"><div class="hd"><h3>各客戶 RE 達成</h3><span class="aside">' + esc(s.period) + "</span></div><div class=\"tablewrap\"><table>" +
           "<thead><tr><th>客戶</th><th>用電 (MWh)</th><th>綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>達標</th></tr></thead><tbody>";
         custs.forEach(function (c) {
@@ -235,7 +235,7 @@
     body.innerHTML = '<div class="placeholder">載入中…</div>';
     api.liveRenewables(force)
       .then(function (d) {
-        var html = '<div class="kpis" style="grid-template-columns:repeat(3,1fr)">' +
+        var html = '<div class="kpis">' +
           kpi("快照時間", esc(d.snapshot_time || "–"), "") +
           kpi("風力總出力", nfmt(d.wind_total_mw, 1) + "<small>MW</small>", "", "hl") +
           kpi("再生能源總出力", nfmt(d.renewable_total_mw, 1) + "<small>MW</small>", "") +
@@ -291,7 +291,7 @@
       var prices = farms.map(function (f) { return f.feed_in_price_per_kwh; }).filter(function (v) { return v != null; });
       var avgPrice = prices.length ? prices.reduce(function (s, v) { return s + v; }, 0) / prices.length : null;
 
-      var html = '<div class="kpis" style="grid-template-columns:repeat(4,1fr)">' +
+      var html = '<div class="kpis">' +
         kpi("案場數", farms.length + "<small>場</small>", "已納入媒合", "hl") +
         kpi("總裝置容量", nfmt(totCap, 1) + "<small>MW</small>", "跨全部案場") +
         kpi("總發電量", nfmt(totGen, 0) + "<small>MWh</small>", "資料區間累積") +
@@ -369,7 +369,7 @@
     var t = r.total;
     var netCls = t.annual_net >= 0 ? "pos" : "neg";
     var rCls = roiCls(t.roi_percent);
-    var html = '<div class="kpis" style="grid-template-columns:repeat(4,1fr)">' +
+    var html = '<div class="kpis">' +
       kpi("總 CAPEX", yi(t.capex) + "<small>億</small>", nfmt(t.capacity_mw, 0) + " MW 裝置容量", "hl") +
       kpi("年淨利", '<span class="' + netCls + '">' + yi(t.annual_net) + "</span><small>億</small>", "年收入 − O&M") +
       kpi("組合 ROI", '<span class="' + rCls + '">' + pct(t.roi_percent, 1) + "</span><small>%/年</small>", "年淨利 / CAPEX") +

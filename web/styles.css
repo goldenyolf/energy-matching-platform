@@ -137,8 +137,8 @@ button{font-family:inherit}
 .field .hint{font-size:11px;color:var(--faint)}
 .formactions{margin-top:16px;display:flex;justify-content:flex-end}
 
-/* KPI strip */
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--kpi-line);
+/* KPI strip — auto-fit so every strip (6/4/3 KPIs) is responsive without inline overrides */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:1px;background:var(--kpi-line);
   border:1px solid var(--kpi-line);border-radius:var(--radius);overflow:hidden;margin-bottom:22px}
 .kpi{background:var(--kpi-bg);padding:16px 18px;display:flex;flex-direction:column;gap:9px;min-width:0}
 .kpi .k{font-size:11.5px;color:var(--kpi-muted);letter-spacing:.03em}
@@ -249,12 +249,31 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .modal p{color:var(--muted);font-size:12px;margin:14px 0 0}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}.mbar i{animation:none;width:94%}}
 
+/* ---- responsive: sidebar becomes a sticky top bar (brand + horizontal-scroll nav) ---- */
 @media (max-width:1080px){
-  .app{grid-template-columns:1fr}
-  .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center}
-  .rail .nav{flex-direction:row;flex-wrap:wrap;margin-top:0}
+  .app{display:flex;flex-direction:column}
+  .rail{flex:none;position:sticky;top:0;z-index:20;height:auto;flex-direction:row;
+    flex-wrap:nowrap;align-items:center;gap:10px;padding:8px 12px;
+    border-right:0;border-bottom:1px solid var(--rail-line)}
+  .brand{flex:none;padding:2px 2px;gap:9px}
+  .brand em{display:none}
+  .rail .nav{flex:1 1 auto;min-width:0;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;
+    gap:4px;margin-top:0;padding:2px 0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .rail .nav::-webkit-scrollbar{display:none}
   .rail .nav .lbl,.rail .foot{display:none}
-  .kpis{grid-template-columns:repeat(3,1fr)}
+  .nav a{flex:none;padding:8px 11px;font-size:12.5px;white-space:nowrap}
+  .nav a.on{box-shadow:inset 0 -2px 0 var(--brand)}
+  .topbar{position:static}
   .grid{grid-template-columns:1fr}
+  .content{padding:22px 18px 32px;max-width:100%}
 }
-@media (max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}.content{padding:18px 14px 30px}}
+@media (max-width:560px){
+  .content{padding:16px 13px 28px}
+  .brand b{font-size:13px}
+  .kpi{padding:13px 14px}
+  .kpi .v{font-size:19px}
+  .kpi .v small{font-size:11px}
+  .pagehead h1{font-size:19px}
+  .topbar{padding:0 14px}
+  .card .hd{padding:13px 15px}
+}
