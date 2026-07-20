@@ -127,6 +127,7 @@ button{font-family:inherit}
 .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:20px;font-size:11.5px;font-weight:650;letter-spacing:.02em}
 .pill.ok{background:var(--good-soft);color:var(--good)}
 .pill.warnp{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
 .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
 
 /* form panel */
