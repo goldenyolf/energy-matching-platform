@@ -70,8 +70,8 @@
     var views = {
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       meters: renderMeters, contracts: renderContracts, evaluate: renderEvaluate,
-      investment: renderInvestment, settlement: renderSettlement, risks: renderRisks,
-      live: renderLive,
+      investment: renderInvestment, recommend: renderRecommend,
+      settlement: renderSettlement, risks: renderRisks, live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -533,6 +533,76 @@
     }
     html += "</tbody></table></div></section>";
     html += '<div class="foot-note">' + iconInfo() + "到期/狀態以今日為基準;供電不足以選定期間的媒合結果比對合約預期上限。示範資料。</div>";
+    body.innerHTML = html;
+  }
+
+  // ---------- RE 目標建議 ----------
+  function renderRecommend() {
+    crumb.textContent = "RE 建議";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>RE 目標建議</h1></div>' +
+      '<div class="meta"><span>對未達 RE 目標的客戶,以成本最低優先,建議簽哪些有剩餘綠電的風場來補足缺口。</span></div></div>' +
+      '<form class="formcard" id="rcForm"><div class="formgrid">' +
+      '<div class="field"><label>用電戶<span class="req">*</span></label><select id="c-customer" required><option value="">載入中…</option></select></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="c-period" class="num" value="2024-01"></div>' +
+      '</div><div class="formactions"><button class="btn primary" type="submit">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a6 6 0 0 0-4 10.5c.5.5 1 1.5 1 2.5h6c0-1 .5-2 1-2.5A6 6 0 0 0 12 3zM9 18h6"/></svg>產生建議</button></div></form>' +
+      '<div id="rc-body"><div class="placeholder">載入中…</div></div>';
+    var sel = document.getElementById("c-customer");
+    api.customers().then(function (list) {
+      sel.innerHTML = list.map(function (c) {
+        return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
+      }).join("");
+      run();
+    }).catch(function (err) {
+      sel.innerHTML = '<option value="">無法載入用電戶</option>';
+      document.getElementById("rc-body").innerHTML = errbox("載入用電戶", err);
+    });
+    function run() {
+      var cid = parseInt(sel.value, 10); if (!cid) return;
+      var period = document.getElementById("c-period").value.trim();
+      var body = document.getElementById("rc-body");
+      body.innerHTML = '<div class="placeholder">運算中…</div>';
+      api.reRecommendations(cid, period).then(function (r) { renderRecommendResult(body, r); })
+        .catch(function (err) { body.innerHTML = errbox("產生建議", err); });
+    }
+    document.getElementById("rcForm").addEventListener("submit", function (e) { e.preventDefault(); run(); });
+  }
+
+  function renderRecommendResult(body, r) {
+    var closePill = r.gap_mwh <= 0
+      ? '<span class="pill ok"><span class="dot"></span>已達標</span>'
+      : (r.fully_closable ? '<span class="pill ok"><span class="dot"></span>可補足</span>'
+        : '<span class="pill bad"><span class="dot"></span>尚缺 ' + nfmt(r.residual_gap_mwh, 0) + " MWh</span>");
+    var html = '<div class="kpis">' +
+      kpi("RE 目標電量", nfmt(r.target_energy_mwh, 0) + "<small>MWh</small>", esc(r.company_name) + " · 目標 " + pct(r.re_target_percent, 0) + "%", "hl") +
+      kpi("目前綠電", nfmt(r.current_green_mwh, 0) + "<small>MWh</small>", "期間 " + esc(r.period)) +
+      kpi("RE 缺口", '<span class="' + (r.gap_mwh > 0 ? "neg" : "pos") + '">' + nfmt(r.gap_mwh, 0) + "</span><small>MWh</small>", r.gap_mwh > 0 ? "待補足" : "無缺口") +
+      kpi("補足狀態", closePill, r.gap_mwh > 0 ? "需簽約 " + nfmt(r.total_recommended_mwh, 0) + " MWh" : "") +
+      "</div>";
+    if (r.gap_mwh <= 0) {
+      html += '<div class="placeholder"><div class="big">✅</div><h2>已達標,無需補足</h2>' +
+        "<p>" + esc(r.company_name) + " 於 " + esc(r.period) + " 已達成 RE 目標,無 RE 缺口。</p></div>";
+      body.innerHTML = html;
+      return;
+    }
+    html += '<section class="card"><div class="hd"><h3>建議簽約風場</h3><span class="aside">成本最低優先 · 估計總成本 ' + money(r.total_est_cost) + " NTD</span></div><div class=\"tablewrap\"><table>" +
+      "<thead><tr><th>風場</th><th>可簽剩餘 (MWh)</th><th>建議補量 (MWh)</th><th>佔缺口</th><th>躉售價</th><th>估計成本</th><th>類型</th></tr></thead><tbody>";
+    if (!r.recommendations.length) {
+      html += '<tr><td class="empty" colspan="7">目前無可用的剩餘綠電可補足缺口</td></tr>';
+    } else {
+      r.recommendations.forEach(function (x) {
+        html += "<tr><td><span class=\"code\">" + esc(x.code) + "</span> " + esc(x.name) + "</td>" +
+          "<td class=\"num\">" + nfmt(x.available_surplus_mwh, 0) + "</td>" +
+          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(x.recommended_mwh, 0) + "</td>" +
+          "<td class=\"num\">" + pct(x.gap_covered_percent) + "%</td>" +
+          "<td class=\"num\">" + price(x.feed_in_price_per_kwh) + "</td>" +
+          "<td class=\"num\">" + money(x.est_cost) + "</td>" +
+          "<td>" + (x.has_existing_contract ? '<span class="pill ok"><span class="dot"></span>擴約</span>' : '<span class="pill warnp"><span class="dot"></span>新簽</span>') + "</td></tr>";
+      });
+    }
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() + "以成本最低優先,用有剩餘綠電的風場補足缺口。躉售價為指示性成本(非轉供價)。示範資料。</div>";
     body.innerHTML = html;
   }
 
