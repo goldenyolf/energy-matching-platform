@@ -102,7 +102,8 @@ A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
 (farms), 企業客戶 (customers), 多電號 (multi-meter/site), 綠電合約 (contracts), 即時再生能源 (live),
 投資效益 (investment ROI / payback), 轉供結算 (transfer settlement bill),
-風險告警 (contract risk alerts), and the flagship **最佳化評估** page (pick a
+風險告警 (contract risk alerts), T-REC 憑證 (renewable energy certificates),
+and the flagship **最佳化評估** page (pick a
 customer → one MILP run feeds a product-grade dual-sided result + per-farm detail
 + time-slot breakdown). Files
 are in [`web/`](web/); the optimizer's `min_site_allocation_percent` /
@@ -263,6 +264,13 @@ categories (即將到期 expiry, 供電不足 under-delivery, 風場超額承諾
 detail, and suggested action per alert. Under-delivery reuses the matching engine.
 
 ![Contract risk alerts](docs/images/risk-alerts.png)
+
+**T-REC 憑證 (Renewable Energy Certificates)** — a persisted certificate ledger
+with a two-stage lifecycle: matching **issues + transfers** batches to customers
+(1 憑證 = 1 MWh), and customers **retire** them to claim RE. Interactive: 發行本期憑證
+issues from the period's matching, and each transferred batch can be 註銷 (retired).
+
+![T-REC certificate ledger](docs/images/trec-ledger.png)
 
 **即時再生能源 (Live renewables)** — the one **real** data source: Taipower's
 public per-unit instantaneous generation (dataset 8931, ~10-min cadence), shown
