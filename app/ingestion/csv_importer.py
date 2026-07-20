@@ -95,6 +95,39 @@ def import_customers(db: Session, rows: Iterable[dict]) -> ImportResult:
     return ImportResult(imported=imported, skipped=skipped, errors=errors)
 
 
+def import_meters(db: Session, rows: Iterable[dict]) -> ImportResult:
+    """Meters (電號/廠區) reference their customer by *code* in the CSV."""
+    from app.models import Customer, Meter
+
+    imported, skipped, errors = 0, 0, []
+    for n, row in enumerate(rows, start=2):
+        try:
+            code = p.s(row.get("code"))
+            cust_id = _lookup_id(db, Customer, p.s(row.get("customer_code")))
+            if code is None or cust_id is None:
+                errors.append(f"row {n}: missing code or unknown customer_code")
+                continue
+            if _lookup_id(db, Meter, code) is not None:
+                skipped += 1
+                continue
+            db.add(
+                Meter(
+                    code=code,
+                    customer_id=cust_id,
+                    name=p.s(row.get("name")) or code,
+                    location=p.s(row.get("location")),
+                    re_target_percent=p.f(row.get("re_target_percent")) or 0.0,
+                    annual_consumption_mwh=p.f(row.get("annual_consumption_mwh")),
+                )
+            )
+            db.commit()
+            imported += 1
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            errors.append(f"row {n}: {exc}")
+    return ImportResult(imported=imported, skipped=skipped, errors=errors)
+
+
 def import_contracts(db: Session, rows: Iterable[dict]) -> ImportResult:
     """Contracts reference wind farms and customers by *code* in the CSV."""
     from app.models import Customer, WindFarm

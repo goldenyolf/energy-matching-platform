@@ -1,0 +1,6 @@
+customer_code,code,name,location,re_target_percent,annual_consumption_mwh
+CUST-TSMC,TSMC-TN,台南廠,台南,90,250000
+CUST-TSMC,TSMC-KH,高雄廠,高雄,60,166667
+CUST-AUO,AUO-LT,龍潭廠,桃園,80,40000
+CUST-AUO,AUO-TC,台中廠,台中,60,30000
+CUST-AUO,AUO-HL,後里廠,台中,40,13333
