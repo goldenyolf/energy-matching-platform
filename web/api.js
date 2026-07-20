@@ -65,6 +65,14 @@
         om_rate_percent: omRatePercent,
       });
     },
+    settlement: function (customerId, period, transferPrice, wheelingFee) {
+      return get("/analytics/settlement", {
+        customer_id: customerId,
+        period: period,
+        transfer_price_per_kwh: transferPrice,
+        wheeling_fee_per_kwh: wheelingFee,
+      });
+    },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,

@@ -15,11 +15,14 @@ from app.schemas.analytics import (
 from app.schemas.customer_optimization import CustomerOptimizationResult
 from app.schemas.evaluation import EvaluationResult
 from app.schemas.investment import InvestmentResult
+from app.schemas.settlement import SettlementResult
 from app.services import analytics_service as svc
 from app.services import customer_optimization_service as copt_svc
 from app.services import evaluation as eval_svc
 from app.services import investment_service as inv_svc
+from app.services import settlement_service as settle_svc
 from app.services.customer_optimization_service import CustomerOptimizeOptions
+from app.services.settlement_service import SettlementOptions
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -95,5 +98,25 @@ def investment(
         capex_per_mw=(settings.capex_per_mw if capex_per_mw is None else capex_per_mw),
         om_rate_percent=(
             settings.om_rate_percent if om_rate_percent is None else om_rate_percent
+        ),
+    )
+
+
+@router.get("/settlement", response_model=SettlementResult)
+def settlement(
+    customer_id: int = Query(..., ge=1),
+    period: str = _period,
+    transfer_price_per_kwh: float | None = Query(None, ge=0.0),
+    wheeling_fee_per_kwh: float | None = Query(None, ge=0.0),
+    db: Session = Depends(get_db),
+) -> SettlementResult:
+    """Two-sided per-slot 轉供結算單 for a customer/period."""
+    return settle_svc.compute_settlement(
+        db,
+        customer_id,
+        period,
+        SettlementOptions(
+            transfer_price_per_kwh=transfer_price_per_kwh,
+            wheeling_fee_per_kwh=wheeling_fee_per_kwh,
         ),
     )

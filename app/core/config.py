@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     capex_per_mw: float = 80_000_000.0  # NTD per MW installed
     om_rate_percent: float = 2.0  # annual O&M as % of CAPEX
 
+    # Transfer settlement (P5) — illustrative demo defaults
+    wheeling_fee_per_kwh: float = 0.1  # NTD/kWh Taipower 轉供/輸配 service fee
+    grid_emission_factor_kg_per_kwh: float = 0.494  # Taiwan 2023 grid factor
+
     @field_validator("database_url")
     @classmethod
     def _use_psycopg3_driver(cls, v: str) -> str:
