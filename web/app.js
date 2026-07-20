@@ -70,7 +70,7 @@
     var views = {
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       contracts: renderContracts, evaluate: renderEvaluate, investment: renderInvestment,
-      live: renderLive,
+      settlement: renderSettlement, live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -419,6 +419,75 @@
       "CAPEX = 裝置容量 × 每 MW 成本;年收入 = 年發電 × 躉售價;年淨利 = 年收入 − 年 O&amp;M;" +
       "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。</div>";
     body.innerHTML = html;
+  }
+
+  // ---------- 轉供結算單 (P5) ----------
+  var SLOT_LABEL = { peak: "尖峰", half_peak: "半尖峰", off_peak: "離峰" };
+  function slotName(s) { return SLOT_LABEL[s] || s; }
+
+  function renderSettlement() {
+    crumb.textContent = "轉供結算";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>轉供結算單</h1></div>' +
+      '<div class="meta"><span>選用電戶與期間,產出雙方逐時段轉供結算單(綠電轉供費、台電輸配費、售電毛利、減碳量)。</span></div></div>' +
+      '<form class="formcard" id="stForm"><div class="formgrid">' +
+      '<div class="field"><label>用電戶<span class="req">*</span></label><select id="s-customer" required><option value="">載入中…</option></select></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="s-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>轉供價</label><input id="s-transfer" class="num" type="number" min="0" step="0.1" placeholder="依合約"><span class="hint">NTD/kWh · 可覆寫</span></div>' +
+      '<div class="field"><label>台電輸配費</label><input id="s-wheel" class="num" type="number" min="0" step="0.01" placeholder="0.1"><span class="hint">NTD/kWh · 可覆寫</span></div>' +
+      '</div><div class="formactions"><button class="btn primary" type="submit">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 12h10M10 17h4"/></svg>產生結算單</button></div></form>' +
+      '<div id="st-result"></div>';
+    var sel = document.getElementById("s-customer");
+    api.customers().then(function (list) {
+      sel.innerHTML = list.map(function (c) {
+        return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
+      }).join("");
+    }).catch(function (err) {
+      sel.innerHTML = '<option value="">無法載入用電戶</option>';
+      document.getElementById("st-result").innerHTML = errbox("載入用電戶", err);
+    });
+    document.getElementById("stForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var cid = parseInt(sel.value, 10); if (!cid) { sel.focus(); return; }
+      var period = document.getElementById("s-period").value.trim();
+      var tv = document.getElementById("s-transfer").value.trim();
+      var wv = document.getElementById("s-wheel").value.trim();
+      showModal("正在產生轉供結算單…");
+      var root = document.getElementById("st-result");
+      api.settlement(cid, period, tv === "" ? null : parseFloat(tv), wv === "" ? null : parseFloat(wv))
+        .then(function (r) { renderSettlementBill(root, r); })
+        .catch(function (err) { root.innerHTML = errbox("產生結算單", err); })
+        .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+    });
+  }
+
+  function renderSettlementBill(root, r) {
+    var t = r.totals;
+    var farms = (r.farms || []).map(function (f) { return esc(f.wind_farm_code); }).join(" · ") || "–";
+    var seasonLabel = r.season === "summer" ? "夏月" : "非夏月";
+    var html = '<section class="card">' +
+      '<div class="hd"><h3>轉供結算單 · ' + esc(r.period) + "</h3><span class=\"aside\">" + seasonLabel + " · " + esc(r.solver_status) + "</span></div>" +
+      '<div class="rows"><div class="row"><span class="lab">用電戶</span><span class="val">' + esc(r.company_name) + " (" + esc(r.customer_code) + ")</span></div>" +
+      '<div class="row"><span class="lab">供電風場</span><span class="val">' + farms + "</span></div>" +
+      '<div class="row"><span class="lab">轉供價 / 輸配費</span><span class="val num">' + price(r.transfer_price_per_kwh) + " / " + price(r.wheeling_fee_per_kwh) + '<span class="u">NTD/kWh</span></span></div></div>';
+    html += '<div class="tablewrap"><table><thead><tr><th>時段</th><th>綠電量 (MWh)</th><th>轉供價</th><th>綠電金額</th><th>灰電量 (MWh)</th><th>灰電TOU價</th><th>灰電金額</th></tr></thead><tbody>';
+    (r.slots || []).forEach(function (s) {
+      html += "<tr><td>" + slotName(s.slot) + "</td><td class=\"num\">" + nfmt(s.green_mwh, 0) + "</td><td class=\"num\">" + price(s.transfer_price_per_kwh) +
+        "</td><td class=\"num\">" + money(s.green_cost) + "</td><td class=\"num\">" + nfmt(s.grey_mwh, 0) + "</td><td class=\"num\">" + price(s.grey_price_per_kwh) + "</td><td class=\"num\">" + money(s.grey_cost) + "</td></tr>";
+    });
+    html += "</tbody></table></div>";
+    html += '<div class="rows">' +
+      erow("綠電轉供費", money(t.green_transfer_cost), "NTD") +
+      erow("台電輸配費", "+" + money(t.wheeling_fee), "NTD") +
+      erowTotal("客戶應付合計", money(t.customer_payable), "NTD", "pos") +
+      erow("風場應收", money(t.farm_receivable), "NTD") +
+      erow("售電業毛利", money(t.retailer_margin) + " (" + pct(t.retailer_margin_percent) + "%)", "NTD", t.retailer_margin >= 0 ? "pos" : "neg") +
+      erow("灰電補足（參考）", money(t.grey_cost), "NTD", "prem") +
+      '</div>';
+    html += '<div class="slotnote">' + iconInfo() + "減碳量 <b>" + nfmt(t.carbon_avoided_tco2e, 0) + " tCO₂e</b>(綠電 " + nfmt(t.green_mwh, 0) + " MWh × " + price(r.grid_emission_factor_kg_per_kwh) + " kgCO₂e/kWh)。灰電補足為客戶剩餘用電成本,僅供參考、不計入應付。</div>";
+    html += "</section>";
+    root.innerHTML = html;
   }
 
   // ---------- flagship: 最佳化評估 ----------
