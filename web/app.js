@@ -40,8 +40,22 @@
     var f = farmsCache && farmsCache[id];
     return f ? { code: f.code, name: f.name } : { code: "#" + id, name: "" };
   }
-  function showModal(title) { if (title) modalTitle.textContent = title; overlay.classList.add("show"); }
-  function hideModal() { overlay.classList.remove("show"); }
+  // loading now uses a light non-blocking top bar instead of a full-screen modal
+  var loadbar = document.getElementById("loadbar");
+  function showModal() { loadbar.classList.add("on"); }
+  function hideModal() { loadbar.classList.remove("on"); }
+
+  // shared "last used period" so it carries across pages
+  var _period = null;
+  function getPeriod() {
+    if (_period == null) {
+      try { _period = localStorage.getItem("emp-period") || "2024-01"; } catch (e) { _period = "2024-01"; }
+    }
+    return _period;
+  }
+  function setPeriod(p) {
+    if (p && /^\d{4}-\d{2}$/.test(p)) { _period = p; try { localStorage.setItem("emp-period", p); } catch (e) { /* ignore */ } }
+  }
 
   function setActive(route) {
     Array.prototype.forEach.call(nav.querySelectorAll("a"), function (a) {
@@ -115,7 +129,7 @@
   function pageHeadWithPeriod(title, subtitle, id) {
     return '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>' + esc(title) + "</h1></div>" +
       '<div class="meta"><span>' + esc(subtitle) + "</span></div></div>" +
-      '<div class="headactions"><input id="' + id + '-period" class="period-input num" value="2024-01" placeholder="2024-01">' +
+      '<div class="headactions"><input id="' + id + '-period" class="period-input num" value="' + getPeriod() + '" placeholder="2024-01">' +
       '<button class="btn primary" id="' + id + '-go">查詢</button></div></div>' +
       '<div id="' + id + '-body"><div class="placeholder">載入中…</div></div>';
   }
@@ -125,7 +139,7 @@
     if (go) go.addEventListener("click", fn);
     if (inp) inp.addEventListener("keydown", function (e) { if (e.key === "Enter") fn(); });
   }
-  function periodVal(id) { var el = document.getElementById(id + "-period"); return el ? el.value.trim() : "2024-01"; }
+  function periodVal(id) { var el = document.getElementById(id + "-period"); var v = el ? el.value.trim() : "2024-01"; setPeriod(v); return v; }
   function reCell(v) {
     var w = Math.max(0, Math.min(100, v || 0));
     return pct(v) + "%<span class=\"re-bar\"><i style=\"width:" + w.toFixed(0) + "%\"></i></span>";
@@ -221,7 +235,7 @@
       '<div class="meta"><span>各電號/廠區的用電與 RE 目標達成。客戶綠電依各電號 RE 目標優先分配(目標高者優先)。</span></div></div>' +
       '<form class="formcard" id="mtForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="m-customer" required><option value="">載入中…</option></select></div>' +
-      '<div class="field"><label>期間 (YYYY-MM)</label><input id="m-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="m-period" class="num" value="' + getPeriod() + '"></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 12l3-3"/></svg>查看各電號</button></div></form>' +
       '<div id="mt-body"><div class="placeholder">載入中…</div></div>';
@@ -503,7 +517,7 @@
       '<div class="pagehead"><div class="title"><span class="bar"></span><h1>T-REC 憑證</h1></div>' +
       '<div class="meta"><span>再生能源憑證(1 憑證 = 1 MWh)。媒合即發行+移轉給客戶;客戶可註銷抵充 RE。</span></div></div>' +
       '<form class="formcard" id="trForm"><div class="formgrid">' +
-      '<div class="field"><label>年份別 (YYYY-MM)</label><input id="t-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>年份別 (YYYY-MM)</label><input id="t-period" class="num" value="' + getPeriod() + '"></div>' +
       '</div><div class="formactions" style="gap:9px">' +
       '<button class="btn ghost" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>查詢</button>' +
       '<button class="btn primary" type="button" id="t-issue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>發行本期憑證</button>' +
@@ -571,7 +585,7 @@
       '<div class="pagehead"><div class="title"><span class="bar"></span><h1>合約風險告警</h1></div>' +
       '<div class="meta"><span>掃描所有合約:即將到期、供電不足、風場超額承諾、狀態不一致,依嚴重度排序。</span></div></div>' +
       '<form class="formcard" id="rkForm"><div class="formgrid">' +
-      '<div class="field"><label>供電不足評估期間 (YYYY-MM)</label><input id="r-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>供電不足評估期間 (YYYY-MM)</label><input id="r-period" class="num" value="' + getPeriod() + '"></div>' +
       '<div class="field"><label>到期預警月數</label><input id="r-horizon" class="num" type="number" min="1" max="60" value="6"></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>掃描風險</button></div></form>' +
@@ -621,7 +635,7 @@
       '<div class="meta"><span>對未達 RE 目標的客戶,以成本最低優先,建議簽哪些有剩餘綠電的風場來補足缺口。</span></div></div>' +
       '<form class="formcard" id="rcForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="c-customer" required><option value="">載入中…</option></select></div>' +
-      '<div class="field"><label>期間 (YYYY-MM)</label><input id="c-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="c-period" class="num" value="' + getPeriod() + '"></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a6 6 0 0 0-4 10.5c.5.5 1 1.5 1 2.5h6c0-1 .5-2 1-2.5A6 6 0 0 0 12 3zM9 18h6"/></svg>產生建議</button></div></form>' +
       '<div id="rc-body"><div class="placeholder">載入中…</div></div>';
@@ -694,7 +708,7 @@
       '<div class="meta"><span>選用電戶與期間,產出雙方逐時段轉供結算單(綠電轉供費、台電輸配費、售電毛利、減碳量)。</span></div></div>' +
       '<form class="formcard" id="stForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="s-customer" required><option value="">載入中…</option></select></div>' +
-      '<div class="field"><label>期間 (YYYY-MM)</label><input id="s-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="s-period" class="num" value="' + getPeriod() + '"></div>' +
       '<div class="field"><label>轉供價</label><input id="s-transfer" class="num" type="number" min="0" step="0.1" placeholder="依合約"><span class="hint">NTD/kWh · 可覆寫</span></div>' +
       '<div class="field"><label>台電輸配費</label><input id="s-wheel" class="num" type="number" min="0" step="0.01" placeholder="0.1"><span class="hint">NTD/kWh · 可覆寫</span></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
@@ -761,7 +775,7 @@
       '<div class="meta"><span>對選定用電戶跑最佳化媒合,產出雙面經濟評估與時段別達成。</span></div></div>' +
       '<form class="formcard" id="evalForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="f-customer" required><option value="">載入中…</option></select></div>' +
-      '<div class="field"><label>期間 (YYYY-MM)</label><input id="f-period" class="num" value="2024-01" placeholder="2024-01"></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="f-period" class="num" value="' + getPeriod() + '" placeholder="2024-01"></div>' +
       '<div class="field"><label>最小分配 %</label><input id="f-minpct" class="num" type="number" min="0" max="100" step="1" value="0"></div>' +
       '<div class="field"><label>最少案場數</label><input id="f-minsites" class="num" type="number" min="0" max="20" step="1" value="0"></div>' +
       '<div class="field"><label>RE 目標 %</label><input id="f-retarget" class="num" type="number" min="0" max="100" step="1" placeholder="依資料設定"><span class="hint">可覆寫</span></div>' +
@@ -974,6 +988,10 @@
   var helpOverlay = document.getElementById("helpOverlay");
   function showHelp() { helpOverlay.classList.add("show"); }
   function hideHelp() { helpOverlay.classList.remove("show"); }
+  // remember the period whenever any "*-period" input changes, so pages share it
+  view.addEventListener("input", function (e) {
+    if (e.target && /(^|-)period$/.test(e.target.id || "")) setPeriod(e.target.value.trim());
+  });
   document.getElementById("helpBtn").addEventListener("click", showHelp);
   document.getElementById("helpClose").addEventListener("click", hideHelp);
   document.getElementById("helpOk").addEventListener("click", hideHelp);
