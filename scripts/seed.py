@@ -28,6 +28,7 @@ from app.db.session import SessionLocal, create_all, engine
 from app.ingestion import csv_importer
 from app.ingestion.sources import CsvDataSource
 from app.ingestion.taipower import DEFAULT_MONTHS, TaipowerWindSource
+from app.services.trec_service import get_ledger, issue_for_period, retire
 from scripts.generate_meter_profiles import split_consumption_to_meters
 from scripts.generate_slot_profiles import split_profiles
 
@@ -79,6 +80,10 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
             print("時段展開      : 發電/用電已拆為尖峰・半尖峰・離峰時段")
             split_consumption_to_meters(db)
             print("電號拆分      : 用電已歸屬至各電號/廠區")
+            issue_for_period(db, "2024-01")
+            for row in get_ledger(db, period="2024-01").batches[:2]:
+                retire(db, row.id)  # retire a couple to show both statuses
+            print("T-REC 憑證    : 已由 2024-01 媒合結果發行")
     finally:
         db.close()
     print("seed complete.")
