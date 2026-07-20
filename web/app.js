@@ -43,6 +43,17 @@
     });
   }
 
+  var dataBadge = document.getElementById("dataBadge");
+  function setDataBadge(route) {
+    if (!dataBadge) return;
+    var real = route === "live";
+    dataBadge.classList.toggle("real", real);
+    dataBadge.textContent = real ? "即時 · 台電資料" : "示範資料";
+    dataBadge.title = real
+      ? "本頁為真實資料:台電公開「各機組即時發電」(約 10 分更新)。僅供監控,不進媒合引擎。"
+      : "示範資料:發電、用電、合約、媒合與投資效益皆為模擬 demo。公司/風場名稱為真實,但數字為模擬。僅「即時再生能源」頁為台電真實資料。";
+  }
+
   // ---------- router ----------
   function parseHash() {
     var h = (location.hash || "#/overview").replace(/^#\/?/, "");
@@ -61,10 +72,12 @@
       contracts: renderContracts, evaluate: renderEvaluate, investment: renderInvestment,
       live: renderLive,
     };
-    if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); return; }
+    if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
     (known || renderOverview)();
-    setActive(known ? r.route : "overview");
+    var active = known ? r.route : "overview";
+    setActive(active);
+    setDataBadge(active);
   }
   nav.addEventListener("click", function (e) {
     var a = e.target.closest("a"); if (!a || a.classList.contains("off")) return;
