@@ -240,6 +240,13 @@ net, ROI and static payback; per-MW build cost and O&M rate are overridable.
 
 ![Investment ROI / payback](docs/images/investment.png)
 
+**即時再生能源 (Live renewables)** — the one **real** data source: Taipower's
+public per-unit instantaneous generation (dataset 8931, ~10-min cadence), shown
+read-through and never fed into the matching engine. The green **即時 · 台電資料**
+badge marks it as live, in contrast to the amber 示範資料 on the demo pages.
+
+![Live renewables (real Taipower feed)](docs/images/live-renewables.png)
+
 ## Known limitations
 
 - Monthly matching plus a Taipower three-tier time-of-use slot matcher
