@@ -229,7 +229,9 @@ Dependency-free static SPA served same-origin by the API at `/app/` (demo data,
 light theme).
 
 **總覽 (Overview)** — platform-wide generation, allocation, RE attainment and
-per-farm utilisation for a period.
+per-farm utilisation for a period. The amber **示範資料** badge in the top bar
+marks simulated demo data; it turns green (**即時 · 台電資料**) on the live
+renewables page, which is the one real Taipower feed.
 
 ![Overview dashboard](docs/images/dashboard-overview.png)
 
