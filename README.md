@@ -101,7 +101,8 @@ A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 **same-origin by the API** at **http://localhost:8000/app/** once `make run` is
 up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
 (farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live),
-投資效益 (investment ROI / payback), and the flagship **最佳化評估** page (pick a
+投資效益 (investment ROI / payback), 轉供結算 (transfer settlement bill), and the
+flagship **最佳化評估** page (pick a
 customer → one MILP run feeds a product-grade dual-sided result + per-farm detail
 + time-slot breakdown). Files
 are in [`web/`](web/); the optimizer's `min_site_allocation_percent` /
@@ -239,6 +240,14 @@ renewables page, which is the one real Taipower feed.
 net, ROI and static payback; per-MW build cost and O&M rate are overridable.
 
 ![Investment ROI / payback](docs/images/investment.png)
+
+**轉供結算單 (Transfer settlement bill)** — a formal two-sided bill for a
+customer/period, derived from the same per-slot matching engine: per-TOU-slot
+green/grey energy and cost, then 客戶應付 (green transfer cost + Taipower wheeling
+fee), 風場應收, 售電業毛利, and carbon avoided (tCO₂e). Transfer price and wheeling
+fee are overridable.
+
+![Transfer settlement bill](docs/images/settlement-bill.png)
 
 **即時再生能源 (Live renewables)** — the one **real** data source: Taipower's
 public per-unit instantaneous generation (dataset 8931, ~10-min cadence), shown
