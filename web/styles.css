@@ -93,6 +93,13 @@ button{font-family:inherit}
 .crumb b{color:var(--ink);font-weight:600}
 .crumb svg{width:14px;height:14px;opacity:.5}
 .spacer{flex:1}
+/* data-provenance badge: amber = simulated demo, green = real Taipower feed */
+.databadge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;margin-left:4px;
+  border-radius:20px;font-size:11px;font-weight:650;letter-spacing:.02em;white-space:nowrap;cursor:help;
+  background:var(--warn-soft);color:var(--warn)}
+.databadge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.databadge.real{background:var(--good-soft);color:var(--good)}
+.databadge:empty{display:none}
 .chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;
   border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:550;cursor:pointer}
 .chip svg{width:14px;height:14px;opacity:.7}
@@ -276,4 +283,6 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
   .pagehead h1{font-size:19px}
   .topbar{padding:0 14px}
   .card .hd{padding:13px 15px}
+  .crumb span:first-child,.crumb svg{display:none}
+  .databadge{margin-left:2px}
 }
