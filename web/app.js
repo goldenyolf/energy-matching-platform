@@ -71,7 +71,8 @@
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       meters: renderMeters, contracts: renderContracts, evaluate: renderEvaluate,
       investment: renderInvestment, recommend: renderRecommend,
-      settlement: renderSettlement, risks: renderRisks, live: renderLive,
+      settlement: renderSettlement, trecs: renderTrecs, risks: renderRisks,
+      live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -480,6 +481,76 @@
     html += '<div class="foot-note">' + iconInfo() +
       "CAPEX = 裝置容量 × 每 MW 成本;年收入 = 年發電 × 躉售價;年淨利 = 年收入 − 年 O&amp;M;" +
       "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。</div>";
+    body.innerHTML = html;
+  }
+
+  // ---------- T-REC 憑證 ----------
+  function trecStatusPill(s) {
+    return s === "retired"
+      ? '<span class="pill ok"><span class="dot"></span>已註銷</span>'
+      : '<span class="pill warnp"><span class="dot"></span>已移轉</span>';
+  }
+
+  function renderTrecs() {
+    crumb.textContent = "T-REC 憑證";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>T-REC 憑證</h1></div>' +
+      '<div class="meta"><span>再生能源憑證(1 憑證 = 1 MWh)。媒合即發行+移轉給客戶;客戶可註銷抵充 RE。</span></div></div>' +
+      '<form class="formcard" id="trForm"><div class="formgrid">' +
+      '<div class="field"><label>年份別 (YYYY-MM)</label><input id="t-period" class="num" value="2024-01"></div>' +
+      '</div><div class="formactions" style="gap:9px">' +
+      '<button class="btn ghost" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>查詢</button>' +
+      '<button class="btn primary" type="button" id="t-issue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>發行本期憑證</button>' +
+      '</div></form><div id="tr-body"><div class="placeholder">載入中…</div></div>';
+    var body = document.getElementById("tr-body");
+    function period() { return document.getElementById("t-period").value.trim(); }
+    function load() {
+      body.innerHTML = '<div class="placeholder">載入中…</div>';
+      api.trecs(period()).then(function (r) { renderTrecLedger(body, r); })
+        .catch(function (err) { body.innerHTML = errbox("載入憑證帳", err); });
+    }
+    document.getElementById("trForm").addEventListener("submit", function (e) { e.preventDefault(); load(); });
+    document.getElementById("t-issue").addEventListener("click", function () {
+      showModal("正在由媒合結果發行本期憑證…");
+      api.trecsIssue(period()).then(function (r) { renderTrecLedger(body, r); })
+        .catch(function (err) { body.innerHTML = errbox("發行憑證", err); })
+        .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+    });
+    body.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-retire]"); if (!btn) return;
+      showModal("正在註銷憑證…");
+      api.trecRetire(btn.getAttribute("data-retire")).then(function () { load(); })
+        .catch(function (err) { body.innerHTML = errbox("註銷憑證", err); })
+        .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+    });
+    load();
+  }
+
+  function renderTrecLedger(body, r) {
+    var s = r.summary;
+    var html = '<div class="kpis">' +
+      kpi("總憑證", nfmt(s.total_quantity_mwh, 0) + "<small>MWh</small>", s.total_batches + " 批次", "hl") +
+      kpi("已移轉", '<span class="prem">' + nfmt(s.transferred_mwh, 0) + "</span><small>MWh</small>", s.transferred_batches + " 批 · 客戶持有") +
+      kpi("已註銷", '<span class="pos">' + nfmt(s.retired_mwh, 0) + "</span><small>MWh</small>", s.retired_batches + " 批 · 已抵充 RE") +
+      kpi("批次數", s.total_batches + "<small>批</small>", "1 憑證 = 1 MWh") +
+      "</div>";
+    html += '<section class="card"><div class="hd"><h3>憑證帳</h3><span class="aside">' + s.total_batches + " 批次</span></div><div class=\"tablewrap\"><table>" +
+      "<thead><tr><th>批次號</th><th>風場</th><th>客戶</th><th>年份別</th><th>數量 (MWh)</th><th>狀態</th><th>動作</th></tr></thead><tbody>";
+    if (!r.batches.length) {
+      html += '<tr><td class="empty" colspan="7">本期尚無憑證,點「發行本期憑證」由媒合結果產生。</td></tr>';
+    } else {
+      r.batches.forEach(function (b) {
+        html += "<tr><td><span class=\"code\">" + esc(b.batch_no) + "</span></td>" +
+          "<td style=\"text-align:left\">" + esc(b.wind_farm_code) + "</td>" +
+          "<td style=\"text-align:left\">" + esc(b.customer_code) + " · " + esc(b.company_name) + "</td>" +
+          "<td class=\"num\">" + esc(b.period) + "</td>" +
+          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(b.quantity_mwh, 0) + "</td>" +
+          "<td>" + trecStatusPill(b.status) + "</td>" +
+          "<td>" + (b.status === "retired" ? "<span class=\"u\">—</span>" : '<button class="btn ghost" data-retire="' + b.id + '" style="height:28px;padding:0 11px;font-size:12px">註銷</button>') + "</td></tr>";
+      });
+    }
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() + "1 T-REC = 1,000 度 = 1 MWh。媒合即發行+移轉給客戶(已移轉);註銷後用於抵充 RE、不可再交易。示範資料。</div>";
     body.innerHTML = html;
   }
 
