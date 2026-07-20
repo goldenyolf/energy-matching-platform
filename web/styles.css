@@ -218,6 +218,7 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .re-bar i{display:block;height:100%;background:var(--buyer)}
 .slotnote{padding:12px 18px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
 .slotnote b{color:var(--ink);font-weight:600}
+.slotnote svg{width:14px;height:14px;flex:none;vertical-align:-2px;margin-right:5px}
 
 .period-input{height:36px;padding:0 11px;border-radius:9px;border:1px solid var(--line-strong);
   background:var(--surface);color:var(--ink);font-family:var(--font-mono);width:120px}
