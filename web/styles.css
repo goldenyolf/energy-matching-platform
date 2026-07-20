@@ -256,6 +256,21 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
   animation:load 2s ease forwards}
 @keyframes load{to{width:94%}}
 .modal p{color:var(--muted);font-size:12px;margin:14px 0 0}
+/* help panel */
+.helpcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(500px,92vw);padding:26px 26px 22px;text-align:left}
+.helpcard h3{font-size:17px;margin-bottom:10px}
+.helpcard .hlead{color:var(--muted);font-size:13px;line-height:1.7;margin:0 0 12px}
+.helpcard .hlist{margin:0 0 14px;padding-left:18px;display:flex;flex-direction:column;gap:7px}
+.helpcard .hlist li{font-size:13px;color:var(--ink);line-height:1.6}
+.helpcard .hlist b{color:var(--brand);font-weight:650}
+.helpcard .hnote{font-size:12px;color:var(--muted);line-height:1.9;margin:0 0 18px}
+.helpcard .hb{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:20px;font-size:11px;font-weight:650}
+.helpcard .hb.warn{background:var(--warn-soft);color:var(--warn)}
+.helpcard .hb.ok{background:var(--good-soft);color:var(--good)}
+.helpcard .hact{display:flex;gap:10px;justify-content:flex-end}
+.helpcard .helpx{position:absolute;top:12px;right:14px;background:none;border:0;color:var(--faint);font-size:24px;line-height:1;cursor:pointer}
+.helpcard .helpx:hover{color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}.mbar i{animation:none;width:94%}}
 
 /* ---- responsive: sidebar becomes a sticky top bar (brand + horizontal-scroll nav) ---- */

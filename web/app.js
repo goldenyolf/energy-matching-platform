@@ -19,7 +19,13 @@
     if (n == null || isNaN(n)) return "–";
     return Number(n).toLocaleString("en-US", { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
   }
-  function money(n) { return nfmt(Math.round(n), 0); }
+  function money(n) {
+    if (n == null || isNaN(n)) return "–";
+    if (Math.abs(n) >= 1e8) {
+      return Number(n / 1e8).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " 億";
+    }
+    return nfmt(Math.round(n), 0);
+  }
   function signed(n) { return (n >= 0 ? "+" : "") + money(n); }
   function abbr(n) {
     if (n == null || isNaN(n)) return "–";
@@ -278,12 +284,12 @@
     Promise.all([api.contracts(), api.windFarms(), api.customers()])
       .then(function (r) {
         var cs = r[0], fm = {}, cm = {};
-        r[1].forEach(function (f) { fm[f.id] = f.code; });
-        r[2].forEach(function (c) { cm[c.id] = c.code; });
+        r[1].forEach(function (f) { fm[f.id] = f.name || f.code; });
+        r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; });
         var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span></div><div class=\"tablewrap\"><table>" +
           "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th></tr></thead><tbody>";
         cs.forEach(function (c) {
-          html += "<tr><td class=\"code\">" + esc(c.contract_number) + "</td><td>" + esc(fm[c.wind_farm_id] || c.wind_farm_id) + "</td><td>" + esc(cm[c.customer_id] || c.customer_id) +
+          html += "<tr><td class=\"code\">" + esc(c.contract_number) + "</td><td style=\"text-align:left\">" + esc(fm[c.wind_farm_id] || c.wind_farm_id) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
             "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) +
             "</td><td class=\"num\">" + (c.contracted_energy_mwh != null ? nfmt(c.contracted_energy_mwh, 0) : "–") +
             "</td><td class=\"num\">" + (c.contracted_percentage != null ? pct(c.contracted_percentage, 0) + "%" : "–") +
@@ -695,16 +701,7 @@
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 12h10M10 17h4"/></svg>產生結算單</button></div></form>' +
       '<div id="st-result"></div>';
     var sel = document.getElementById("s-customer");
-    api.customers().then(function (list) {
-      sel.innerHTML = list.map(function (c) {
-        return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
-      }).join("");
-    }).catch(function (err) {
-      sel.innerHTML = '<option value="">無法載入用電戶</option>';
-      document.getElementById("st-result").innerHTML = errbox("載入用電戶", err);
-    });
-    document.getElementById("stForm").addEventListener("submit", function (e) {
-      e.preventDefault();
+    function run() {
       var cid = parseInt(sel.value, 10); if (!cid) { sel.focus(); return; }
       var period = document.getElementById("s-period").value.trim();
       var tv = document.getElementById("s-transfer").value.trim();
@@ -715,12 +712,22 @@
         .then(function (r) { renderSettlementBill(root, r); })
         .catch(function (err) { root.innerHTML = errbox("產生結算單", err); })
         .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+    }
+    api.customers().then(function (list) {
+      sel.innerHTML = list.map(function (c) {
+        return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
+      }).join("");
+      if (list[0]) run();  // auto-run for the first customer so the page isn't empty
+    }).catch(function (err) {
+      sel.innerHTML = '<option value="">無法載入用電戶</option>';
+      document.getElementById("st-result").innerHTML = errbox("載入用電戶", err);
     });
+    document.getElementById("stForm").addEventListener("submit", function (e) { e.preventDefault(); run(); });
   }
 
   function renderSettlementBill(root, r) {
     var t = r.totals;
-    var farms = (r.farms || []).map(function (f) { return esc(f.wind_farm_code); }).join(" · ") || "–";
+    var farms = (r.farms || []).map(function (f) { return esc(f.wind_farm_name || f.wind_farm_code); }).join(" · ") || "–";
     var seasonLabel = r.season === "summer" ? "夏月" : "非夏月";
     var html = '<section class="card">' +
       '<div class="hd"><h3>轉供結算單 · ' + esc(r.period) + "</h3><span class=\"aside\">" + seasonLabel + " · " + esc(r.solver_status) + "</span></div>" +
@@ -771,7 +778,11 @@
         custMap[c.id] = c;
         return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
       }).join("");
-      if (list[0]) reTarget.value = pct(list[0].re_target_percent, 0);
+      if (list[0]) {
+        reTarget.value = pct(list[0].re_target_percent, 0);
+        // auto-run for the first customer so the flagship page isn't empty on arrival
+        runEvaluation(list[0].id, list[0], document.getElementById("f-period").value.trim(), 0, 0, null, null);
+      }
     }).catch(function (err) {
       sel.innerHTML = '<option value="">無法載入用電戶</option>';
       document.getElementById("result").innerHTML = errbox("載入用電戶", err);
@@ -835,7 +846,7 @@
     // KPI strip
     html += '<div class="kpis">' +
       kpi("RE 達成率", pct(buyer.re_percent) + "<small>%</small>", "目標 " + pct(reTargetPct, 0) + "%", "hl") +
-      kpi("售電端毛利", "NT$ " + abbr(seller.gross_profit), "毛利率 " + pct(seller.gross_margin_percent, 2) + "%", "", seller.gross_profit >= 0 ? "up" : "down") +
+      kpi("售電端毛利", money(seller.gross_profit) + "<small>NTD</small>", "毛利率 " + pct(seller.gross_margin_percent, 2) + "%", "", seller.gross_profit >= 0 ? "up" : "down") +
       kpi("配對案場", allocs.length + "<small>場</small>", "綠電轉供率 " + pct(buyer.re_percent) + "%") +
       kpi("綠電轉供量", nfmt(buyer.green_mwh, 0) + "<small>MWh</small>", "灰電 " + nfmt(buyer.grey_mwh, 0) + " MWh") +
       kpi("售電均價", price(sellPrice), "NTD / kWh") +
@@ -958,6 +969,16 @@
     root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
   });
   overlay.addEventListener("click", function (e) { if (e.target === overlay) hideModal(); });
+
+  // ---------- help panel ----------
+  var helpOverlay = document.getElementById("helpOverlay");
+  function showHelp() { helpOverlay.classList.add("show"); }
+  function hideHelp() { helpOverlay.classList.remove("show"); }
+  document.getElementById("helpBtn").addEventListener("click", showHelp);
+  document.getElementById("helpClose").addEventListener("click", hideHelp);
+  document.getElementById("helpOk").addEventListener("click", hideHelp);
+  helpOverlay.addEventListener("click", function (e) { if (e.target === helpOverlay) hideHelp(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); } });
 
   // ---------- boot ----------
   route();

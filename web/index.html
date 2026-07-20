@@ -45,7 +45,7 @@
         <span class="databadge" id="dataBadge" tabindex="0"></span>
         <div class="spacer"></div>
         <button class="iconbtn" id="themeBtn" title="切換主題"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8Z"/></svg></button>
-        <button class="iconbtn" title="說明"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4 2c0 1.5-2 1.8-2 3M12 17h.01"/></svg></button>
+        <button class="iconbtn" id="helpBtn" title="說明"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4 2c0 1.5-2 1.8-2 3M12 17h.01"/></svg></button>
       </div>
 
       <main class="content" id="view"><!-- rendered by app.js --></main>
@@ -58,6 +58,24 @@
       <h3 id="modal-title">正在求解最佳綠電組合…</h3>
       <div class="mbar"><i></i></div>
       <p>MILP 全域最佳化 · 逐時段媒合 · 約束檢查</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="helpOverlay">
+    <div class="helpcard" role="dialog" aria-label="說明">
+      <button class="helpx" id="helpClose" aria-label="關閉">&times;</button>
+      <h3>關於這個平台</h3>
+      <p class="hlead">綠電媒合平台——台灣企業綠電轉供(Corporate PPA)的媒合與售電決策工具。左側導覽分成三塊:</p>
+      <ul class="hlist">
+        <li><b>資料管理</b> — 發電案場、企業客戶(可到電號/廠區)、綠電合約。</li>
+        <li><b>媒合評估</b> — 售電評估、投資效益、RE 目標建議(核心是逐時段 MILP 媒合)。</li>
+        <li><b>監控 / 結算</b> — 轉供結算單、T-REC 憑證、合約風險告警、即時再生能源。</li>
+      </ul>
+      <p class="hnote"><span class="hb warn">示範資料</span> 代表模擬數字;<span class="hb ok">即時 · 台電資料</span> 代表即時再生能源頁的真實台電來源。</p>
+      <div class="hact">
+        <a class="btn ghost" href="/docs" target="_blank" rel="noopener">API 文件(Swagger)</a>
+        <button class="btn primary" id="helpOk">知道了</button>
+      </div>
     </div>
   </div>
 
