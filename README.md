@@ -101,8 +101,8 @@ A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 **same-origin by the API** at **http://localhost:8000/app/** once `make run` is
 up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
 (farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live),
-投資效益 (investment ROI / payback), 轉供結算 (transfer settlement bill), and the
-flagship **最佳化評估** page (pick a
+投資效益 (investment ROI / payback), 轉供結算 (transfer settlement bill),
+風險告警 (contract risk alerts), and the flagship **最佳化評估** page (pick a
 customer → one MILP run feeds a product-grade dual-sided result + per-farm detail
 + time-slot breakdown). Files
 are in [`web/`](web/); the optimizer's `min_site_allocation_percent` /
@@ -248,6 +248,13 @@ fee), 風場應收, 售電業毛利, and carbon avoided (tCO₂e). Transfer pric
 fee are overridable.
 
 ![Transfer settlement bill](docs/images/settlement-bill.png)
+
+**合約風險告警 (Contract risk alerts)** — scans every contract for four risk
+categories (即將到期 expiry, 供電不足 under-delivery, 風場超額承諾 over-commitment,
+狀態不一致 status-mismatch), ranked by severity (高/中/低) with an affected-party,
+detail, and suggested action per alert. Under-delivery reuses the matching engine.
+
+![Contract risk alerts](docs/images/risk-alerts.png)
 
 **即時再生能源 (Live renewables)** — the one **real** data source: Taipower's
 public per-unit instantaneous generation (dataset 8931, ~10-min cadence), shown
