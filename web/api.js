@@ -20,8 +20,8 @@
     return parts.length ? "?" + parts.join("&") : "";
   }
 
-  function get(path, params) {
-    return fetch(V1 + path + qs(params), { headers: { Accept: "application/json" } })
+  function request(method, path, params) {
+    return fetch(V1 + path + qs(params), { method: method, headers: { Accept: "application/json" } })
       .then(function (resp) {
         return resp.text().then(function (body) {
           if (!resp.ok) {
@@ -37,6 +37,8 @@
         throw new ApiError("無法連線到後端 API：" + err.message, 0);
       });
   }
+  function get(path, params) { return request("GET", path, params); }
+  function post(path, params) { return request("POST", path, params); }
 
   global.api = {
     ApiError: ApiError,
@@ -82,6 +84,11 @@
     reRecommendations: function (customerId, period) {
       return get("/analytics/re-recommendations", { customer_id: customerId, period: period });
     },
+    trecs: function (period, customerId) {
+      return get("/trecs", { period: period, customer_id: customerId });
+    },
+    trecsIssue: function (period) { return post("/trecs/issue", { period: period }); },
+    trecRetire: function (batchId) { return post("/trecs/" + batchId + "/retire", {}); },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,
