@@ -76,6 +76,9 @@
     contractRisks: function (period, horizonMonths) {
       return get("/analytics/contract-risks", { period: period, horizon_months: horizonMonths });
     },
+    meterBreakdown: function (customerId, period) {
+      return get("/analytics/meter-breakdown", { customer_id: customerId, period: period });
+    },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,

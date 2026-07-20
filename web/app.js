@@ -69,8 +69,9 @@
     var r = parseHash();
     var views = {
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
-      contracts: renderContracts, evaluate: renderEvaluate, investment: renderInvestment,
-      settlement: renderSettlement, risks: renderRisks, live: renderLive,
+      meters: renderMeters, contracts: renderContracts, evaluate: renderEvaluate,
+      investment: renderInvestment, settlement: renderSettlement, risks: renderRisks,
+      live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -203,6 +204,67 @@
         body.innerHTML = html;
       })
       .catch(function (err) { body.innerHTML = errbox("載入客戶", err); });
+  }
+
+  // ---------- 多電號/廠區 ----------
+  function renderMeters() {
+    crumb.textContent = "多電號";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>多電號/廠區</h1></div>' +
+      '<div class="meta"><span>各電號/廠區的用電與 RE 目標達成。客戶綠電依各電號 RE 目標優先分配(目標高者優先)。</span></div></div>' +
+      '<form class="formcard" id="mtForm"><div class="formgrid">' +
+      '<div class="field"><label>用電戶<span class="req">*</span></label><select id="m-customer" required><option value="">載入中…</option></select></div>' +
+      '<div class="field"><label>期間 (YYYY-MM)</label><input id="m-period" class="num" value="2024-01"></div>' +
+      '</div><div class="formactions"><button class="btn primary" type="submit">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 12l3-3"/></svg>查看各電號</button></div></form>' +
+      '<div id="mt-body"><div class="placeholder">載入中…</div></div>';
+    var sel = document.getElementById("m-customer");
+    api.customers().then(function (list) {
+      sel.innerHTML = list.map(function (c) {
+        return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
+      }).join("");
+      run();
+    }).catch(function (err) {
+      sel.innerHTML = '<option value="">無法載入用電戶</option>';
+      document.getElementById("mt-body").innerHTML = errbox("載入用電戶", err);
+    });
+    function run() {
+      var cid = parseInt(sel.value, 10); if (!cid) return;
+      var period = document.getElementById("m-period").value.trim();
+      var body = document.getElementById("mt-body");
+      body.innerHTML = '<div class="placeholder">載入中…</div>';
+      api.meterBreakdown(cid, period).then(function (r) { renderMeterBreakdown(body, r); })
+        .catch(function (err) { body.innerHTML = errbox("載入電號", err); });
+    }
+    document.getElementById("mtForm").addEventListener("submit", function (e) { e.preventDefault(); run(); });
+  }
+
+  function renderMeterBreakdown(body, r) {
+    if (!r.meter_count) {
+      body.innerHTML = '<div class="placeholder"><div class="big">🏭</div><h2>此客戶尚未設定多電號/廠區</h2>' +
+        '<p>' + esc(r.company_name) + " 目前以單一用電戶計。可於示範資料的 meters.csv 為其新增電號/廠區。</p></div>";
+      return;
+    }
+    var html = '<div class="kpis">' +
+      kpi("電號數", r.meter_count + "<small>個</small>", esc(r.company_name), "hl") +
+      kpi("客戶總用電", nfmt(r.total_consumption_mwh, 0) + "<small>MWh</small>", "期間 " + esc(r.period)) +
+      kpi("客戶總 RE 達成", pct(r.customer_re_percent) + "<small>%</small>", "綠電 " + nfmt(r.total_green_mwh, 0) + " MWh") +
+      kpi("達標電號", r.meters_meeting_target + " / " + r.meter_count, "達成各自 RE 目標") +
+      "</div>";
+    html += '<section class="card"><div class="hd"><h3>各電號/廠區 RE 達成</h3><span class="aside">依 RE 目標排序</span></div><div class="tablewrap"><table>' +
+      "<thead><tr><th>電號</th><th>廠區</th><th>用電 (MWh)</th><th>分配綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>達標</th></tr></thead><tbody>";
+    r.meters.forEach(function (m) {
+      html += "<tr><td><span class=\"code\">" + esc(m.code) + "</span></td>" +
+        "<td style=\"text-align:left\">" + esc(m.name) + (m.location ? " · " + esc(m.location) : "") + "</td>" +
+        "<td class=\"num\">" + nfmt(m.consumption_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + nfmt(m.allocated_green_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + reCell(m.re_percent) + "</td>" +
+        "<td class=\"num\">" + pct(m.re_target_percent, 0) + "%</td>" +
+        "<td>" + metPill(m.target_met) + "</td></tr>";
+    });
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() + "綠電依各電號 RE 目標優先分配(目標較高者優先填至目標,餘量再補),Σ各電號綠電 = 客戶總綠電。示範資料。</div>";
+    body.innerHTML = html;
   }
 
   // ---------- 綠電合約 ----------
