@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +39,22 @@ class Settings(BaseSettings):
     # Investment analysis (ROI / payback) — illustrative demo defaults
     capex_per_mw: float = 80_000_000.0  # NTD per MW installed
     om_rate_percent: float = 2.0  # annual O&M as % of CAPEX
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg3_driver(cls, v: str) -> str:
+        """Force psycopg v3 for Postgres.
+
+        A bare ``postgresql://`` / ``postgres://`` (what Neon and Render hand you
+        when you copy a connection string) makes SQLAlchemy default to psycopg2,
+        which is not installed — this project uses ``psycopg[binary]`` (v3).
+        Normalizing here means a plain copy-pasted URL just works.
+        """
+        if v.startswith("postgres://"):
+            v = "postgresql://" + v[len("postgres://") :]
+        if v.startswith("postgresql://"):
+            v = "postgresql+psycopg://" + v[len("postgresql://") :]
+        return v
 
 
 settings = Settings()
