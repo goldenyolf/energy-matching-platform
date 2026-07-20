@@ -100,7 +100,7 @@ make run
 A dependency-free, build-free single-page UI (HTML/CSS/vanilla JS) is served
 **same-origin by the API** at **http://localhost:8000/app/** once `make run` is
 up — no extra process, no Node build. It covers 總覽 (overview), 發電案場
-(farms), 企業客戶 (customers), 綠電合約 (contracts), 即時再生能源 (live),
+(farms), 企業客戶 (customers), 多電號 (multi-meter/site), 綠電合約 (contracts), 即時再生能源 (live),
 投資效益 (investment ROI / payback), 轉供結算 (transfer settlement bill),
 風險告警 (contract risk alerts), and the flagship **最佳化評估** page (pick a
 customer → one MILP run feeds a product-grade dual-sided result + per-farm detail
@@ -235,6 +235,14 @@ marks simulated demo data; it turns green (**即時 · 台電資料**) on the li
 renewables page, which is the one real Taipower feed.
 
 ![Overview dashboard](docs/images/dashboard-overview.png)
+
+**多電號/廠區 (Multi-meter / multi-site)** — a customer's consumption split
+across 電號/廠區 (meters/sites), each with its own RE target. The customer's green
+is distributed **target-priority** (higher-target sites filled first), so each
+site shows a distinct RE% — here 台積電's 台南廠 (90% target) is met while 高雄廠 falls
+short. Core matching stays customer-level.
+
+![Multi-meter / multi-site RE attainment](docs/images/multi-meter.png)
 
 **投資效益 (Investment ROI / payback)** — per-farm and portfolio CAPEX, annual
 net, ROI and static payback; per-MW build cost and O&M rate are overridable.
