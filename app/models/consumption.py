@@ -21,6 +21,9 @@ class ConsumptionData(Base, CreatedMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    meter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("meters.id"), index=True, nullable=True, default=None
+    )
     period_start: Mapped[date] = mapped_column(Date, index=True)
     period_end: Mapped[date] = mapped_column(Date)
     consumed_energy_mwh: Mapped[float] = mapped_column(Float)
