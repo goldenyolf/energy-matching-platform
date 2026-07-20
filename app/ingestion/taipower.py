@@ -218,3 +218,6 @@ class TaipowerWindSource:
 
     def consumption(self) -> list[dict]:
         return []
+
+    def meters(self) -> list[dict]:
+        return []

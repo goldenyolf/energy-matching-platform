@@ -28,6 +28,7 @@ from app.db.session import SessionLocal, create_all, engine
 from app.ingestion import csv_importer
 from app.ingestion.sources import CsvDataSource
 from app.ingestion.taipower import DEFAULT_MONTHS, TaipowerWindSource
+from scripts.generate_meter_profiles import split_consumption_to_meters
 from scripts.generate_slot_profiles import split_profiles
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
@@ -63,6 +64,7 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
             ("contracts", csv_importer.import_contracts, source.contracts()),
             ("generation", csv_importer.import_generation, source.generation()),
             ("consumption", csv_importer.import_consumption, source.consumption()),
+            ("meters", csv_importer.import_meters, source.meters()),
         ]
         for label, importer, rows in steps:
             result = importer(db, rows)
@@ -75,6 +77,8 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
         if slot_profiles:
             split_profiles(db)
             print("時段展開      : 發電/用電已拆為尖峰・半尖峰・離峰時段")
+            split_consumption_to_meters(db)
+            print("電號拆分      : 用電已歸屬至各電號/廠區")
     finally:
         db.close()
     print("seed complete.")
