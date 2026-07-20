@@ -18,6 +18,7 @@ from app.schemas.customer_optimization import CustomerOptimizationResult
 from app.schemas.evaluation import EvaluationResult
 from app.schemas.investment import InvestmentResult
 from app.schemas.meter import MeterBreakdown
+from app.schemas.recommendation import ReTargetAdvice
 from app.schemas.risk import RiskReport
 from app.schemas.settlement import SettlementResult
 from app.services import analytics_service as svc
@@ -25,6 +26,7 @@ from app.services import customer_optimization_service as copt_svc
 from app.services import evaluation as eval_svc
 from app.services import investment_service as inv_svc
 from app.services import meter_service as meter_svc
+from app.services import recommendation_service as reco_svc
 from app.services import risk_service as risk_svc
 from app.services import settlement_service as settle_svc
 from app.services.customer_optimization_service import CustomerOptimizeOptions
@@ -148,3 +150,13 @@ def meter_breakdown(
 ) -> MeterBreakdown:
     """Per-meter RE attainment (target-priority green distribution)."""
     return meter_svc.compute_meter_breakdown(db, customer_id, period)
+
+
+@router.get("/re-recommendations", response_model=ReTargetAdvice)
+def re_recommendations(
+    customer_id: int = Query(..., ge=1),
+    period: str = _period,
+    db: Session = Depends(get_db),
+) -> ReTargetAdvice:
+    """Cheapest-first surplus-farm recommendations to close a customer's RE gap."""
+    return reco_svc.compute_re_recommendations(db, customer_id, period)

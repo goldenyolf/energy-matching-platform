@@ -79,6 +79,9 @@
     meterBreakdown: function (customerId, period) {
       return get("/analytics/meter-breakdown", { customer_id: customerId, period: period });
     },
+    reRecommendations: function (customerId, period) {
+      return get("/analytics/re-recommendations", { customer_id: customerId, period: period });
+    },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,
