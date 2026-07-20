@@ -1,8 +1,8 @@
-# Domain model
+# 領域模型（Domain model）
 
-All energy is stored in **MWh**; percentages are 0–100. Defined in `app/models/`.
+所有電量以 **MWh** 儲存;百分比為 0–100。定義在 `app/models/`。
 
-## Entity–relationship diagram
+## 實體關聯圖（ERD）
 
 ```mermaid
 erDiagram
@@ -86,25 +86,24 @@ erDiagram
     }
 ```
 
-## Key distinctions
+## 關鍵區別
 
-The system deliberately keeps these four quantities **separate** — a contract
-ratio is *not* the same as the delivered green energy:
+系統刻意把下面這四個量**分開**——合約比例*不等於*實際交付的綠電:
 
-| Concept | Field | Meaning |
+| 概念 | 欄位 | 意義 |
 |---------|-------|---------|
-| Contract share | `contracted_percentage` | Agreed share of a farm's output (a cap) |
-| Contract volume | `contracted_energy_mwh` | Agreed fixed monthly volume (a cap) |
-| Actual generation | `generation_data.generated_energy_mwh` | What the farm really produced |
-| Actual consumption | `consumption_data.consumed_energy_mwh` | What the customer really used |
-| **Final allocation** | `matching_result.allocated_energy_mwh` | Result of the engine, bounded by all of the above |
-| RE achievement | `matching_result.achieved_re_percent` | `allocated ÷ consumption × 100` |
+| 合約比例 | `contracted_percentage` | 約定佔某風場產出的比例(上限) |
+| 合約電量 | `contracted_energy_mwh` | 約定的固定月度電量(上限) |
+| 實際發電 | `generation_data.generated_energy_mwh` | 風場真正發了多少 |
+| 實際用電 | `consumption_data.consumed_energy_mwh` | 客戶真正用了多少 |
+| **最終分配** | `matching_result.allocated_energy_mwh` | 引擎的結果,受上述所有量所限 |
+| RE 達成 | `matching_result.achieved_re_percent` | `分配 ÷ 用電 × 100` |
 
-## Enumerations
+## 列舉（Enumerations）
 
-- **WindFarmStatus**: `planning`, `under_construction`, `operational`, `decommissioned`
-- **ContractStatus**: `pending`, `active`, `expired`, `terminated`
-- **MatchingRunStatus**: `pending`, `running`, `completed`, `failed`
+- **WindFarmStatus**：`planning`、`under_construction`、`operational`、`decommissioned`
+- **ContractStatus**：`pending`、`active`、`expired`、`terminated`
+- **MatchingRunStatus**：`pending`、`running`、`completed`、`failed`
 
-Only `active` contracts whose `[start_date, end_date]` covers the period take
-part in matching (see [`matching-rules.md`](matching-rules.md)).
+只有 `active` 且 `[start_date, end_date]` 涵蓋該期間的合約會參與媒合
+(見 [`matching-rules.md`](matching-rules.md))。

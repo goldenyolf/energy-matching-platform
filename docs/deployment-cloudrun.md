@@ -1,9 +1,8 @@
-# Deployment (Google Cloud Run + Neon Postgres)
+# 部署（Google Cloud Run + Neon Postgres）
 
-Deploy the platform as **one Cloud Run service** (the FastAPI app, which also
-serves the static SPA at `/app`) built from the `Dockerfile`, backed by **Neon**
-serverless PostgreSQL. Cloud Run scales to zero (pay-per-use) and `asia-east1` is
-in Taiwan (Changhua), so latency is excellent.
+把平台部署成**單一個 Cloud Run 服務**(FastAPI app,同時在 `/app` 服務靜態 SPA),
+由 `Dockerfile` 建置,後端接 **Neon** serverless PostgreSQL。Cloud Run 能 scale 到零
+(用多少付多少),`asia-east1` 在台灣(彰化),延遲極佳。
 
 ```mermaid
 flowchart LR
@@ -15,18 +14,18 @@ flowchart LR
     J[Cloud Run Jobs:<br/>migrate + seed] --> N
 ```
 
-## Prerequisites
+## 前置需求
 
-- `gcloud` CLI installed and authenticated: `gcloud auth login`
-- A GCP project with **billing enabled**
-- A [Neon](https://neon.tech) database. Use the `postgresql+psycopg://…` form of
-  the connection string and keep `?sslmode=require` (pick a Neon region near
-  `asia-east1`, e.g. Tokyo `ap-northeast-1` or Singapore `ap-southeast-1`).
+- 已安裝並登入 `gcloud` CLI:`gcloud auth login`
+- 一個**已啟用計費**的 GCP 專案
+- 一個 [Neon](https://neon.tech) 資料庫。連線字串用 `postgresql+psycopg://…` 形式,保留
+  `?sslmode=require`(Neon 區域選靠近 `asia-east1` 的,例如東京 `ap-northeast-1` 或
+  新加坡 `ap-southeast-1`)。
 
-## One-command deploy
+## 一行部署
 
-The repo ships [`scripts/deploy_cloudrun.sh`](../scripts/deploy_cloudrun.sh),
-which builds the image, runs migrations, deploys both services, and seeds data:
+repo 附了 [`scripts/deploy_cloudrun.sh`](../scripts/deploy_cloudrun.sh),它會建置映像、
+跑遷移、部署服務並載入資料:
 
 ```bash
 export PROJECT_ID="your-gcp-project"
@@ -34,23 +33,22 @@ export DATABASE_URL="postgresql+psycopg://user:pass@ep-xxx.aws.neon.tech/neondb?
 ./scripts/deploy_cloudrun.sh
 ```
 
-Optional overrides: `REGION` (default `asia-east1`), `REPO`, `IMAGE_TAG`,
-`SEED` (default `true`).
+可選的覆寫:`REGION`(預設 `asia-east1`)、`REPO`、`IMAGE_TAG`、`SEED`(預設 `true`)。
 
-At the end it prints the API/Swagger and SPA (`…/app/`) URLs.
+最後它會印出 API/Swagger 與 SPA(`…/app/`)的網址。
 
-## What the script does (step by step)
+## 腳本做了什麼(逐步)
 
-1. **Enable APIs** — Cloud Run, Cloud Build, Artifact Registry.
-2. **Create an Artifact Registry** Docker repo (idempotent).
-3. **Build & push** one image from the `Dockerfile` via Cloud Build.
-4. **Migrate** — a one-off **Cloud Run Job** runs `alembic upgrade head` against
-   Neon (kept out of the serving container to avoid start-up races).
-5. **Deploy `emp-api`** — binds `$PORT`, `DATABASE_URL` set, public; also serves
-   the static SPA at `/app`.
-6. **Seed** — a one-off Cloud Run Job runs `python -m scripts.seed --reset`.
+1. **啟用 API** — Cloud Run、Cloud Build、Artifact Registry。
+2. **建立 Artifact Registry** 的 Docker repo(冪等)。
+3. **建置並推送**一份映像,由 `Dockerfile` 經 Cloud Build 產生。
+4. **遷移** — 一個一次性的 **Cloud Run Job** 對 Neon 跑 `alembic upgrade head`
+   (刻意放在服務容器之外,避免啟動時的競態)。
+5. **部署 `emp-api`** — 綁定 `$PORT`、設好 `DATABASE_URL`、對外公開;同時在 `/app`
+   服務靜態 SPA。
+6. **載入資料** — 一個一次性的 Cloud Run Job 跑 `python -m scripts.seed --reset`。
 
-## Manual equivalent (if you prefer running commands yourself)
+## 手動等價指令(如果你偏好自己下指令)
 
 ```bash
 PROJECT_ID=your-project ; REGION=asia-east1 ; REPO=energy-matching
@@ -73,16 +71,16 @@ API_URL=$(gcloud run services describe emp-api --region $REGION --format 'value(
 echo "Web UI (SPA): $API_URL/app/"
 ```
 
-## Notes & gotchas
+## 注意事項與眉角
 
-- **`$PORT`** — Cloud Run injects it; both services must bind to it (the commands
-  above do). It is passed literally so the container's `sh` expands it at runtime.
-- **Secrets** — for production, prefer **Secret Manager** over `--set-env-vars`
-  for `DATABASE_URL` (`--set-secrets DATABASE_URL=emp-db-url:latest`).
-- **Cold starts** — scale-to-zero means the first request after idle is slower;
-  set `--min-instances 1` on `emp-api` if you want it always warm (costs more).
-- **Cost** — with scale-to-zero and low traffic this stays within a few cents;
-  a demo often fits the Cloud Run free tier.
-- **Region** — keep Cloud Run and Neon geographically close to cut latency.
+- **`$PORT`** — Cloud Run 會注入它;兩個服務都必須綁到它(上面的指令有做)。它是以字面
+  傳入的,好讓容器的 `sh` 在執行期展開。
+- **機密** — 正式環境建議用 **Secret Manager** 而非 `--set-env-vars` 來放 `DATABASE_URL`
+  (`--set-secrets DATABASE_URL=emp-db-url:latest`)。
+- **冷啟動** — scale-to-zero 代表閒置後第一個請求會慢一點;想讓它常駐,對 `emp-api` 設
+  `--min-instances 1`(成本較高)。
+- **成本** — 在 scale-to-zero、低流量下大概只花幾分錢;一個 demo 常常落在 Cloud Run 的
+  免費額度內。
+- **區域** — 讓 Cloud Run 與 Neon 地理上靠近以降低延遲。
 
-See also the Render option in [`deployment.md`](deployment.md).
+另見 [`deployment.md`](deployment.md) 裡的 Render 選項。

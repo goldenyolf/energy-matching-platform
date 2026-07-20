@@ -1,18 +1,17 @@
-# Matching rules
+# 媒合規則（Matching rules）
 
-The matching engine (`app/matching/engine.py`) allocates each wind farm's monthly
-generation to customers through their contracts, deterministically.
+媒合引擎（`app/matching/engine.py`）以可重現的方式,把每座風場的月度發電量,透過合約分配給客戶。
 
-## Inputs
+## 輸入
 
-For a single period (one calendar month, `YYYY-MM`):
+對單一期間(一個日曆月,`YYYY-MM`):
 
-- **Farm supply** — each farm's total `generated_energy_mwh` that month.
-- **Customer demand** — each customer's total `consumed_energy_mwh` that month.
-- **Contracts** — every contract, with its priority, validity window, status and
-  cap (`contracted_energy_mwh` and/or `contracted_percentage`).
+- **風場供給** — 每座風場當月的 `generated_energy_mwh` 總量。
+- **客戶需求** — 每位客戶當月的 `consumed_energy_mwh` 總量。
+- **合約** — 每一份合約,含其優先序、有效期間、狀態,以及上限
+  (`contracted_energy_mwh` 和／或 `contracted_percentage`)。
 
-## Process flow
+## 流程
 
 ```mermaid
 flowchart TD
@@ -31,25 +30,20 @@ flowchart TD
     K --> L[Return MatchingOutcome]
 ```
 
-## Allocation rules
+## 分配規則
 
-1. **Period = one month.** Generation and consumption are aggregated to the month.
-2. **No double allocation.** Each farm's generated energy is a finite pool;
-   `Σ allocations from a farm ≤ its generation`.
-3. **No over-consumption.** `Σ allocations to a customer ≤ its consumption`.
-4. **Contract cap.** A contract never allocates more than the tighter of its
-   fixed volume and its percentage-of-generation share.
-5. **Priority.** Contracts are served by ascending `priority` (lower number =
-   higher priority). Ties break by earlier `start_date`, then `contract_number` —
-   a total, stable ordering.
-6. **Eligibility.** Only `active` contracts with `start_date ≤ period_end` and
-   `end_date ≥ period_start` participate. Others are skipped with a recorded
-   reason (not started / already ended / not active).
-7. **Auditability.** Every allocation records the binding constraint
-   ("limited by wind farm supply / customer demand / contract cap").
-8. **Determinism.** No randomness; identical inputs give identical outputs.
+1. **期間 = 一個月。** 發電與用電都彙整到月。
+2. **不重複分配。** 每座風場的發電量是有限的池子;`Σ 從某風場的分配 ≤ 其發電量`。
+3. **不超用。** `Σ 分配給某客戶的量 ≤ 其用電量`。
+4. **合約上限。** 一份合約分配的量,絕不超過「固定電量」與「佔發電量的比例」兩者中較緊者。
+5. **優先序。** 合約依 `priority` 由小到大服務(數字越小 = 優先序越高)。平手時先看較早的
+   `start_date`、再看 `contract_number`——一個完整、穩定的排序。
+6. **資格。** 只有 `active` 且 `start_date ≤ period_end`、`end_date ≥ period_start` 的合約會
+   參與。其餘會被跳過並記下理由(尚未開始／已結束／非有效)。
+7. **可稽核。** 每筆分配都記下卡住它的約束(「受限於風場供給／客戶需求／合約上限」)。
+8. **可重現。** 沒有隨機性;相同輸入給出相同輸出。
 
-## Formulas
+## 公式
 
 ```
 contract_limit      = min( contracted_energy_mwh?,
@@ -61,25 +55,24 @@ gap_to_target_mwh   = max(0, target_energy_mwh − allocated_to_customer)
 utilization_percent = allocated_from_farm / farm_generation × 100
 ```
 
-## Boundary scenarios (all covered by the demo data)
+## 邊界情境(示範資料皆已涵蓋)
 
-| Scenario | How it shows up |
+| 情境 | 如何呈現 |
 |----------|-----------------|
-| Under-supply | Large customer (TSMC) — RE% < target, positive gap |
-| Over-supply | Small farm (Zhongtun) generates more than its single small buyer uses → unallocated surplus |
-| Consumption below contract cap | Customer capped by demand, not by the contract |
-| Different RE targets | 100 % / 60 % / 80 % / 50 % across customers |
-| Different priorities | Higher-priority contract on a shared farm served first |
-| Contract inactive | Expired (`PPA-2020-007`) and pending (`PPA-2025-008`) are skipped |
+| 供給不足 | 大客戶(台積電)——RE% < 目標,缺口為正 |
+| 供給過剩 | 小風場(中屯)發的電多於它唯一的小買家所需 → 出現未分配的餘電 |
+| 用電低於合約上限 | 客戶被需求卡住,而非被合約卡住 |
+| 不同 RE 目標 | 客戶間分別是 100% / 60% / 80% / 50% |
+| 不同優先序 | 共用風場上,優先序較高的合約先被服務 |
+| 合約非有效 | 已到期(`PPA-2020-007`)與待生效(`PPA-2025-008`)會被跳過 |
 
-## Limitations & future optimisation
+## 限制與未來最佳化
 
-- Monthly granularity only — no 8760-hour time-matching yet (Phase 2).
-- Two matching strategies exist: the deterministic greedy priority engine above
-  (fast, priority-ordered, not a global optimum) and the MILP economic
-  optimizer (`optimize_period`, `GET /matching/optimize`) documented below,
-  which solves for a global optimum over the same constraints (Phase 3).
-- No inter-farm portfolio balancing or curtailment forecasting yet.
+- 目前只有月度粒度——尚無 8760 小時的時間媒合(Phase 2)。
+- 存在兩種媒合策略:上面這個可重現的貪婪優先序引擎(快、依優先序、非全域最佳),
+  以及下方說明的 MILP 經濟最佳化器(`optimize_period`、`GET /matching/optimize`),
+  它在相同約束下求全域最佳解(Phase 3)。
+- 尚未有跨風場的組合平衡或減發(curtailment)預測。
 
 ## 經濟最佳化媒合(optimizer)
 

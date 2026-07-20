@@ -1,37 +1,34 @@
-# Roadmap
+# 藍圖（Roadmap）
 
-## Phase 1 — MVP (this release)
+## Phase 1 — MVP（本次發布）
 
-- Core entities: wind farms, customers, contracts, generation, consumption.
-- Deterministic monthly green-energy matching engine with auditable reasons.
-- RE-target analytics (coverage, gap, target met) per customer / farm / period.
-- REST API (FastAPI + Swagger) with request/response schemas and error handling.
-- CSV import + replaceable `DataSource` interface + deterministic mock generator.
-- One-click seed with a rich demo scenario (under/over-supply, priorities, etc.).
-- Web UI: a dependency-free static SPA (`web/`) served by the API at `/app` —
-  overview, farms, customers, contracts, optimization evaluation, live renewables.
-- Alembic migrations, Docker Compose, Makefile, pre-commit, CI, tests (≥80 % on
-  the matching core).
+- 核心實體：風場、客戶、合約、發電、用電。
+- 可重現的月結綠電媒合引擎，每筆分配都有可稽核的理由。
+- RE 目標分析（達成率、缺口、是否達標），逐客戶／風場／期間。
+- REST API（FastAPI + Swagger），含請求／回應 schema 與錯誤處理。
+- CSV 匯入 + 可替換的 `DataSource` 介面 + 可重現的 mock 產生器。
+- 一鍵載入的豐富示範情境（供給不足／過剩、優先序等）。
+- Web UI：由 API 在 `/app` 服務的零相依靜態 SPA（`web/`）——總覽、風場、客戶、
+  合約、最佳化評估、即時再生能源。
+- Alembic 遷移、Docker Compose、Makefile、pre-commit、CI、測試（媒合核心覆蓋率 ≥ 80%）。
 
-## Phase 2 — Public data & data quality
+## Phase 2 — 公開資料與資料品質
 
-- Real public open-data **adapter** (only against a documented, legal API,
-  honouring ToS / robots.txt / rate limits).
-- Scheduled ingestion jobs and incremental updates.
-- Data-quality checks (gaps, outliers, unit sanity, duplicate detection).
-- Hourly (8760) generation & consumption profiles for **time-based matching**.
-- Simple generation/consumption forecasting.
+- 真實公開資料的**轉接器**（只對有文件、合法的 API，並遵守 ToS / robots.txt / 流量限制）。
+- 排程擷取工作與增量更新。
+- 資料品質檢查（缺漏、離群值、單位合理性、重複偵測）。
+- 逐小時（8760）發電與用電曲線，供**時間維度的媒合**。
+- 簡易的發電／用電預測。
 
-## Phase 3 — Optimisation & portfolio
+## Phase 3 — 最佳化與組合
 
-- Replace greedy priority allocation with a **linear-programming optimiser**
-  that minimises total RE gap or cost under the same constraints.
-- Multi-source green-energy portfolios (blend farms per customer).
-- Price and risk analysis; scenario comparison.
-- Certificate (T-REC) tracking and retirement modelling.
+- 以**線性規劃最佳化**取代貪婪的優先序分配，在相同約束下最小化總 RE 缺口或成本。
+- 多來源綠電組合（為單一客戶混搭多座風場）。
+- 價格與風險分析、情境比較。
+- 憑證（T-REC）追蹤與註銷建模。
 
-## Phase 4 — Intelligence
+## Phase 4 — 智慧化
 
-- AI assistant with natural-language querying over the data model.
-- Contract-risk alerts (expiry, under-delivery, over-commitment).
-- RE-target recommendations (which contracts/farms close a customer's gap).
+- AI 助理：以自然語言查詢資料模型。
+- 合約風險告警（到期、供電不足、超額承諾）。
+- RE 目標建議（哪些合約／風場能補上客戶的缺口）。

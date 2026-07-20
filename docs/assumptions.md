@@ -1,44 +1,38 @@
-# Assumptions & scope
+# 假設與範圍（Assumptions & scope）
 
-This document records the deliberate modelling choices and limits of the MVP.
+這份文件記錄 MVP 刻意做的建模選擇與界線。
 
-## Data
+## 資料
 
-- **All demo data is simulated.** Wind-farm names are inspired by public Taiwan
-  offshore-wind information, but every figure (capacity, generation, consumption,
-  contract terms) is illustrative and **not** a real contract or grid reading.
-- **No live scraping.** The platform ships CSV import + a deterministic
-  `MockDataGenerator`. A real `PublicDataAdapter` is a Phase-2 placeholder and,
-  when built, must respect the source's Terms of Service, authentication,
-  robots.txt and rate limits. The project never bypasses access controls.
+- **所有示範資料皆為模擬。** 風場名稱取材自台灣離岸風電的公開資訊,但所有數字
+  (裝置容量、發電、用電、合約條件)都只是示意,**不是**真實的合約或電網讀值。
+- **不做即時爬取。** 平台提供 CSV 匯入 + 可重現的 `MockDataGenerator`。真正的
+  `PublicDataAdapter` 是 Phase 2 的預留位;真的要做時,必須遵守來源的使用條款、
+  驗證機制、robots.txt 與流量限制。本專案不繞過任何存取控制。
 
-## Matching model
+## 媒合模型
 
-- **Period = one calendar month.** Generation/consumption are aggregated to the
-  month; there is no intra-month (hourly) matching in Phase 1.
-- **`contracted_energy_mwh` is a monthly cap.** For an MVP with monthly periods,
-  a contract's fixed volume is interpreted as its per-month allocatable ceiling.
-- **`contracted_percentage` is a share of that farm's monthly generation.**
-- When both caps are present, the **tighter** one applies.
-- **Only `active`, in-window contracts allocate.** Status and the
-  `[start_date, end_date]` window are both enforced.
-- **Greedy by priority**, not a global optimum (see roadmap Phase 3).
-- **Floating-point energy** with rounding to 6 decimals; comparisons use a small
-  epsilon. Deterministic given a fixed contract ordering.
+- **期間 = 一個日曆月。** 發電／用電彙整到月;Phase 1 沒有月內(逐小時)媒合。
+- **`contracted_energy_mwh` 是月度上限。** 在以月為期間的 MVP 裡,合約的固定電量
+  被解讀為「每月可分配的上限」。
+- **`contracted_percentage` 是佔該風場當月發電量的比例。**
+- 兩種上限都有時,取**較緊**的那個。
+- **只有 `active` 且在合約期間內的合約會分配。** 狀態與 `[start_date, end_date]`
+  期間兩者都會檢查。
+- **依優先序貪婪**,不是全域最佳解(見藍圖 Phase 3)。
+- **浮點數電量**,四捨五入到小數 6 位;比較時用一個很小的 epsilon。給定固定的
+  合約排序後結果可重現。
 
-## Technical
+## 技術
 
-- **Database:** SQLite by default for zero-config local dev and tests;
-  PostgreSQL for Docker/production. Models are kept DB-agnostic so both work.
-- **Local Python:** the repo targets **Python 3.12**. `uv` is preferred for
-  environment management; `pip` is a documented fallback.
-- **RE target** (`re_target_percent`, `target_year`) is treated as an annual goal;
-  monthly `achieved_re_percent` and `gap_to_target_mwh` are computed per period
-  as a proxy for progress.
+- **資料庫:** 預設 SQLite,讓本機開發與測試零設定;Docker／正式環境用 PostgreSQL。
+  模型保持與資料庫無關,兩者皆可運作。
+- **本機 Python:** 專案鎖定 **Python 3.12**。環境管理建議用 `uv`;`pip` 為備援。
+- **RE 目標**(`re_target_percent`、`target_year`)視為年度目標;每個期間會計算月度的
+  `achieved_re_percent` 與 `gap_to_target_mwh`,當作進度的近似指標。
 
-## Not in scope (this is a portfolio MVP)
+## 不在範圍內(這是作品集 MVP)
 
-- It is **not** a settlement, certificate-transfer, or trading system.
-- No authentication/authorisation, multi-tenancy, or audit trail beyond
-  matching-run records.
-- No official affiliation with Taipower, TSEC, or any energy company.
+- 它**不是**結算、憑證移轉或交易系統。
+- 沒有身分驗證／授權、多租戶,或超出媒合執行紀錄的稽核軌跡。
+- 與台電、TSEC 或任何能源業者皆無官方關聯。

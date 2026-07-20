@@ -1,10 +1,9 @@
-# Architecture
+# 架構（Architecture）
 
-## Overview
+## 總覽
 
-The Energy Matching Platform is a layered FastAPI application. The **matching
-engine is a pure, deterministic core** with no I/O; everything around it —
-persistence, ingestion, API, web UI — is a replaceable outer layer.
+綠電媒合平台是一個分層的 FastAPI 應用。**媒合引擎是一個純粹、可重現的核心**,不做任何
+I/O;圍繞它的一切——持久化、資料匯入、API、Web UI——都是可替換的外層。
 
 ```mermaid
 flowchart TB
@@ -39,35 +38,32 @@ flowchart TB
     SVC -->|Alembic migrations| DB
 ```
 
-## Layers
+## 分層
 
-| Layer | Package | Responsibility |
+| 層 | 套件 | 職責 |
 |-------|---------|----------------|
-| API | `app/api/v1` | HTTP routing, request/response schemas, status codes |
-| Schemas | `app/schemas` | Pydantic v2 validation & serialization contracts |
-| Services | `app/services` | Business logic, orchestration, transactions |
-| Matching | `app/matching` | Pure deterministic allocation engine (no I/O) |
-| Ingestion | `app/ingestion` | CSV import, pluggable `DataSource`, mock generator |
-| Repositories | `app/repositories` | Generic CRUD data-access over the ORM |
-| Models | `app/models` | SQLAlchemy 2.x ORM entities |
-| Core | `app/core` | Settings, domain exceptions |
-| DB | `app/db` | Engine, session, declarative base |
+| API | `app/api/v1` | HTTP 路由、請求／回應 schema、狀態碼 |
+| Schemas | `app/schemas` | Pydantic v2 驗證與序列化契約 |
+| Services | `app/services` | 商業邏輯、流程編排、交易 |
+| Matching | `app/matching` | 純粹、可重現的分配引擎(無 I/O) |
+| Ingestion | `app/ingestion` | CSV 匯入、可插拔的 `DataSource`、mock 產生器 |
+| Repositories | `app/repositories` | ORM 上的泛型 CRUD 資料存取 |
+| Models | `app/models` | SQLAlchemy 2.x ORM 實體 |
+| Core | `app/core` | 設定、領域例外 |
+| DB | `app/db` | engine、session、declarative base |
 
-## Design principles
+## 設計原則
 
-- **Pure core, replaceable edges.** `match_period()` takes plain dataclasses and
-  returns plain dataclasses — trivially unit-testable and reused by both the
-  matching service (persisted runs) and analytics (on-the-fly).
-- **Deterministic.** Contracts are processed in a total, stable order; there is
-  no randomness. Same input ⇒ identical output.
-- **Database-agnostic.** Models avoid vendor-specific types, so the exact same
-  code runs on SQLite (local/tests) and PostgreSQL (Docker/production).
-- **No fake data sources.** Where a real public API is not confirmed available,
-  the platform exposes a `DataSource` interface + CSV import + a deterministic
-  `MockDataGenerator`, and a `PublicDataAdapter` placeholder that must honour the
-  upstream's ToS / robots.txt before it is ever implemented.
+- **核心純粹、邊緣可替換。** `match_period()` 吃單純的 dataclass、回傳單純的 dataclass
+  ——極容易單元測試,並同時被媒合服務(持久化的執行)與分析(即時計算)共用。
+- **可重現。** 合約以一個完整且穩定的順序處理,沒有任何隨機性。相同輸入 ⇒ 完全相同的輸出。
+- **與資料庫無關。** 模型避開特定廠商的型別,所以同一份程式碼在 SQLite(本機／測試)
+  與 PostgreSQL(Docker／正式)上跑法完全一致。
+- **不做假的資料來源。** 在真實公開 API 尚未確認可用之處,平台提供 `DataSource` 介面
+  + CSV 匯入 + 可重現的 `MockDataGenerator`,以及一個 `PublicDataAdapter` 預留位——
+  真的要實作前,它必須先遵守上游的 ToS / robots.txt。
 
-## Request lifecycle (matching run)
+## 請求生命週期(一次媒合執行)
 
 ```mermaid
 sequenceDiagram
@@ -86,5 +82,4 @@ sequenceDiagram
     API-->>C: 201 + result summary & details
 ```
 
-See also [`domain-model.md`](domain-model.md) and
-[`matching-rules.md`](matching-rules.md).
+另見 [`domain-model.md`](domain-model.md) 與 [`matching-rules.md`](matching-rules.md)。
