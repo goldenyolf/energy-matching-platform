@@ -6,12 +6,16 @@ Usage:
     python -m scripts.seed --source taipower       # real Taipower wind open data
     python -m scripts.seed --source taipower --months 12 --fetch
 
-The ``sample`` source loads the bundled demo CSVs. The ``taipower`` source reads
-Taiwan Power Company's monthly wind-turbine open data (dataset 29961) for a
-rolling window of the most recent N months (default 12): by default from a local
-file (``data/taipower/wind_turbines.csv``), or with ``--fetch`` it downloads the
-CSV live. Taipower supplies only the supply side, so customers / contracts /
-consumption stay empty for that source.
+The ``sample`` source loads the bundled demo CSVs and automatically expands the
+monthly generation/consumption into peak / half-peak / off-peak time slots, so
+the time-based matching, settlement and analytics work out of the box — no
+separate step needed. The ``taipower`` source reads Taiwan Power Company's
+monthly wind-turbine open data (dataset 29961) for a rolling window of the most
+recent N months (default 12): by default from a local file
+(``data/taipower/wind_turbines.csv``), or with ``--fetch`` it downloads the CSV
+live. Taipower is real monthly data and is left as-is (no synthetic slots).
+Taipower supplies only the supply side, so customers / contracts / consumption
+stay empty for that source.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from app.db.session import SessionLocal, create_all, engine
 from app.ingestion import csv_importer
 from app.ingestion.sources import CsvDataSource
 from app.ingestion.taipower import DEFAULT_MONTHS, TaipowerWindSource
+from scripts.generate_slot_profiles import split_profiles
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
@@ -42,7 +47,7 @@ def build_source(
     raise ValueError(f"unknown source: {name!r} (expected 'sample' or 'taipower')")
 
 
-def seed(source, reset: bool = False) -> None:
+def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
     if reset:
         import app.models  # noqa: F401  (register tables)
 
@@ -67,6 +72,9 @@ def seed(source, reset: bool = False) -> None:
             )
             for err in result.errors[:5]:
                 print(f"    ! {err}")
+        if slot_profiles:
+            split_profiles(db)
+            print("時段展開      : 發電/用電已拆為尖峰・半尖峰・離峰時段")
     finally:
         db.close()
     print("seed complete.")
@@ -101,7 +109,8 @@ def main() -> None:
     source = build_source(
         args.source, months=args.months, fetch=args.fetch, csv_path=args.csv_path
     )
-    seed(source, reset=args.reset)
+    # Synthetic time slots only for the demo sample; real Taipower data is left as-is.
+    seed(source, reset=args.reset, slot_profiles=(args.source == "sample"))
 
 
 if __name__ == "__main__":
