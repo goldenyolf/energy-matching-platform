@@ -73,6 +73,9 @@
         wheeling_fee_per_kwh: wheelingFee,
       });
     },
+    contractRisks: function (period, horizonMonths) {
+      return get("/analytics/contract-risks", { period: period, horizon_months: horizonMonths });
+    },
     customerOptimization: function (customerId, period, minSites, minPct, reTarget, transferPrice) {
       return get("/analytics/customer-optimization", {
         customer_id: customerId,

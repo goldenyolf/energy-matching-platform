@@ -70,7 +70,7 @@
     var views = {
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       contracts: renderContracts, evaluate: renderEvaluate, investment: renderInvestment,
-      settlement: renderSettlement, live: renderLive,
+      settlement: renderSettlement, risks: renderRisks, live: renderLive,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -418,6 +418,59 @@
     html += '<div class="foot-note">' + iconInfo() +
       "CAPEX = 裝置容量 × 每 MW 成本;年收入 = 年發電 × 躉售價;年淨利 = 年收入 − 年 O&amp;M;" +
       "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。</div>";
+    body.innerHTML = html;
+  }
+
+  // ---------- 合約風險告警 ----------
+  var SEV = { high: ["高", "bad"], medium: ["中", "warnp"], low: ["低", "ok"] };
+  var RISK_CAT = { expiry: "即將到期", under_delivery: "供電不足", over_commitment: "超額承諾", status_mismatch: "狀態不一致" };
+  function sevPill(s) { var x = SEV[s] || [s, "warnp"]; return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + x[0] + "</span>"; }
+
+  function renderRisks() {
+    crumb.textContent = "風險告警";
+    view.innerHTML =
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>合約風險告警</h1></div>' +
+      '<div class="meta"><span>掃描所有合約:即將到期、供電不足、風場超額承諾、狀態不一致,依嚴重度排序。</span></div></div>' +
+      '<form class="formcard" id="rkForm"><div class="formgrid">' +
+      '<div class="field"><label>供電不足評估期間 (YYYY-MM)</label><input id="r-period" class="num" value="2024-01"></div>' +
+      '<div class="field"><label>到期預警月數</label><input id="r-horizon" class="num" type="number" min="1" max="60" value="6"></div>' +
+      '</div><div class="formactions"><button class="btn primary" type="submit">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>掃描風險</button></div></form>' +
+      '<div id="rk-body"><div class="placeholder">載入中…</div></div>';
+    function run() {
+      var period = document.getElementById("r-period").value.trim();
+      var hz = parseInt(document.getElementById("r-horizon").value, 10) || 6;
+      var body = document.getElementById("rk-body");
+      body.innerHTML = '<div class="placeholder">掃描中…</div>';
+      api.contractRisks(period, hz).then(function (r) { renderRiskReport(body, r); })
+        .catch(function (err) { body.innerHTML = errbox("掃描風險", err); });
+    }
+    document.getElementById("rkForm").addEventListener("submit", function (e) { e.preventDefault(); run(); });
+    run();
+  }
+
+  function renderRiskReport(body, r) {
+    var k = r.counts;
+    var html = '<div class="kpis">' +
+      kpi("高風險", '<span class="neg">' + k.high + "</span>", "需立即處理") +
+      kpi("中風險", '<span class="prem">' + k.medium + "</span>", "需關注") +
+      kpi("低風險", k.low, "提醒") +
+      kpi("告警總數", k.total + "<small>則</small>", "期間 " + esc(r.period) + " · 基準日 " + esc(r.reference_date), "hl") +
+      "</div>";
+    html += '<section class="card"><div class="hd"><h3>告警清單</h3><span class="aside">依嚴重度排序 · 到期預警 ' + r.horizon_months + " 個月</span></div><div class=\"tablewrap\"><table>" +
+      "<thead><tr><th>嚴重度</th><th>類型</th><th>影響對象</th><th>說明</th><th>建議動作</th></tr></thead><tbody>";
+    if (!r.alerts.length) {
+      html += '<tr><td class="empty" colspan="5">目前無風險告警 ✓</td></tr>';
+    } else {
+      r.alerts.forEach(function (a) {
+        var who = [a.contract_number, a.wind_farm_code, a.customer_code].filter(Boolean).map(esc).join(" · ") || "–";
+        html += "<tr><td>" + sevPill(a.severity) + "</td><td>" + (RISK_CAT[a.category] || esc(a.category)) +
+          "</td><td style=\"text-align:left\">" + who + "</td><td style=\"text-align:left\">" + esc(a.detail) +
+          "</td><td style=\"text-align:left\">" + esc(a.suggested_action) + "</td></tr>";
+      });
+    }
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() + "到期/狀態以今日為基準;供電不足以選定期間的媒合結果比對合約預期上限。示範資料。</div>";
     body.innerHTML = html;
   }
 
