@@ -352,6 +352,9 @@
           });
         }
         html += "</tbody></table></div></section></div>";
+        html += '<div class="foot-note">' + iconInfo() +
+          "資料來源:台電「各機組即時發電」(data.gov.tw dataset 8931,約 10 分更新)。此為<b>瞬時出力(MW)</b>,即這一刻的發電功率——" +
+          "非月度累積發電量(kWh,dataset 29961)。read-through 呈現、不儲存、不進媒合引擎。</div>";
         body.innerHTML = html;
       })
       .catch(function (err) { body.innerHTML = errbox("載入即時再生能源", err); });
