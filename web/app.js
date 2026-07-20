@@ -430,8 +430,8 @@
       '<div class="pagehead"><div class="title"><span class="bar"></span><h1>投資效益</h1></div>' +
       '<div class="meta"><span>逐案場與組合的 CAPEX、年淨利、投報率(ROI)與回收期;每 MW 建置成本與 O&amp;M 費率可覆寫。</span></div></div>' +
       '<form class="formcard" id="invForm"><div class="formgrid">' +
-      '<div class="field"><label>每 MW 建置成本</label><input id="i-capex" class="num" type="number" min="1" step="1000000" placeholder="載入中…"><span class="hint">NTD / MW · 可覆寫</span></div>' +
-      '<div class="field"><label>年 O&amp;M 費率</label><input id="i-om" class="num" type="number" min="0" max="100" step="0.5" placeholder="載入中…"><span class="hint">% of CAPEX · 可覆寫</span></div>' +
+      '<div class="field"><label>每 MW 建置成本</label><input id="i-capex" class="num" type="number" min="1" step="any" placeholder="載入中…"><span class="hint">NTD / MW · 可覆寫</span></div>' +
+      '<div class="field"><label>年 O&amp;M 費率</label><input id="i-om" class="num" type="number" min="0" max="100" step="any" placeholder="載入中…"><span class="hint">% of CAPEX · 可覆寫</span></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>計算投資效益</button></div></form>' +
       '<div id="inv-body"><div class="placeholder">載入中…</div></div>';
