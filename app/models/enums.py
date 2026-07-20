@@ -40,3 +40,8 @@ class TimeSlot(StrEnum):
 class Season(StrEnum):
     SUMMER = "summer"
     NON_SUMMER = "non_summer"
+
+
+class TrecStatus(StrEnum):
+    TRANSFERRED = "transferred"  # issued + transferred to the customer (bundled 轉供)
+    RETIRED = "retired"  # retired by the customer to claim RE (not re-tradable)
