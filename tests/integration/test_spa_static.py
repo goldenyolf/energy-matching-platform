@@ -25,8 +25,14 @@ def test_spa_missing_asset_404(client):
     assert client.get("/app/does-not-exist.js").status_code == 404
 
 
-def test_api_root_advertises_app(client):
-    body = client.get("/").json()
+def test_root_redirects_to_app(client):
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/app/"
+
+
+def test_api_index_advertises_app(client):
+    body = client.get("/api").json()
     assert body["app"] == "/app/"
 
 

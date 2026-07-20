@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
@@ -49,8 +49,14 @@ async def domain_error_handler(_: Request, exc: DomainError) -> JSONResponse:
     return JSONResponse(status_code=code, content={"detail": str(exc)})
 
 
-@app.get("/", tags=["system"], summary="API root")
-def root() -> dict[str, str]:
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    # The web UI lives at /app; send visitors there instead of the API index.
+    return RedirectResponse(url="/app/")
+
+
+@app.get("/api", tags=["system"], summary="API index")
+def api_index() -> dict[str, str]:
     return {
         "name": settings.app_name,
         "version": __version__,
