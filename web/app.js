@@ -343,17 +343,24 @@
     Promise.all([api.contracts(), api.windFarms(), api.customers()])
       .then(function (r) {
         var cs = r[0], fm = {}, cm = {};
-        r[1].forEach(function (f) { fm[f.id] = f.name || f.code; });
-        r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; });
-        var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span></div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th></tr></thead><tbody>";
+        crudCache.contract = {};
+        contractFarmOpts.length = 0;
+        contractCustOpts.length = 0;
+        r[1].forEach(function (f) { fm[f.id] = f.name || f.code; contractFarmOpts.push([f.id, (f.name || f.code)]); });
+        r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; contractCustOpts.push([c.id, (c.company_name || c.code)]); });
+        cs.forEach(function (c) { crudCache.contract[c.id] = c; });
+        var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + "</div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+        if (!cs.length) {
+          html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
+        }
         cs.forEach(function (c) {
           html += "<tr><td class=\"code\">" + esc(c.contract_number) + "</td><td style=\"text-align:left\">" + esc(fm[c.wind_farm_id] || c.wind_farm_id) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
             "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) +
             "</td><td class=\"num\">" + (c.contracted_energy_mwh != null ? nfmt(c.contracted_energy_mwh, 0) : "–") +
             "</td><td class=\"num\">" + (c.contracted_percentage != null ? pct(c.contracted_percentage, 0) + "%" : "–") +
             "</td><td class=\"num\">" + (c.price_per_kwh != null ? price(c.price_per_kwh) : "–") +
-            "</td><td class=\"num\">" + c.priority + "</td><td>" + contractStatusPill(c.status) + "</td></tr>";
+            "</td><td class=\"num\">" + c.priority + "</td><td>" + contractStatusPill(c.status) + "</td>" + rowActions("contract", c.id) + "</tr>";
         });
         html += "</tbody></table></div></section>";
         body.innerHTML = html;
@@ -1411,7 +1418,7 @@
   // 這兩個是「管理頁」,一律顯示新增/編輯/刪除。密碼保護暫時隱藏(之後再設計呈現);
   // 後端仍有 ADMIN_WRITE_TOKEN 寫入閘,設定後即需帶密碼(屆時再補密碼輸入 UI)。
   var editMode = true;
-  var crudCache = { farm: {}, customer: {} };
+  var crudCache = { farm: {}, customer: {}, contract: {} };
 
   var FARM_FIELDS = [
     { key: "code", label: "案場代碼", createOnly: true, required: true, placeholder: "WF-XXX" },
@@ -1430,6 +1437,22 @@
     { key: "annual_consumption_mwh", label: "總用電量 (MWh)", type: "number" },
     { key: "re_target_percent", label: "RE 目標 (%)", type: "number", min: 0, max: 100 },
     { key: "target_year", label: "目標年", type: "number", step: "1" },
+  ];
+  // 綠電合約:發電案場 / 用電端下拉選項於 renderContracts 時就地填入(保留參照)
+  var contractFarmOpts = [];
+  var contractCustOpts = [];
+  var CONTRACT_STATUS = [["active", "生效中"], ["pending", "待生效"], ["expired", "已到期"], ["terminated", "已終止"]];
+  var CONTRACT_FIELDS = [
+    { key: "contract_number", label: "合約編號", createOnly: true, required: true, placeholder: "PPA-2024-001" },
+    { key: "wind_farm_id", label: "發電案場", type: "select", options: contractFarmOpts, required: true, createOnly: true },
+    { key: "customer_id", label: "用電端 / 客戶", type: "select", options: contractCustOpts, required: true, createOnly: true },
+    { key: "start_date", label: "起始日", type: "date", required: true, placeholder: "2024-01-01" },
+    { key: "end_date", label: "結束日", type: "date", required: true, placeholder: "2033-12-31" },
+    { key: "contracted_energy_mwh", label: "合約年電量 (MWh)", type: "number" },
+    { key: "contracted_percentage", label: "合約比例 (%)", type: "number", min: 0, max: 100 },
+    { key: "price_per_kwh", label: "轉供價格 (NTD/kWh)", type: "number" },
+    { key: "priority", label: "優先序 (小=優先)", type: "number", step: "1" },
+    { key: "status", label: "狀態", type: "select", options: CONTRACT_STATUS },
   ];
   // 台電時間電價方案(下拉)
   var TARIFF_PLANS = [["", "—"], ["lv_two_stage", "低壓-二段式時間電價"], ["lv_three_stage", "低壓-三段式時間電價"], ["hv_two_stage", "高壓-二段式時間電價"], ["hv_three_stage", "高壓-三段式時間電價"], ["ehv_two_stage", "特高壓-二段式時間電價"], ["ehv_three_stage", "特高壓-三段式時間電價"], ["batch_production", "批次生產時間電價"]];
@@ -1524,7 +1547,8 @@
         var v = el.value;
         if (f.type === "number") { v = v.trim() === "" ? null : parseFloat(v); }
         else { v = v.trim(); if (v === "") v = null; }
-        vals[f.key] = v;
+        // 空白欄位不送出:新增時套用後端預設(如優先序 100),編輯時保持原值不變。
+        if (v !== null) vals[f.key] = v;
       });
       var errEl = ov.querySelector(".fm-err");
       var btn = ov.querySelector('button[type="submit"]'); btn.disabled = true;
@@ -1532,15 +1556,18 @@
     });
     var first = ov.querySelector("input,select"); if (first) first.focus();
   }
-  var ENTITY_NAME = { farm: "發電案場", customer: "企業客戶", meter: "電號" };
+  var ENTITY_NAME = { farm: "發電案場", customer: "企業客戶", meter: "電號", contract: "綠電合約" };
+  var ENTITY_NOTE = { contract: "「合約年電量」與「合約比例」至少填一項;分配以兩者較嚴格者為準。" };
+  var ENTITY_FIELDS = { farm: FARM_FIELDS, meter: METER_FIELDS, contract: CONTRACT_FIELDS, customer: CUST_FIELDS };
   function openEntityForm(kind, item, preset) {
-    var cfg = kind === "farm" ? FARM_FIELDS : kind === "meter" ? METER_FIELDS : CUST_FIELDS;
-    var create = { farm: api.createFarm, customer: api.createCustomer, meter: api.createMeter }[kind];
-    var upd = { farm: api.updateFarm, customer: api.updateCustomer, meter: api.updateMeter }[kind];
+    var cfg = ENTITY_FIELDS[kind] || CUST_FIELDS;
+    var create = { farm: api.createFarm, customer: api.createCustomer, meter: api.createMeter, contract: api.createContract }[kind];
+    var upd = { farm: api.updateFarm, customer: api.updateCustomer, meter: api.updateMeter, contract: api.updateContract }[kind];
     var fields = cfg.filter(function (f) { return !(item && f.createOnly); });
     showFormModal({
       title: (item ? "編輯" : "新增") + ENTITY_NAME[kind],
       fields: fields, values: item || {}, submitLabel: item ? "儲存" : "新增",
+      note: ENTITY_NOTE[kind],
       simulate: kind === "meter" ? simulateMeterValues : undefined,
       onSubmit: function (vals, done) {
         if (preset) Object.keys(preset).forEach(function (k) { vals[k] = preset[k]; });
@@ -1550,8 +1577,8 @@
     });
   }
   function confirmDelete(kind, item) {
-    var del = { farm: api.deleteFarm, customer: api.deleteCustomer, meter: api.deleteMeter }[kind];
-    var nm = esc(item.code) + " " + esc(item.name || item.company_name || "");
+    var del = { farm: api.deleteFarm, customer: api.deleteCustomer, meter: api.deleteMeter, contract: api.deleteContract }[kind];
+    var nm = esc(item.code || item.contract_number) + " " + esc(item.name || item.company_name || "");
     showFormModal({
       title: "刪除" + ENTITY_NAME[kind], fields: [], danger: true, submitLabel: "確定刪除",
       note: "確定要刪除「<b>" + nm + "</b>」嗎?此動作無法復原;若仍有關聯資料(合約/發電/用電)會被擋下。",
