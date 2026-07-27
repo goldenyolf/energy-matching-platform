@@ -15,9 +15,11 @@ from app.schemas.matching import (
     MatchingRunRead,
 )
 from app.schemas.optimization import OptimizationResult
+from app.schemas.scenario import ScenarioResult
 from app.schemas.slot_matching import SlotMatchingResult
 from app.services import matching_service as svc
-from app.services import optimize_service, slot_matching_service
+from app.services import optimize_service, scenario_service, slot_matching_service
+from app.services.scenario_service import ScenarioRequest
 
 router = APIRouter(prefix="/matching", tags=["matching"])
 
@@ -83,6 +85,84 @@ def optimize(
         default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
     )
     return optimize_service.compute_optimized(db, period, options)
+
+
+def _parse_id_set(raw: str | None) -> set[int] | None:
+    """Parse a comma-separated id list; None/empty → None (means 'all')."""
+    if raw is None or not raw.strip():
+        return None
+    ids: set[int] = set()
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            ids.add(int(tok))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"invalid id '{tok}'") from exc
+    return ids or None
+
+
+def _parse_re_targets(raw: str | None) -> dict[int, float]:
+    """Parse 'cid:pct,cid:pct' RE-target overrides into {customer_id: percent}."""
+    out: dict[int, float] = {}
+    if raw is None or not raw.strip():
+        return out
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            cid_s, pct_s = tok.split(":")
+            pct = float(pct_s)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"invalid re_target '{tok}' (want cid:pct)"
+            ) from exc
+        if not 0.0 <= pct <= 100.0:
+            raise HTTPException(
+                status_code=422, detail=f"re_target percent out of range: {pct}"
+            )
+        out[int(cid_s)] = pct
+    return out
+
+
+@router.get("/scenario", response_model=ScenarioResult)
+def scenario(
+    period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
+    farm_ids: str | None = Query(None, description="CSV of farm ids; empty = all"),
+    customer_ids: str | None = Query(None, description="CSV of customer ids"),
+    re_targets: str | None = Query(
+        None, description="RE-target overrides 'cid:pct,cid:pct'"
+    ),
+    transfer_price: float | None = Query(None, ge=0.0),
+    min_sites: int | None = Query(None, ge=0),
+    min_site_allocation_percent: float | None = Query(None, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+) -> ScenarioResult:
+    """Greenfield 'what-if' matching: any selected farm may supply any selected
+    customer (hypothetical pairings) under a single assumed transfer price,
+    subject to per-customer RE targets. Compute-only."""
+    req = ScenarioRequest(
+        farm_ids=_parse_id_set(farm_ids),
+        customer_ids=_parse_id_set(customer_ids),
+        re_target_overrides=_parse_re_targets(re_targets),
+        assumed_transfer_price_per_kwh=(
+            settings.scenario_transfer_price_per_kwh
+            if transfer_price is None
+            else transfer_price
+        ),
+        min_sites_per_customer=(
+            settings.optimize_min_sites_per_customer if min_sites is None else min_sites
+        ),
+        min_site_allocation_percent=(
+            settings.optimize_min_site_allocation_percent
+            if min_site_allocation_percent is None
+            else min_site_allocation_percent
+        ),
+        default_feed_in_price_per_kwh=settings.default_feed_in_price_per_kwh,
+    )
+    return scenario_service.compute_scenario(db, period, req)
 
 
 @router.get("/slots", response_model=SlotMatchingResult)

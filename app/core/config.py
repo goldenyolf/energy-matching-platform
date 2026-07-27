@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     optimize_min_sites_per_customer: int = 0
     optimize_min_site_allocation_percent: float = 0.0
 
+    # Greenfield "what-if" scenario explorer (多對多匹配) — assumed sell price
+    # for hypothetical (no-contract) pairings; NTD/kWh, overridable per request.
+    scenario_transfer_price_per_kwh: float = 5.0
+
     # Investment analysis (ROI / payback) — illustrative demo defaults
     capex_per_mw: float = 80_000_000.0  # NTD per MW installed
     om_rate_percent: float = 2.0  # annual O&M as % of CAPEX
