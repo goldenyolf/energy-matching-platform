@@ -73,23 +73,19 @@ def test_customer_company_fields_roundtrip(client):
             "code": "CUST-EXT",
             "company_name": "世通國際",
             "re_target_percent": 50.0,
-            "tax_id": "22153346",
             "address": "桃園市龍潭區中原路二段一號",
-            "contact_name": "王小明",
-            "transfer_price_per_kwh": 4.6,
+            "agent": "王大明",
         },
     )
     assert resp.status_code == 201
     b = resp.json()
-    assert b["tax_id"] == "22153346"
     assert b["address"] == "桃園市龍潭區中原路二段一號"
-    assert b["transfer_price_per_kwh"] == 4.6
+    assert b["agent"] == "王大明"
     up = client.put(
         f"/api/v1/customers/{b['id']}",
-        json={"contact_email": "a@b.com", "phone": "03-1234567"},
+        json={"phone": "03-1234567"},
     )
     assert up.status_code == 200
-    assert up.json()["contact_email"] == "a@b.com"
     assert up.json()["phone"] == "03-1234567"
 
 

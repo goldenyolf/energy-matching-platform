@@ -32,16 +32,11 @@ class Customer(Base, TimestampMixin):
     )
     target_energy_mwh: Mapped[float | None] = mapped_column(Float, default=None)
 
-    # Company / contact info (用電戶資訊)
+    # Company info (用電戶資訊). Capacity/tariff/slot consumption live per 電號
+    # on the Meter model.
     agent: Mapped[str | None] = mapped_column(String(100), default=None)
     address: Mapped[str | None] = mapped_column(String(300), default=None)
     phone: Mapped[str | None] = mapped_column(String(50), default=None)
-    tax_id: Mapped[str | None] = mapped_column(String(20), default=None)  # 統一編號
-    contact_name: Mapped[str | None] = mapped_column(String(100), default=None)
-    contact_email: Mapped[str | None] = mapped_column(String(200), default=None)
-    # customer-level default green transfer price (轉供價); capacity/tariff/slot
-    # consumption live per 電號 on the Meter model.
-    transfer_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
 
     contracts: Mapped[list[Contract]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"

@@ -50,15 +50,11 @@ def build_source(
 
 
 def _set_demo_defaults(db) -> None:
-    """Illustrative company info (客戶) + per-電號 load data (Meter) for the demo."""
+    """Simulated per-電號 load data (Meter) for the demo (kWh, kW)."""
     from sqlalchemy import select
 
-    from app.models import Customer, Meter
+    from app.models import Meter
 
-    for c in db.execute(select(Customer)).scalars():
-        c.transfer_price_per_kwh = 4.50
-        c.tax_id = c.tax_id or f"{22000000 + c.id * 111}"
-        c.contact_name = c.contact_name or f"{c.company_name} 能源窗口"
     # per-電號 annual per-slot load (kWh) from typical shares; cap ~ avg power / 0.6
     shares = {
         "peak": 0.14,
