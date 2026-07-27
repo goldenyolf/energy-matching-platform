@@ -229,14 +229,13 @@
     Promise.all([api.customers(), api.analyticsCustomers(period)])
       .then(function (r) {
         var custs = r[0], an = r[1];
-        function pOr(v) { return v != null ? price(v) : "–"; }
         var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>統一編號</th><th>產業</th><th>聯絡人</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>轉供價</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>代理人</th><th>電話</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
-          html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td class=\"num\">" + esc(c.tax_id || "–") + "</td><td>" + esc(c.industry || "–") +
-            "</td><td style=\"text-align:left\">" + esc(c.contact_name || "–") + "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" +
-            "<td class=\"num\">" + pOr(c.transfer_price_per_kwh) + "</td>" + rowActions("customer", c.id) + "</tr>";
+          html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
+            "</td><td style=\"text-align:left\">" + esc(c.agent || "–") + "</td><td class=\"num\">" + esc(c.phone || "–") + "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" +
+            rowActions("customer", c.id) + "</tr>";
         });
         html += "</tbody></table></div></section>";
         html += '<section class="card section-gap"><div class="hd"><h3>RE 目標達成分析</h3><span class="aside">' + esc(period) + "</span></div><div class=\"tablewrap\"><table>" +
@@ -1425,17 +1424,13 @@
   var CUST_FIELDS = [
     { key: "code", label: "客戶代碼", createOnly: true, required: true, placeholder: "CUST-XXX" },
     { key: "company_name", label: "公司名稱", required: true },
-    { key: "tax_id", label: "統一編號" },
     { key: "industry", label: "產業" },
     { key: "agent", label: "公司代理人" },
     { key: "phone", label: "公司電話" },
     { key: "address", label: "公司地址" },
-    { key: "contact_name", label: "聯絡人姓名" },
-    { key: "contact_email", label: "聯絡人信箱" },
     { key: "annual_consumption_mwh", label: "總用電量 (MWh)", type: "number" },
     { key: "re_target_percent", label: "RE 目標 (%)", type: "number", min: 0, max: 100 },
     { key: "target_year", label: "目標年", type: "number", step: "1" },
-    { key: "transfer_price_per_kwh", label: "轉供價格 (NTD/kWh)", type: "number" },
   ];
   // 台電時間電價方案(下拉)
   var TARIFF_PLANS = [["", "—"], ["lv_two_stage", "低壓-二段式時間電價"], ["lv_three_stage", "低壓-三段式時間電價"], ["hv_two_stage", "高壓-二段式時間電價"], ["hv_three_stage", "高壓-三段式時間電價"], ["ehv_two_stage", "特高壓-二段式時間電價"], ["ehv_three_stage", "特高壓-三段式時間電價"], ["batch_production", "批次生產時間電價"]];
@@ -1456,6 +1451,21 @@
     { key: "total_kwh", label: "總量 (kWh)", type: "number" },
   ];
   crudCache.meter = {};
+
+  // 模擬一組合理的電號負載值(含周六半尖峰),供表單「模擬填入」用
+  function simulateMeterValues() {
+    var total = Math.round((0.5 + Math.random() * 4.5) * 1e6);
+    var jit = function (base) { return Math.round(base * (0.9 + Math.random() * 0.2)); };
+    var peak = jit(total * 0.14), half = jit(total * 0.40), sat = jit(total * 0.11);
+    return {
+      contracted_capacity_kw: Math.round(total / 8760 / 0.6),
+      tariff_type: "hv_three_stage",
+      load_data_type: "年度用電量(15分鐘一筆)",
+      data_period: "2023-01~2023-12",
+      peak_kwh: peak, half_peak_kwh: half, saturday_half_peak_kwh: sat,
+      off_peak_kwh: Math.max(0, total - peak - half - sat), total_kwh: total,
+    };
+  }
 
   function entityAddBtn(kind, label, custId) {
     if (!editMode) return "";
@@ -1490,14 +1500,22 @@
     var ov = document.createElement("div");
     ov.className = "overlay show formov";
     var fieldsHtml = (opts.fields || []).map(function (f) { return fmField(f, (opts.values || {})[f.key]); }).join("");
+    var tools = opts.simulate ? '<div class="fm-tools"><button type="button" class="btn ghost sm fm-sim">🎲 模擬填入</button></div>' : "";
     ov.innerHTML = '<div class="formmodal"><div class="fm-hd"><h3>' + esc(opts.title) + '</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
-      '<form class="fm-body">' + (opts.note ? '<p class="fm-note">' + opts.note + "</p>" : "") + fieldsHtml +
+      '<form class="fm-body">' + (opts.note ? '<p class="fm-note">' + opts.note + "</p>" : "") + tools + fieldsHtml +
       '<div class="fm-err"></div><div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button>' +
       '<button type="submit" class="btn ' + (opts.danger ? "danger" : "primary") + '">' + esc(opts.submitLabel || "儲存") + "</button></div></form></div>";
     document.body.appendChild(ov);
     function close() { ov.remove(); }
     ov.querySelector(".fm-x").onclick = close;
     ov.querySelector(".fm-cancel").onclick = close;
+    var simBtn = ov.querySelector(".fm-sim");
+    if (simBtn) simBtn.onclick = function () {
+      var vals = opts.simulate();
+      Object.keys(vals).forEach(function (k) {
+        var el = ov.querySelector('[name="' + k + '"]'); if (el) el.value = vals[k];
+      });
+    };
     ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
     ov.querySelector("form").addEventListener("submit", function (e) {
       e.preventDefault();
@@ -1524,6 +1542,7 @@
     showFormModal({
       title: (item ? "編輯" : "新增") + ENTITY_NAME[kind],
       fields: fields, values: item || {}, submitLabel: item ? "儲存" : "新增",
+      simulate: kind === "meter" ? simulateMeterValues : undefined,
       onSubmit: function (vals, done) {
         if (preset) Object.keys(preset).forEach(function (k) { vals[k] = preset[k]; });
         var p = item ? upd(item.id, vals) : create(vals);
