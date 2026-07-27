@@ -230,7 +230,7 @@
       .then(function (r) {
         var custs = r[0], an = r[1];
         var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? "<th>操作</th>" : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
           html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
@@ -419,7 +419,7 @@
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
       html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span>" + entityAddBtn("farm", "新增案場") + "</div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th>" + (editMode ? "<th>操作</th>" : "") + "</tr></thead><tbody>";
+        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
@@ -1384,14 +1384,11 @@
   helpOverlay.addEventListener("click", function (e) { if (e.target === helpOverlay) hideHelp(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); } });
 
-  // ---------- 編輯模式 + 實體 CRUD(發電案場 / 企業客戶) ----------
-  var editMode = false, adminToken = null;
+  // ---------- 實體 CRUD(發電案場 / 企業客戶) ----------
+  // 這兩個是「管理頁」,一律顯示新增/編輯/刪除。密碼保護暫時隱藏(之後再設計呈現);
+  // 後端仍有 ADMIN_WRITE_TOKEN 寫入閘,設定後即需帶密碼(屆時再補密碼輸入 UI)。
+  var editMode = true;
   var crudCache = { farm: {}, customer: {} };
-  try {
-    adminToken = localStorage.getItem("emp-admin-token") || null;
-    editMode = localStorage.getItem("emp-edit") === "1" && !!adminToken;
-  } catch (e) { /* ignore */ }
-  if (adminToken) api.setToken(adminToken);
 
   var FARM_FIELDS = [
     { key: "code", label: "案場代碼", createOnly: true, required: true, placeholder: "WF-XXX" },
@@ -1421,7 +1418,7 @@
       '<button class="mini danger entity-del" data-kind="' + kind + '" data-id="' + id + '">刪除</button></td>';
   }
   function writeErr(err) {
-    if (err && err.status === 403) return "沒有編輯權限:密碼錯誤,請重新開啟編輯模式。";
+    if (err && err.status === 403) return "沒有編輯權限:此環境已啟用寫入密碼保護(ADMIN_WRITE_TOKEN)。";
     return String((err && err.message) || "").replace(/^\d+:\s*/, "") || "操作失敗";
   }
   function fmField(f, val) {
@@ -1504,34 +1501,6 @@
     if (el.classList.contains("entity-edit")) openEntityForm(kind, item);
     else confirmDelete(kind, item);
   });
-  // edit-mode toggle
-  var editBtn = document.getElementById("editBtn");
-  function syncEditBtn() {
-    editBtn.classList.toggle("on", editMode);
-    editBtn.querySelector("span").textContent = editMode ? "編輯中" : "編輯";
-  }
-  syncEditBtn();
-  editBtn.addEventListener("click", function () {
-    if (editMode) {
-      editMode = false;
-      try { localStorage.setItem("emp-edit", "0"); } catch (e) { /* ignore */ }
-      syncEditBtn(); route(); return;
-    }
-    showFormModal({
-      title: "開啟編輯模式", submitLabel: "開啟",
-      note: "編輯發電案場 / 企業客戶需要密碼(由部署時的 ADMIN_WRITE_TOKEN 設定;本機未設定則留空即可)。",
-      fields: [{ key: "token", label: "編輯密碼", type: "password" }],
-      onSubmit: function (vals, done) {
-        adminToken = vals.token || null; api.setToken(adminToken); editMode = true;
-        try {
-          if (adminToken) localStorage.setItem("emp-admin-token", adminToken);
-          localStorage.setItem("emp-edit", "1");
-        } catch (e) { /* ignore */ }
-        syncEditBtn(); done(); route();
-      },
-    });
-  });
-
   // ---------- boot ----------
   route();
 })();
