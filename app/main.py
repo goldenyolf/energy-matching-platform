@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app import __version__
 from app.api.v1.health import router as health_router
@@ -68,5 +71,41 @@ def api_index() -> dict[str, str]:
 
 # Static SPA (v1) served same-origin at /app so it can call /api/v1 without CORS.
 _WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+_SPA_ASSETS = ("styles.css", "api.js", "app.js")
+
+
+def _asset_version(web_dir: Path, name: str) -> str:
+    """8-char content hash of a web asset (used to cache-bust its URL)."""
+    try:
+        return hashlib.sha1((web_dir / name).read_bytes()).hexdigest()[:8]
+    except OSError:
+        return "0"
+
+
+def _render_index(web_dir: Path) -> str:
+    """index.html with every JS/CSS reference cache-busted by content hash."""
+    html = (web_dir / "index.html").read_text(encoding="utf-8")
+    for name in _SPA_ASSETS:
+        html = html.replace(f'"{name}"', f'"{name}?v={_asset_version(web_dir, name)}"')
+    return html
+
+
+class SpaStaticFiles(StaticFiles):
+    """Serve index.html uncached (always revalidated) with content-hashed asset
+    URLs, and serve the hashed JS/CSS immutably. A new deploy changes each
+    asset's hash, so its URL changes and browsers fetch the new file instead of
+    a stale cached copy — no manual hard-refresh needed.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        if path.strip("/").lower() in ("", ".", "index.html"):
+            html = _render_index(Path(str(self.directory)))
+            return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        response = await super().get_response(path, scope)
+        if path.lower().endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 if _WEB_DIR.is_dir():
-    app.mount("/app", StaticFiles(directory=str(_WEB_DIR), html=True), name="spa")
+    app.mount("/app", SpaStaticFiles(directory=str(_WEB_DIR), html=True), name="spa")

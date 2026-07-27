@@ -2,6 +2,25 @@
 
 from __future__ import annotations
 
+import re
+
+
+def test_spa_index_no_cache_with_versioned_assets(client):
+    resp = client.get("/app/")
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-cache"
+    # asset references are cache-busted with an 8-char content hash
+    assert re.search(r'src="app\.js\?v=[0-9a-f]{8}"', resp.text)
+    assert re.search(r'src="api\.js\?v=[0-9a-f]{8}"', resp.text)
+    assert re.search(r'href="styles\.css\?v=[0-9a-f]{8}"', resp.text)
+
+
+def test_spa_js_css_immutable(client):
+    for asset in ("/app/app.js", "/app/api.js", "/app/styles.css"):
+        cc = client.get(asset).headers["cache-control"]
+        assert "immutable" in cc
+        assert "max-age=31536000" in cc
+
 
 def test_spa_index_served(client):
     resp = client.get("/app/")
