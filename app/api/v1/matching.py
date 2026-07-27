@@ -103,8 +103,10 @@ def _parse_id_set(raw: str | None) -> set[int] | None:
     return ids or None
 
 
-def _parse_re_targets(raw: str | None) -> dict[int, float]:
-    """Parse 'cid:pct,cid:pct' RE-target overrides into {customer_id: percent}."""
+def _parse_float_map(
+    raw: str | None, lo: float, hi: float, name: str
+) -> dict[int, float]:
+    """Parse an 'id:value,id:value' override string into {id: value}."""
     out: dict[int, float] = {}
     if raw is None or not raw.strip():
         return out
@@ -113,17 +115,15 @@ def _parse_re_targets(raw: str | None) -> dict[int, float]:
         if not tok:
             continue
         try:
-            cid_s, pct_s = tok.split(":")
-            pct = float(pct_s)
+            key_s, val_s = tok.split(":")
+            val = float(val_s)
         except ValueError as exc:
             raise HTTPException(
-                status_code=422, detail=f"invalid re_target '{tok}' (want cid:pct)"
+                status_code=422, detail=f"invalid {name} '{tok}' (want id:value)"
             ) from exc
-        if not 0.0 <= pct <= 100.0:
-            raise HTTPException(
-                status_code=422, detail=f"re_target percent out of range: {pct}"
-            )
-        out[int(cid_s)] = pct
+        if not lo <= val <= hi:
+            raise HTTPException(status_code=422, detail=f"{name} out of range: {val}")
+        out[int(key_s)] = val
     return out
 
 
@@ -134,6 +134,9 @@ def scenario(
     customer_ids: str | None = Query(None, description="CSV of customer ids"),
     re_targets: str | None = Query(
         None, description="RE-target overrides 'cid:pct,cid:pct'"
+    ),
+    feed_ins: str | None = Query(
+        None, description="Per-farm feed-in overrides 'fid:price,fid:price'"
     ),
     transfer_price: float | None = Query(None, ge=0.0),
     min_sites: int | None = Query(None, ge=0),
@@ -146,7 +149,8 @@ def scenario(
     req = ScenarioRequest(
         farm_ids=_parse_id_set(farm_ids),
         customer_ids=_parse_id_set(customer_ids),
-        re_target_overrides=_parse_re_targets(re_targets),
+        re_target_overrides=_parse_float_map(re_targets, 0.0, 100.0, "re_target"),
+        feed_in_overrides=_parse_float_map(feed_ins, 0.0, 100.0, "feed_in"),
         assumed_transfer_price_per_kwh=(
             settings.scenario_transfer_price_per_kwh
             if transfer_price is None

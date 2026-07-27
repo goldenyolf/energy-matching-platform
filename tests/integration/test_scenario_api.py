@@ -122,6 +122,24 @@ def test_scenario_re_target_override(client, seeded):
     assert k1t["re_target_met"] is True
 
 
+def test_scenario_feed_in_override_flips_farm_preference(client, seeded):
+    def farm_alloc(body, fid):
+        return sum(
+            a["allocated_mwh"] for a in body["allocations"] if a["wind_farm_id"] == fid
+        )
+
+    # Default: F1 (feed-in 4.0) is cheaper than F2 (4.2) → F1 carries the green.
+    base = client.get("/api/v1/matching/scenario", params={"period": "2024-01"}).json()
+    assert farm_alloc(base, seeded["f1"]) > farm_alloc(base, seeded["f2"])
+
+    # Override F1's feed-in to 5.0 (now pricier than F2) → preference flips to F2.
+    over = client.get(
+        "/api/v1/matching/scenario",
+        params={"period": "2024-01", "feed_ins": f"{seeded['f1']}:5.0"},
+    ).json()
+    assert farm_alloc(over, seeded["f2"]) > farm_alloc(over, seeded["f1"])
+
+
 def test_scenario_rejects_bad_re_target(client, seeded):
     resp = client.get(
         "/api/v1/matching/scenario",

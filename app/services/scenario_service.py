@@ -39,6 +39,7 @@ class ScenarioRequest:
     farm_ids: set[int] | None = None  # None = all farms
     customer_ids: set[int] | None = None  # None = all customers
     re_target_overrides: dict[int, float] = field(default_factory=dict)
+    feed_in_overrides: dict[int, float] = field(default_factory=dict)  # NTD/kWh
     assumed_transfer_price_per_kwh: float = 5.0
     min_sites_per_customer: int = 0
     min_site_allocation_percent: float = 0.0
@@ -54,7 +55,9 @@ def compute_scenario(db: Session, period: str, req: ScenarioRequest) -> Scenario
         FarmSupply(
             farm_id=f.id,
             generated_mwh=gen.get(f.id, 0.0),
-            feed_in_price_per_kwh=f.feed_in_price_per_kwh,
+            feed_in_price_per_kwh=req.feed_in_overrides.get(
+                f.id, f.feed_in_price_per_kwh
+            ),
         )
         for f in db.execute(select(WindFarm).order_by(WindFarm.id)).scalars()
         if req.farm_ids is None or f.id in req.farm_ids
