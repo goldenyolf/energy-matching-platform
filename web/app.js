@@ -229,11 +229,12 @@
     Promise.all([api.customers(), api.analyticsCustomers(period)])
       .then(function (r) {
         var custs = r[0], an = r[1];
-        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3></div><div class="tablewrap"><table>' +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th></tr></thead><tbody>";
+        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? "<th>操作</th>" : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
+          crudCache.customer[c.id] = c;
           html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
-            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td></tr>";
+            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" + rowActions("customer", c.id) + "</tr>";
         });
         html += "</tbody></table></div></section>";
         html += '<section class="card section-gap"><div class="hd"><h3>RE 目標達成分析</h3><span class="aside">' + esc(period) + "</span></div><div class=\"tablewrap\"><table>" +
@@ -417,9 +418,10 @@
         kpi("總發電量", nfmt(totGen, 0) + "<small>MWh</small>", "資料區間累積") +
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
-      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span></div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th></tr></thead><tbody>";
+      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span>" + entityAddBtn("farm", "新增案場") + "</div><div class=\"tablewrap\"><table>" +
+        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th>" + (editMode ? "<th>操作</th>" : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
+        crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
         html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td>" +
           "<td style=\"text-align:left\">" + esc(f.operator_name || "–") + "</td>" +
@@ -429,7 +431,7 @@
           "<td class=\"num\">" + (f.feed_in_price_per_kwh != null ? price(f.feed_in_price_per_kwh) : "–") + "</td>" +
           "<td>" + statusPill(f.status) + "</td>" +
           "<td class=\"num\">" + nfmt(a.peak, 0) + "</td><td class=\"num\">" + nfmt(a.half_peak, 0) + "</td><td class=\"num\">" + nfmt(a.off_peak, 0) + "</td>" +
-          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(a.total, 0) + "</td></tr>";
+          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(a.total, 0) + "</td>" + rowActions("farm", f.id) + "</tr>";
       });
       html += "</tbody></table></div></section>";
       html += '<div class="foot-note">' + iconInfo() + "示範資料為模擬。各時段發電由 generate_slot_profiles 依風電典型占比拆分(離峰較高)。</div>";
@@ -1381,6 +1383,154 @@
   document.getElementById("helpOk").addEventListener("click", hideHelp);
   helpOverlay.addEventListener("click", function (e) { if (e.target === helpOverlay) hideHelp(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); } });
+
+  // ---------- 編輯模式 + 實體 CRUD(發電案場 / 企業客戶) ----------
+  var editMode = false, adminToken = null;
+  var crudCache = { farm: {}, customer: {} };
+  try {
+    adminToken = localStorage.getItem("emp-admin-token") || null;
+    editMode = localStorage.getItem("emp-edit") === "1" && !!adminToken;
+  } catch (e) { /* ignore */ }
+  if (adminToken) api.setToken(adminToken);
+
+  var FARM_FIELDS = [
+    { key: "code", label: "案場代碼", createOnly: true, required: true, placeholder: "WF-XXX" },
+    { key: "name", label: "名稱", required: true },
+    { key: "operator_name", label: "營運商" },
+    { key: "location", label: "場址" },
+    { key: "installed_capacity_mw", label: "裝置容量 (MW)", type: "number", required: true },
+    { key: "feed_in_price_per_kwh", label: "躉售價 (NTD/kWh)", type: "number" },
+    { key: "commercial_operation_date", label: "商轉日", placeholder: "2024-01-01" },
+    { key: "status", label: "狀態", type: "select", options: [["operational", "營運中"], ["under_construction", "建置中"], ["planning", "規劃中"], ["decommissioned", "除役"]] },
+  ];
+  var CUST_FIELDS = [
+    { key: "code", label: "客戶代碼", createOnly: true, required: true, placeholder: "CUST-XXX" },
+    { key: "company_name", label: "公司名稱", required: true },
+    { key: "industry", label: "產業" },
+    { key: "annual_consumption_mwh", label: "年用電 (MWh)", type: "number" },
+    { key: "re_target_percent", label: "RE 目標 (%)", type: "number", min: 0, max: 100 },
+    { key: "target_year", label: "目標年", type: "number", step: "1" },
+  ];
+
+  function entityAddBtn(kind, label) {
+    return editMode ? '<button class="btn primary sm entity-add" data-kind="' + kind + '">+ ' + esc(label) + "</button>" : "";
+  }
+  function rowActions(kind, id) {
+    if (!editMode) return "";
+    return '<td class="rowact"><button class="mini entity-edit" data-kind="' + kind + '" data-id="' + id + '">編輯</button>' +
+      '<button class="mini danger entity-del" data-kind="' + kind + '" data-id="' + id + '">刪除</button></td>';
+  }
+  function writeErr(err) {
+    if (err && err.status === 403) return "沒有編輯權限:密碼錯誤,請重新開啟編輯模式。";
+    return String((err && err.message) || "").replace(/^\d+:\s*/, "") || "操作失敗";
+  }
+  function fmField(f, val) {
+    var v = val == null ? "" : val;
+    var lab = "<span>" + esc(f.label) + (f.required ? ' <i class="req">*</i>' : "") + "</span>";
+    if (f.type === "select") {
+      var opts = f.options.map(function (o) {
+        return '<option value="' + o[0] + '"' + (String(o[0]) === String(v) ? " selected" : "") + ">" + esc(o[1]) + "</option>";
+      }).join("");
+      return '<label class="fm-f">' + lab + '<select name="' + f.key + '">' + opts + "</select></label>";
+    }
+    var attrs = 'name="' + f.key + '" type="' + (f.type || "text") + '"';
+    if (f.type === "number") attrs += ' step="' + (f.step || "any") + '"' + (f.min != null ? ' min="' + f.min + '"' : "") + (f.max != null ? ' max="' + f.max + '"' : "");
+    if (f.required) attrs += " required";
+    if (f.placeholder) attrs += ' placeholder="' + esc(f.placeholder) + '"';
+    return '<label class="fm-f">' + lab + "<input " + attrs + ' value="' + esc(v) + '"></label>';
+  }
+  function showFormModal(opts) {
+    var ov = document.createElement("div");
+    ov.className = "overlay show formov";
+    var fieldsHtml = (opts.fields || []).map(function (f) { return fmField(f, (opts.values || {})[f.key]); }).join("");
+    ov.innerHTML = '<div class="formmodal"><div class="fm-hd"><h3>' + esc(opts.title) + '</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
+      '<form class="fm-body">' + (opts.note ? '<p class="fm-note">' + opts.note + "</p>" : "") + fieldsHtml +
+      '<div class="fm-err"></div><div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button>' +
+      '<button type="submit" class="btn ' + (opts.danger ? "danger" : "primary") + '">' + esc(opts.submitLabel || "儲存") + "</button></div></form></div>";
+    document.body.appendChild(ov);
+    function close() { ov.remove(); }
+    ov.querySelector(".fm-x").onclick = close;
+    ov.querySelector(".fm-cancel").onclick = close;
+    ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
+    ov.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var vals = {};
+      (opts.fields || []).forEach(function (f) {
+        var el = ov.querySelector('[name="' + f.key + '"]'); if (!el) return;
+        var v = el.value;
+        if (f.type === "number") { v = v.trim() === "" ? null : parseFloat(v); }
+        else { v = v.trim(); if (v === "") v = null; }
+        vals[f.key] = v;
+      });
+      var errEl = ov.querySelector(".fm-err");
+      var btn = ov.querySelector('button[type="submit"]'); btn.disabled = true;
+      opts.onSubmit(vals, function (err) { btn.disabled = false; if (err) { errEl.textContent = err; } else { close(); } });
+    });
+    var first = ov.querySelector("input,select"); if (first) first.focus();
+  }
+  function openEntityForm(kind, item) {
+    var isFarm = kind === "farm";
+    var fields = (isFarm ? FARM_FIELDS : CUST_FIELDS).filter(function (f) { return !(item && f.createOnly); });
+    showFormModal({
+      title: (item ? "編輯" : "新增") + (isFarm ? "發電案場" : "企業客戶"),
+      fields: fields, values: item || {}, submitLabel: item ? "儲存" : "新增",
+      onSubmit: function (vals, done) {
+        var p = isFarm
+          ? (item ? api.updateFarm(item.id, vals) : api.createFarm(vals))
+          : (item ? api.updateCustomer(item.id, vals) : api.createCustomer(vals));
+        p.then(function () { done(); route(); }).catch(function (err) { done(writeErr(err)); });
+      },
+    });
+  }
+  function confirmDelete(kind, item) {
+    var isFarm = kind === "farm";
+    var nm = esc(item.code) + " " + esc(isFarm ? (item.name || "") : (item.company_name || ""));
+    showFormModal({
+      title: "刪除" + (isFarm ? "發電案場" : "企業客戶"), fields: [], danger: true, submitLabel: "確定刪除",
+      note: "確定要刪除「<b>" + nm + "</b>」嗎?此動作無法復原;若仍有合約/發電/用電等關聯資料會被擋下。",
+      onSubmit: function (_vals, done) {
+        var p = isFarm ? api.deleteFarm(item.id) : api.deleteCustomer(item.id);
+        p.then(function () { done(); route(); }).catch(function (err) { done(writeErr(err)); });
+      },
+    });
+  }
+  // delegated CRUD actions
+  view.addEventListener("click", function (e) {
+    var el = e.target.closest(".entity-add,.entity-edit,.entity-del"); if (!el) return;
+    var kind = el.getAttribute("data-kind");
+    if (el.classList.contains("entity-add")) { openEntityForm(kind, null); return; }
+    var item = crudCache[kind][el.getAttribute("data-id")];
+    if (!item) return;
+    if (el.classList.contains("entity-edit")) openEntityForm(kind, item);
+    else confirmDelete(kind, item);
+  });
+  // edit-mode toggle
+  var editBtn = document.getElementById("editBtn");
+  function syncEditBtn() {
+    editBtn.classList.toggle("on", editMode);
+    editBtn.querySelector("span").textContent = editMode ? "編輯中" : "編輯";
+  }
+  syncEditBtn();
+  editBtn.addEventListener("click", function () {
+    if (editMode) {
+      editMode = false;
+      try { localStorage.setItem("emp-edit", "0"); } catch (e) { /* ignore */ }
+      syncEditBtn(); route(); return;
+    }
+    showFormModal({
+      title: "開啟編輯模式", submitLabel: "開啟",
+      note: "編輯發電案場 / 企業客戶需要密碼(由部署時的 ADMIN_WRITE_TOKEN 設定;本機未設定則留空即可)。",
+      fields: [{ key: "token", label: "編輯密碼", type: "password" }],
+      onSubmit: function (vals, done) {
+        adminToken = vals.token || null; api.setToken(adminToken); editMode = true;
+        try {
+          if (adminToken) localStorage.setItem("emp-admin-token", adminToken);
+          localStorage.setItem("emp-edit", "1");
+        } catch (e) { /* ignore */ }
+        syncEditBtn(); done(); route();
+      },
+    });
+  });
 
   // ---------- boot ----------
   route();

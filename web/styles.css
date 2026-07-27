@@ -431,3 +431,32 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
   .mm-expipe{grid-template-columns:1fr}
   .mm-exarr{transform:rotate(90deg);justify-self:center}
 }
+
+/* 編輯模式 + 實體 CRUD */
+.iconbtn.editbtn{width:auto;padding:0 11px;gap:6px;font-size:12.5px;font-weight:600}
+.iconbtn.editbtn span{display:inline}
+.iconbtn.editbtn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn.sm{height:30px;padding:0 12px;font-size:12.5px;margin-left:auto}
+.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn.danger:hover{filter:brightness(1.06)}
+.rowact{white-space:nowrap;text-align:right}
+.mini{font-size:12px;font-weight:600;padding:4px 9px;border-radius:7px;border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--muted);cursor:pointer;margin-left:5px}
+.mini:hover{color:var(--ink);border-color:var(--brand)}
+.mini.danger{color:var(--bad);border-color:transparent}
+.mini.danger:hover{border-color:var(--bad);background:var(--bad-soft)}
+.formmodal{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
+  width:100%;max-width:460px;overflow:hidden;margin:auto}
+.fm-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line)}
+.fm-hd h3{margin:0;font-size:17px}
+.fm-x{background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px}
+.fm-body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:13px;max-height:74vh;overflow-y:auto}
+.fm-note{margin:0;font-size:12.5px;color:var(--muted);line-height:1.65}
+.fm-f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600}
+.fm-f .req{color:var(--bad);font-style:normal}
+.fm-f input,.fm-f select{padding:9px 11px;border:1px solid var(--line-strong);border-radius:9px;
+  background:var(--surface-2);color:var(--ink);font-size:14px;font-weight:400}
+.fm-f input:focus,.fm-f select:focus{outline:none;border-color:var(--brand)}
+.fm-err{color:var(--bad);font-size:12.5px}
+.fm-err:not(:empty){padding:8px 11px;background:var(--bad-soft);border-radius:8px;line-height:1.5}
+.fm-act{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}

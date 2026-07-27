@@ -20,8 +20,16 @@
     return parts.length ? "?" + parts.join("&") : "";
   }
 
-  function request(method, path, params) {
-    return fetch(V1 + path + qs(params), { method: method, headers: { Accept: "application/json" } })
+  var adminToken = null; // set via api.setToken() when 編輯模式 is on
+  function request(method, path, params, jsonBody) {
+    var headers = { Accept: "application/json" };
+    var opts = { method: method, headers: headers };
+    if (jsonBody !== undefined) {
+      headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(jsonBody);
+    }
+    if (adminToken) headers["X-Admin-Token"] = adminToken;
+    return fetch(V1 + path + qs(params), opts)
       .then(function (resp) {
         return resp.text().then(function (body) {
           if (!resp.ok) {
@@ -39,11 +47,21 @@
   }
   function get(path, params) { return request("GET", path, params); }
   function post(path, params) { return request("POST", path, params); }
+  function postJson(path, jsonBody) { return request("POST", path, null, jsonBody); }
+  function putJson(path, jsonBody) { return request("PUT", path, null, jsonBody); }
+  function del(path) { return request("DELETE", path, null); }
 
   global.api = {
     ApiError: ApiError,
+    setToken: function (t) { adminToken = t || null; },
     customers: function () { return get("/customers", { limit: 1000 }); },
     windFarms: function () { return get("/wind-farms", { limit: 1000 }); },
+    createFarm: function (data) { return postJson("/wind-farms", data); },
+    updateFarm: function (id, data) { return putJson("/wind-farms/" + id, data); },
+    deleteFarm: function (id) { return del("/wind-farms/" + id); },
+    createCustomer: function (data) { return postJson("/customers", data); },
+    updateCustomer: function (id, data) { return putJson("/customers/" + id, data); },
+    deleteCustomer: function (id) { return del("/customers/" + id); },
     contracts: function () { return get("/contracts", { limit: 1000 }); },
     generation: function () { return get("/generation", { limit: 5000 }); },
     analyticsSummary: function (period) { return get("/analytics/summary", { period: period }); },
