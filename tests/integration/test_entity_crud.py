@@ -161,6 +161,85 @@ def test_delete_customer_blocked_by_consumption(client, db):
     assert "用電" in resp.json()["detail"]
 
 
+def _make_contract(client, number="PPA-NEW"):
+    fid = _make_farm(client, code="WF-CT").json()["id"]
+    cid = _make_customer(client, code="CUST-CT").json()["id"]
+    return client.post(
+        "/api/v1/contracts",
+        json={
+            "contract_number": number,
+            "wind_farm_id": fid,
+            "customer_id": cid,
+            "start_date": "2024-01-01",
+            "end_date": "2033-12-31",
+            "contracted_percentage": 60.0,
+            "price_per_kwh": 4.8,
+        },
+    )
+
+
+def test_update_contract(client):
+    resp = _make_contract(client)
+    assert resp.status_code == 201
+    ct = resp.json()
+    up = client.put(
+        f"/api/v1/contracts/{ct['id']}",
+        json={"price_per_kwh": 5.1, "status": "terminated"},
+    )
+    assert up.status_code == 200
+    assert up.json()["price_per_kwh"] == 5.1
+    assert up.json()["status"] == "terminated"
+
+
+def test_delete_contract_without_dependents(client):
+    cid = _make_contract(client).json()["id"]
+    assert client.delete(f"/api/v1/contracts/{cid}").status_code == 204
+    assert client.get(f"/api/v1/contracts/{cid}").status_code == 404
+
+
+def test_delete_contract_blocked_by_matching_result(client, db):
+    from app.models import MatchingResult, MatchingRun
+
+    ct = _make_contract(client).json()
+    run = MatchingRun(period="2024-01")
+    db.add(run)
+    db.flush()
+    db.add(
+        MatchingResult(
+            matching_run_id=run.id,
+            wind_farm_id=ct["wind_farm_id"],
+            customer_id=ct["customer_id"],
+            contract_id=ct["id"],
+            period="2024-01",
+            allocated_energy_mwh=100.0,
+            customer_consumption_mwh=200.0,
+            achieved_re_percent=50.0,
+            allocation_reason="test",
+        )
+    )
+    db.commit()
+    resp = client.delete(f"/api/v1/contracts/{ct['id']}")
+    assert resp.status_code == 409
+    assert "媒合結果" in resp.json()["detail"]
+
+
+def test_contract_write_gate(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_write_token", "secret")
+    # a create without token is blocked (403) before touching the DB
+    blocked = client.post(
+        "/api/v1/contracts",
+        json={
+            "contract_number": "PPA-GATED",
+            "wind_farm_id": 1,
+            "customer_id": 1,
+            "start_date": "2024-01-01",
+            "end_date": "2030-01-01",
+            "contracted_percentage": 50.0,
+        },
+    )
+    assert blocked.status_code == 403
+
+
 def test_write_gate_requires_token(client, monkeypatch):
     monkeypatch.setattr(settings, "admin_write_token", "secret")
     # no token → blocked

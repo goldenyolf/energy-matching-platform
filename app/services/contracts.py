@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models import Contract, Customer, WindFarm
+from app.models import Contract, Customer, MatchingResult, WindFarm
 from app.repositories.base import BaseRepository
 from app.schemas.contract import ContractCreate, ContractUpdate
 
@@ -39,3 +40,18 @@ def list_all(db: Session, *, limit: int = 100, offset: int = 0) -> list[Contract
 def update(db: Session, contract_id: int, data: ContractUpdate) -> Contract:
     contract = get(db, contract_id)
     return _repo(db).update(contract, data.model_dump(exclude_unset=True))
+
+
+def delete(db: Session, contract_id: int) -> None:
+    """Delete a contract, refusing if it is referenced by matching results."""
+    contract = get(db, contract_id)
+    results = db.scalar(
+        select(func.count())
+        .select_from(MatchingResult)
+        .where(MatchingResult.contract_id == contract_id)
+    )
+    if results:
+        raise ConflictError(
+            f"此合約尚有 {results} 筆媒合結果引用,請先移除關聯資料後再刪除。"
+        )
+    _repo(db).delete(contract)
