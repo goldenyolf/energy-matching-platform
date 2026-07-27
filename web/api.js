@@ -68,6 +68,7 @@
         farm_ids: opts.farmIds,
         customer_ids: opts.customerIds,
         re_targets: opts.reTargets,
+        feed_ins: opts.feedIns,
         transfer_price: opts.transferPrice,
         min_sites: opts.minSites,
         min_site_allocation_percent: opts.minPct,

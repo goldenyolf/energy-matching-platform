@@ -754,6 +754,11 @@
         var el = document.querySelector('input[data-cidre="' + cid + '"]');
         if (el && el.value.trim() !== "") reParts.push(cid + ":" + el.value.trim());
       });
+      var fiParts = [];
+      farmIds.forEach(function (fid) {
+        var el = document.querySelector('input[data-fidfi="' + fid + '"]');
+        if (el && el.value.trim() !== "") fiParts.push(fid + ":" + el.value.trim());
+      });
       var priceEl = document.getElementById("mm-price");
       var priceV = priceEl && priceEl.value.trim();
       body.innerHTML = '<div class="placeholder">求解最佳配置中…</div>';
@@ -761,6 +766,7 @@
         farmIds: farmIds.join(","),
         customerIds: custIds.join(","),
         reTargets: reParts.join(","),
+        feedIns: fiParts.join(","),
         transferPrice: priceV ? parseFloat(priceV) : undefined,
       }).then(function (r) { renderMatchmapResult(body, r, fmMap, cmMap); })
         .catch(function (err) { body.innerHTML = errbox("求解最佳配置", err); });
@@ -775,8 +781,10 @@
 
   function buildScenarioPanel(farms, custs) {
     var fRows = farms.map(function (f) {
-      return '<label class="mm-pick"><input type="checkbox" data-fid="' + f.id + '" checked>' +
-        '<span class="code">' + esc(f.code) + '</span> <span class="nm">' + esc((f.name || "").split(" (")[0]) + "</span></label>";
+      var fi = f.feed_in_price_per_kwh == null ? 4.0 : f.feed_in_price_per_kwh;
+      return '<div class="mm-pick farm"><label><input type="checkbox" data-fid="' + f.id + '" checked>' +
+        '<span class="code">' + esc(f.code) + '</span> <span class="nm">' + esc((f.name || "").split(" (")[0]) + "</span></label>" +
+        '<span class="mm-fi"><input class="num" type="number" min="0" step="0.1" data-fidfi="' + f.id + '" value="' + fi + '"><i>躉售</i></span></div>';
     }).join("");
     var cRows = custs.map(function (c) {
       var t = c.re_target_percent == null ? 0 : c.re_target_percent;
