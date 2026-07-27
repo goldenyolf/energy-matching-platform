@@ -58,15 +58,13 @@
   }
 
   // sub-tab groups: related sub-views share one nav item + a segmented tab bar
-  var TABS_CUST = [{ route: "customers", name: "企業客戶" }, { route: "meters", name: "電號 / 廠區" }];
   var TABS_PNL = [{ route: "evaluate", name: "售電評估" }, { route: "settlement", name: "轉供結算單" }];
   var TABS_MM = [{ route: "matchmap", name: "多對多情境" }, { route: "recommend", name: "RE 補足建議" }];
   var TAB_GROUPS = {
-    customers: TABS_CUST, meters: TABS_CUST,
     evaluate: TABS_PNL, settlement: TABS_PNL,
     matchmap: TABS_MM, recommend: TABS_MM,
   };
-  // sub-route → the nav item that should stay highlighted
+  // sub-route → the nav item that should stay highlighted (電號 drills in from 企業客戶)
   var NAV_PARENT = { meters: "customers", settlement: "evaluate", recommend: "matchmap" };
 
   function subtabs(items, active) {
@@ -229,12 +227,13 @@
     Promise.all([api.customers(), api.analyticsCustomers(period)])
       .then(function (r) {
         var custs = r[0], an = r[1];
-        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>代理人</th><th>電話</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3><span class="aside">點代碼可查看該客戶的電號/廠區</span>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>電號/廠區</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
-          html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
-            "</td><td style=\"text-align:left\">" + esc(c.agent || "–") + "</td><td class=\"num\">" + esc(c.phone || "–") + "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" +
+          html += "<tr><td class=\"code\"><a href=\"#/meters?cid=" + c.id + "\">" + esc(c.code) + "</a></td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
+            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" +
+            "<td><a href=\"#/meters?cid=" + c.id + "\">查看電號 →</a></td>" +
             rowActions("customer", c.id) + "</tr>";
         });
         html += "</tbody></table></div></section>";
@@ -252,10 +251,11 @@
 
   // ---------- 多電號/廠區 ----------
   function renderMeters() {
-    crumb.textContent = "多電號";
+    crumb.textContent = "電號/廠區";
+    var presetCid = parseHash().params.cid ? parseInt(parseHash().params.cid, 10) : null;
     view.innerHTML =
-      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>多電號/廠區</h1></div>' +
-      '<div class="meta"><span>各電號/廠區的用電與 RE 目標達成。客戶綠電依各電號 RE 目標優先分配(目標高者優先)。</span></div></div>' +
+      '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>電號 / 廠區</h1></div>' +
+      '<div class="meta"><span><a href="#/customers">← 企業客戶</a></span><span>各電號的用電負載與 RE 目標達成;各電號年度用電加總 = 客戶總用電量。</span></div></div></div>' +
       '<form class="formcard" id="mtForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="m-customer" required><option value="">載入中…</option></select></div>' +
       '<div class="field"><label>期間 (YYYY-MM)</label><input id="m-period" class="num" value="' + getPeriod() + '"></div>' +
@@ -267,6 +267,7 @@
       sel.innerHTML = list.map(function (c) {
         return '<option value="' + c.id + '">' + esc(c.code + " · " + c.company_name) + "</option>";
       }).join("");
+      if (presetCid && list.some(function (c) { return c.id === presetCid; })) sel.value = presetCid;
       run();
     }).catch(function (err) {
       sel.innerHTML = '<option value="">無法載入用電戶</option>';
@@ -288,7 +289,8 @@
   // 用電負載數據(各電號)管理表(含新增/編輯/刪除)
   function renderMeterManage(cid, meters) {
     meters.forEach(function (m) { crudCache.meter[m.id] = m; });
-    var html = '<section class="card"><div class="hd"><h3>用電負載數據(各電號)</h3>' + entityAddBtn("meter", "新增電號", cid) + "</div><div class=\"tablewrap\"><table>" +
+    var sumKwh = meters.reduce(function (s, m) { return s + (m.total_kwh || 0); }, 0);
+    var html = '<section class="card"><div class="hd"><h3>用電負載數據(各電號)</h3><span class="aside">年度用電加總 ' + nfmt(sumKwh / 1000, 0) + " MWh(= 客戶總用電)</span>" + entityAddBtn("meter", "新增電號", cid) + "</div><div class=\"tablewrap\"><table>" +
       "<thead><tr><th>電號</th><th>用電名稱</th><th>契約容量 (kW)</th><th>時間電價</th><th>尖峰 (kWh)</th><th>半尖峰 (kWh)</th><th>周六半尖峰 (kWh)</th><th>離峰 (kWh)</th><th>總量 (kWh)</th><th>數據區間</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
     if (!meters.length) {
       html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">此客戶尚無電號' + (editMode ? ",可按「新增電號」建立。" : "。") + "</td></tr>";
@@ -1425,9 +1427,6 @@
     { key: "code", label: "客戶代碼", createOnly: true, required: true, placeholder: "CUST-XXX" },
     { key: "company_name", label: "公司名稱", required: true },
     { key: "industry", label: "產業" },
-    { key: "agent", label: "公司代理人" },
-    { key: "phone", label: "公司電話" },
-    { key: "address", label: "公司地址" },
     { key: "annual_consumption_mwh", label: "總用電量 (MWh)", type: "number" },
     { key: "re_target_percent", label: "RE 目標 (%)", type: "number", min: 0, max: 100 },
     { key: "target_year", label: "目標年", type: "number", step: "1" },
