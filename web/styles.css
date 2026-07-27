@@ -110,6 +110,14 @@ button{font-family:inherit}
 
 /* content */
 .content{padding:26px 28px 40px;max-width:1320px;width:100%}
+/* segmented sub-tabs (整併後的頁內分頁切換) */
+.subtabs{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:11px;padding:4px;margin-bottom:18px;max-width:100%;overflow-x:auto}
+.subtab{padding:7px 15px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);
+  text-decoration:none;white-space:nowrap;transition:color .12s,background .12s}
+.subtab:hover{color:var(--ink)}
+.subtab.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
 .pagehead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .pagehead .title{display:flex;align-items:center;gap:12px}
 .pagehead h1{font-size:21px;letter-spacing:.01em}

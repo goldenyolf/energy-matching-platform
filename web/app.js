@@ -57,9 +57,28 @@
     if (p && /^\d{4}-\d{2}$/.test(p)) { _period = p; try { localStorage.setItem("emp-period", p); } catch (e) { /* ignore */ } }
   }
 
+  // sub-tab groups: related sub-views share one nav item + a segmented tab bar
+  var TABS_CUST = [{ route: "customers", name: "企業客戶" }, { route: "meters", name: "電號 / 廠區" }];
+  var TABS_PNL = [{ route: "evaluate", name: "售電評估" }, { route: "settlement", name: "轉供結算單" }];
+  var TABS_MM = [{ route: "matchmap", name: "多對多情境" }, { route: "recommend", name: "RE 補足建議" }];
+  var TAB_GROUPS = {
+    customers: TABS_CUST, meters: TABS_CUST,
+    evaluate: TABS_PNL, settlement: TABS_PNL,
+    matchmap: TABS_MM, recommend: TABS_MM,
+  };
+  // sub-route → the nav item that should stay highlighted
+  var NAV_PARENT = { meters: "customers", settlement: "evaluate", recommend: "matchmap" };
+
+  function subtabs(items, active) {
+    return '<div class="subtabs">' + items.map(function (t) {
+      return '<a class="subtab' + (t.route === active ? " on" : "") + '" href="#/' + t.route + '">' + esc(t.name) + "</a>";
+    }).join("") + "</div>";
+  }
+
   function setActive(route) {
+    var parent = NAV_PARENT[route] || route;
     Array.prototype.forEach.call(nav.querySelectorAll("a"), function (a) {
-      a.classList.toggle("on", a.getAttribute("data-route") === route && !a.dataset.page);
+      a.classList.toggle("on", a.getAttribute("data-route") === parent && !a.dataset.page);
     });
   }
 
@@ -99,6 +118,7 @@
     var known = views[r.route];
     (known || renderOverview)();
     var active = known ? r.route : "overview";
+    if (TAB_GROUPS[active]) view.insertAdjacentHTML("afterbegin", subtabs(TAB_GROUPS[active], active));
     setActive(active);
     setDataBadge(active);
   }
