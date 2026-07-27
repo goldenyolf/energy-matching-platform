@@ -5,7 +5,7 @@
 媒合引擎，算出每家企業每個月真正拿到多少綠電、離 RE 目標還差多遠——最後把整套決策流程
 （媒合、售電評估、投資效益、轉供結算、憑證追蹤、風險告警）收成一個售電業會用得上的介面。
 
-🔗 **線上 Demo：<https://emp-api-bxbe.onrender.com/app/>**　·　API 文件：`/docs`
+🔗 **線上 Demo：<https://emp-api-bxbe.onrender.com/app/>**　·　API 文件：`/docs`　·　🎬 [演算法圖解](https://claude.ai/code/artifact/efbab99c-5166-4fa4-bcb8-e31aa1d6795b)
 
 > **聲明**：站上所有數字都是**模擬示範資料**，與台電、TSEC 或任何能源業者無關；
 > 只有「即時再生能源」頁抓的是台電公開的即時資料。這是技術作品集，不是正式的結算、
@@ -85,6 +85,10 @@ T-REC 憑證帳（發行、移轉、註銷的生命週期），以及抓台電�
 最後把綠電按目標比例公平均攤；每家達成率不會超過設定的目標，多的綠電留為案場餘電。
 
 ![多對多匹配](docs/images/match-map.png)
+
+> 🎬 **演算法圖解**：想看它背後的最佳化邏輯（MILP、三階段字典序、公平均攤），有一份小白也能懂的
+> [視覺化解說頁](https://claude.ai/code/artifact/efbab99c-5166-4fa4-bcb8-e31aa1d6795b)，
+> 原始檔在 [`docs/algorithm-explainer.html`](docs/algorithm-explainer.html)。
 
 **轉供結算單** — 針對某客戶、某期間產出的正式雙方結算單，由同一套逐時段引擎導出：
 逐時段的綠／灰電量與金額，接著是客戶應付（綠電轉供費＋台電輸配費）、風場應收、
