@@ -32,6 +32,16 @@ class Customer(Base, TimestampMixin):
     )
     target_energy_mwh: Mapped[float | None] = mapped_column(Float, default=None)
 
+    # Contract / tariff attributes (stored + editable; not yet wired into calc).
+    contracted_capacity_kw: Mapped[float | None] = mapped_column(Float, default=None)
+    transfer_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
+    # tariff type kept as a plain string (not a DB enum) to avoid the Postgres
+    # CREATE TYPE trap on Neon; values: three_stage / two_stage / standard.
+    tariff_type: Mapped[str | None] = mapped_column(String(30), default=None)
+    peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
+    half_peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
+    off_peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
+
     contracts: Mapped[list[Contract]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"
     )

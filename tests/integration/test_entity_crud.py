@@ -66,6 +66,35 @@ def test_update_customer(client):
     assert resp.json()["re_target_percent"] == 90.0
 
 
+def test_customer_extended_fields_roundtrip(client):
+    resp = client.post(
+        "/api/v1/customers",
+        json={
+            "code": "CUST-EXT",
+            "company_name": "Ext Co",
+            "re_target_percent": 50.0,
+            "contracted_capacity_kw": 8000.0,
+            "transfer_price_per_kwh": 4.6,
+            "tariff_type": "three_stage",
+            "peak_price_per_kwh": 6.2,
+            "half_peak_price_per_kwh": 4.5,
+            "off_peak_price_per_kwh": 2.3,
+        },
+    )
+    assert resp.status_code == 201
+    b = resp.json()
+    assert b["contracted_capacity_kw"] == 8000.0
+    assert b["tariff_type"] == "three_stage"
+    assert b["peak_price_per_kwh"] == 6.2
+    up = client.put(
+        f"/api/v1/customers/{b['id']}",
+        json={"contracted_capacity_kw": 9000.0, "off_peak_price_per_kwh": 2.1},
+    )
+    assert up.status_code == 200
+    assert up.json()["contracted_capacity_kw"] == 9000.0
+    assert up.json()["off_peak_price_per_kwh"] == 2.1
+
+
 def test_delete_customer_blocked_by_consumption(client, db):
     cid = _make_customer(client).json()["id"]
     db.add(

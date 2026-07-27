@@ -49,6 +49,26 @@ def build_source(
     raise ValueError(f"unknown source: {name!r} (expected 'sample' or 'taipower')")
 
 
+def _set_customer_tariff_defaults(db) -> None:
+    """Illustrative 高壓三段式時間電價 defaults for demo customers (NTD/kWh, kW)."""
+    from sqlalchemy import select
+
+    from app.models import Customer
+
+    for c in db.execute(select(Customer)).scalars():
+        if c.annual_consumption_mwh:
+            # rough proxy: avg power / 0.6 load factor
+            c.contracted_capacity_kw = round(
+                c.annual_consumption_mwh * 1000 / 8760 / 0.6
+            )
+        c.tariff_type = "three_stage"
+        c.peak_price_per_kwh = 6.20
+        c.half_peak_price_per_kwh = 4.54
+        c.off_peak_price_per_kwh = 2.31
+        c.transfer_price_per_kwh = 4.50
+    db.commit()
+
+
 def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
     if reset:
         import app.models  # noqa: F401  (register tables)
@@ -75,6 +95,7 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
             )
             for err in result.errors[:5]:
                 print(f"    ! {err}")
+        _set_customer_tariff_defaults(db)
         if slot_profiles:
             split_profiles(db)
             print("時段展開      : 發電/用電已拆為尖峰・半尖峰・離峰時段")

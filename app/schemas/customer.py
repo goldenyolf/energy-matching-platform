@@ -18,6 +18,13 @@ class CustomerBase(BaseModel):
     target_year: int | None = Field(default=None, ge=2000, le=2100)
     green_target_type: GreenTargetType = GreenTargetType.RE_PERCENT
     target_energy_mwh: float | None = Field(default=None, ge=0)
+    # contract / tariff attributes (stored + editable)
+    contracted_capacity_kw: float | None = Field(default=None, ge=0)
+    transfer_price_per_kwh: float | None = Field(default=None, ge=0)
+    tariff_type: str | None = Field(default=None, max_length=30)
+    peak_price_per_kwh: float | None = Field(default=None, ge=0)
+    half_peak_price_per_kwh: float | None = Field(default=None, ge=0)
+    off_peak_price_per_kwh: float | None = Field(default=None, ge=0)
 
 
 class CustomerCreate(CustomerBase):
@@ -30,6 +37,12 @@ class CustomerUpdate(BaseModel):
     annual_consumption_mwh: float | None = Field(default=None, ge=0)
     re_target_percent: float | None = Field(default=None, ge=0, le=100)
     target_year: int | None = Field(default=None, ge=2000, le=2100)
+    contracted_capacity_kw: float | None = Field(default=None, ge=0)
+    transfer_price_per_kwh: float | None = Field(default=None, ge=0)
+    tariff_type: str | None = Field(default=None, max_length=30)
+    peak_price_per_kwh: float | None = Field(default=None, ge=0)
+    half_peak_price_per_kwh: float | None = Field(default=None, ge=0)
+    off_peak_price_per_kwh: float | None = Field(default=None, ge=0)
 
 
 class CustomerRead(CustomerBase):
