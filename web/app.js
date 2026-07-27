@@ -91,6 +91,7 @@
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       meters: renderMeters, contracts: renderContracts, evaluate: renderEvaluate,
       investment: renderInvestment, recommend: renderRecommend,
+      matchmap: renderMatchmap,
       settlement: renderSettlement, trecs: renderTrecs, risks: renderRisks,
       live: renderLive,
     };
@@ -698,6 +699,275 @@
     html += "</tbody></table></div></section>";
     html += '<div class="foot-note">' + iconInfo() + "以成本最低優先,用有剩餘綠電的風場補足缺口。躉售價為指示性成本(非轉供價)。示範資料。</div>";
     body.innerHTML = html;
+  }
+
+  // ---------- 多對多匹配 (情境模擬 · greenfield what-if) ----------
+  function renderMatchmap() {
+    crumb.textContent = "多對多匹配";
+    var fmMap = {}, cmMap = {};
+    view.innerHTML =
+      '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>多對多綠電匹配</h1></div>' +
+      '<div class="meta"><span>情境模擬:自選要納入的案場/用電端,自訂各家 RE 目標,重算最佳綠電配置組合。</span></div></div>' +
+      '<div class="headactions"><input id="mm-period" class="period-input num" value="' + getPeriod() + '" placeholder="2024-01">' +
+      '<button class="btn primary" id="mm-go">查詢</button></div></div>' +
+      '<div id="mm-panel"><div class="placeholder">載入案場與用電端…</div></div>' +
+      '<div id="mm-body"></div>';
+
+    var goBtn = document.getElementById("mm-go");
+    var periodInp = document.getElementById("mm-period");
+    goBtn.addEventListener("click", run);
+    periodInp.addEventListener("keydown", function (e) { if (e.key === "Enter") run(); });
+
+    Promise.all([api.windFarms(), api.customers()]).then(function (res) {
+      res[0].forEach(function (f) { fmMap[f.id] = f; });
+      res[1].forEach(function (c) { cmMap[c.id] = c; });
+      document.getElementById("mm-panel").innerHTML = buildScenarioPanel(res[0], res[1]);
+      wirePanel();
+      run();
+    }).catch(function (err) {
+      document.getElementById("mm-panel").innerHTML = errbox("載入案場/用電端", err);
+    });
+
+    function wirePanel() {
+      document.getElementById("mm-run").addEventListener("click", run);
+      Array.prototype.forEach.call(document.querySelectorAll(".mm-all"), function (b) {
+        b.addEventListener("click", function () {
+          var tgt = b.getAttribute("data-tgt");
+          var boxes = document.querySelectorAll('input[data-' + tgt + 'id]');
+          var anyOff = Array.prototype.some.call(boxes, function (x) { return !x.checked; });
+          Array.prototype.forEach.call(boxes, function (x) { x.checked = anyOff; });
+        });
+      });
+    }
+
+    function run() {
+      var period = periodInp.value.trim(); setPeriod(period);
+      var body = document.getElementById("mm-body");
+      var farmIds = pickedIds("fid"), custIds = pickedIds("cid");
+      if (!farmIds.length || !custIds.length) {
+        body.innerHTML = '<div class="placeholder"><div class="big">☑️</div><h2>請至少勾選一個發電案場與一個用電端</h2>' +
+          "<p>在上方「情境設定」中勾選要納入媒合的案場與用電端,再按「重算最佳配置」。</p></div>";
+        return;
+      }
+      var reParts = [];
+      custIds.forEach(function (cid) {
+        var el = document.querySelector('input[data-cidre="' + cid + '"]');
+        if (el && el.value.trim() !== "") reParts.push(cid + ":" + el.value.trim());
+      });
+      var priceEl = document.getElementById("mm-price");
+      var priceV = priceEl && priceEl.value.trim();
+      body.innerHTML = '<div class="placeholder">求解最佳配置中…</div>';
+      api.scenario(period, {
+        farmIds: farmIds.join(","),
+        customerIds: custIds.join(","),
+        reTargets: reParts.join(","),
+        transferPrice: priceV ? parseFloat(priceV) : undefined,
+      }).then(function (r) { renderMatchmapResult(body, r, fmMap, cmMap); })
+        .catch(function (err) { body.innerHTML = errbox("求解最佳配置", err); });
+    }
+
+    function pickedIds(attr) {
+      return Array.prototype.filter.call(
+        document.querySelectorAll('input[data-' + attr + ']'), function (x) { return x.checked; }
+      ).map(function (x) { return parseInt(x.getAttribute("data-" + attr), 10); });
+    }
+  }
+
+  function buildScenarioPanel(farms, custs) {
+    var fRows = farms.map(function (f) {
+      return '<label class="mm-pick"><input type="checkbox" data-fid="' + f.id + '" checked>' +
+        '<span class="code">' + esc(f.code) + '</span> <span class="nm">' + esc((f.name || "").split(" (")[0]) + "</span></label>";
+    }).join("");
+    var cRows = custs.map(function (c) {
+      var t = c.re_target_percent == null ? 0 : c.re_target_percent;
+      return '<div class="mm-pick cust"><label><input type="checkbox" data-cid="' + c.id + '" checked>' +
+        '<span class="code">' + esc(c.code) + '</span> <span class="nm">' + esc(c.company_name || "") + "</span></label>" +
+        '<span class="mm-re"><input class="num" type="number" min="0" max="100" step="1" data-cidre="' + c.id + '" value="' + t + '"><i>% RE</i></span></div>';
+    }).join("");
+    return '<section class="card mm-panel"><div class="hd"><h3>情境設定</h3>' +
+      '<span class="aside">選要納入的案場/用電端,並可自訂各家 RE 目標</span></div>' +
+      '<div class="mm-panelbody">' +
+      '<div class="mm-pricerow"><label>假設轉供價 <input id="mm-price" class="num" type="number" min="0" step="0.1" value="5.0"> NTD/kWh</label>' +
+      '<span class="hint">無合約的「假設配對」用此售價估毛利(毛利 = 售價 − 案場躉售成本)</span></div>' +
+      '<div class="mm-picks"><div class="mm-col"><div class="mm-colhd"><span>發電案場</span>' +
+      '<button class="mm-all" data-tgt="f" type="button">全選 / 清空</button></div><div class="mm-list">' + fRows + "</div></div>" +
+      '<div class="mm-col"><div class="mm-colhd"><span>用電端 · RE 目標</span>' +
+      '<button class="mm-all" data-tgt="c" type="button">全選 / 清空</button></div><div class="mm-list">' + cRows + "</div></div></div>" +
+      '<div class="mm-panelactions"><button class="btn primary" id="mm-run" type="button">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>重算最佳配置</button></div></div></section>';
+  }
+
+  function mmShort(s, n) {
+    s = String(s == null ? "" : s);
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+
+  function renderMatchmapResult(body, opt, fm, cm) {
+    var farmSum = {}, custSum = {}, custTgt = {};
+    (opt.farm_summaries || []).forEach(function (s) { farmSum[s.wind_farm_id] = s; });
+    (opt.customer_summaries || []).forEach(function (s) { custSum[s.customer_id] = s; });
+    (opt.customer_targets || []).forEach(function (t) { custTgt[t.customer_id] = t; });
+
+    // 把 allocation 依 (案場,客戶) 聚合成一條流,並記錄是否為真實合約
+    var pair = {}, hc = {};
+    (opt.allocations || []).forEach(function (a) {
+      if (!(a.allocated_mwh > 0.0001)) return;
+      var k = a.wind_farm_id + "|" + a.customer_id;
+      pair[k] = (pair[k] || 0) + a.allocated_mwh;
+      hc[k] = !!a.has_contract;
+    });
+    var pairKeys = Object.keys(pair);
+
+    var totalGreen = 0; pairKeys.forEach(function (k) { totalGreen += pair[k]; });
+    var hypoGreen = 0; pairKeys.forEach(function (k) { if (!hc[k]) hypoGreen += pair[k]; });
+    var totalSurplus = 0; (opt.farm_summaries || []).forEach(function (s) { totalSurplus += (s.unallocated_mwh || 0); });
+    // 顯示「所有選定」的案場/用電端(含未配到綠電者),對齊情境選擇
+    var shownFarmIds = (opt.farm_ids || []).slice().sort(function (a, b) { return a - b; });
+    var shownCustIds = (opt.customer_ids || []).slice().sort(function (a, b) { return a - b; });
+    var metCount = 0, reSum = 0, reN = 0;
+    shownCustIds.forEach(function (id) {
+      var t = custTgt[id], s = custSum[id];
+      if (t && t.re_target_met) metCount++;
+      if (s) { reSum += s.achieved_re_percent; reN++; }
+    });
+    var avgRe = reN ? reSum / reN : 0;
+    var hypoPct = totalGreen > 0 ? hypoGreen / totalGreen * 100 : 0;
+
+    var html = '<div class="kpis">' +
+      kpi("售電業毛利", money(opt.objective_gross_margin_ntd) + "<small>NTD</small>", "最佳解 · 假設轉供價 " + price(opt.assumed_transfer_price_per_kwh), "hl", opt.objective_gross_margin_ntd >= 0 ? "up" : "down") +
+      kpi("總配置綠電", nfmt(totalGreen, 0) + "<small>MWh</small>", hypoGreen > 0.5 ? "其中假設新配對 " + pct(hypoPct, 0) + "%" : "全數為既有合約") +
+      kpi("平均 RE 達成", pct(avgRe) + "<small>%</small>", "達標 " + metCount + " / " + shownCustIds.length + " 家") +
+      kpi("案場餘電", nfmt(Math.max(0, totalSurplus), 0) + "<small>MWh</small>", totalSurplus > 0.5 ? "尚可再售" : "已幾近全數消化") +
+      "</div>";
+
+    if (!pairKeys.length) {
+      html += '<div class="placeholder"><div class="big">🔌</div><h2>此情境下無綠電配置</h2>' +
+        "<p>期間 " + esc(opt.period) + " 選定的案場沒有可配置的綠電(可能無發電,或售價低於躉售成本且各家 RE 目標為 0)。可調整假設轉供價、RE 目標或期間再試。</p></div>";
+      body.innerHTML = html;
+      return;
+    }
+
+    var farms = shownFarmIds.map(function (id) {
+      var f = fm[id] || {}, s = farmSum[id] || {};
+      var thru = 0; pairKeys.forEach(function (k) { if (+k.split("|")[0] === id) thru += pair[k]; });
+      return { id: id, label: mmShort((f.name || f.code || ("#" + id)).split(" (")[0], 10), code: f.code || ("#" + id),
+        gen: s.generated_mwh || 0, surplus: s.unallocated_mwh || 0, thru: thru };
+    });
+    var custs = shownCustIds.map(function (id) {
+      var c = cm[id] || {}, s = custSum[id] || {}, t = custTgt[id] || {};
+      var thru = 0; pairKeys.forEach(function (k) { if (+k.split("|")[1] === id) thru += pair[k]; });
+      // effective (possibly overridden) target %, derived from the solved target energy
+      var tgtPct = (s.consumption_mwh > 0 && t.re_target_mwh != null)
+        ? (t.re_target_mwh / s.consumption_mwh * 100) : c.re_target_percent;
+      return { id: id, label: mmShort(c.company_name || c.code || ("#" + id), 8), code: c.code || ("#" + id),
+        re: (s.achieved_re_percent != null ? s.achieved_re_percent : 0), target: tgtPct, met: !!t.re_target_met, thru: thru };
+    });
+
+    html += '<section class="card mm-card"><div class="hd"><h3>綠電配置最佳解</h3>' +
+      '<span class="aside">帶寬 ∝ 配置電量 · 實線=既有合約 · 虛線=假設新配對</span></div>' +
+      '<div class="mm-legend"><span class="mm-lg farm">發電案場</span>' +
+      '<span class="mm-arrow">綠電配置 →</span>' +
+      '<span class="mm-lg cust">用電端 · RE 目標</span></div>' +
+      buildFlowSVG(farms, custs, pair, hc) +
+      '<div class="mm-caps"><span>提升售電業總營收利潤,消化案場餘電</span>' +
+      '<span>實現企業 RE 綠電目標</span></div></section>';
+
+    var rows = pairKeys.map(function (k) {
+      var p = k.split("|"); return { fid: +p[0], cid: +p[1], mwh: pair[k] };
+    }).sort(function (a, b) { return b.mwh - a.mwh; });
+    var custThru = {}; custs.forEach(function (c) { custThru[c.id] = c.thru; });
+    html += '<section class="card"><div class="hd"><h3>配置明細</h3><span class="aside">' + rows.length + " 條配置 · 依電量排序</span></div><div class=\"tablewrap\"><table>" +
+      "<thead><tr><th>發電案場</th><th>用電端</th><th>配對</th><th>配置電量 (MWh)</th><th>占客戶綠電</th><th>占案場發電</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      var f = fm[r.fid] || {}, c = cm[r.cid] || {}, s = farmSum[r.fid] || {};
+      var shareCust = custThru[r.cid] ? r.mwh / custThru[r.cid] * 100 : 0;
+      var shareFarm = s.generated_mwh ? r.mwh / s.generated_mwh * 100 : 0;
+      var real = hc[r.fid + "|" + r.cid];
+      html += "<tr><td style=\"text-align:left\"><span class=\"code\">" + esc(f.code || ("#" + r.fid)) + "</span> " + esc((f.name || "").split(" (")[0]) + "</td>" +
+        "<td style=\"text-align:left\"><span class=\"code\">" + esc(c.code || ("#" + r.cid)) + "</span> " + esc(c.company_name || "") + "</td>" +
+        "<td>" + (real ? '<span class="pill ok"><span class="dot"></span>合約</span>' : '<span class="pill warnp"><span class="dot"></span>假設</span>') + "</td>" +
+        "<td class=\"num\" style=\"font-weight:700\">" + nfmt(r.mwh, 0) + "</td>" +
+        "<td class=\"num\">" + pct(shareCust, 0) + "%</td>" +
+        "<td class=\"num\">" + pct(shareFarm, 0) + "%</td></tr>";
+    });
+    html += "</tbody></table></div></section>";
+    html += '<div class="foot-note">' + iconInfo() + "情境模擬:任一選定案場皆可(假設性)供電給任一選定客戶,以最便宜綠電優先滿足各家 RE 目標、再放大售電毛利。實線/「合約」= 既有 PPA;虛線/「假設」= 尚無合約的 what-if。轉供結算與售電評估頁仍以既有合約為準。示範資料。</div>";
+
+    body.innerHTML = html;
+  }
+
+  function buildFlowSVG(farms, custs, pair, hc) {
+    hc = hc || {};
+    var W = 980, padY = 30, boxW = 198, boxH = 62, rowPitch = 92;
+    var leftX = 12, rightX = W - 12 - boxW;      // 左欄 12..210 ; 右欄 770..968
+    var innerL = leftX + boxW, innerR = rightX;  // 流帶起訖 x
+    var F = farms.length, C = custs.length;
+    var H = padY * 2 + Math.max(F, C) * rowPitch;
+    function colY(i, n) { return (H - n * rowPitch) / 2 + i * rowPitch + rowPitch / 2; }
+    var farmById = {}, custById = {};
+    farms.forEach(function (f, i) { f.cy = colY(i, F); farmById["f" + f.id] = f; });
+    custs.forEach(function (c, j) { c.cy = colY(j, C); custById["c" + c.id] = c; });
+
+    var maxFarm = Math.max.apply(null, farms.map(function (f) { return f.thru; }).concat([1]));
+    var maxCust = Math.max.apply(null, custs.map(function (c) { return c.thru; }).concat([1]));
+    var cap = boxH * 0.84;
+    var ppm = Math.min(cap / maxFarm, cap / maxCust);  // 每 MWh 的像素寬,兩側都不溢出
+
+    // 產生流帶並在左右兩側各自堆疊錨點(排序以減少交叉)
+    var flows = [];
+    farms.forEach(function (f) {
+      var outs = [];
+      custs.forEach(function (c) {
+        var m = pair[f.id + "|" + c.id]; if (!m) return;
+        outs.push({ fid: f.id, cid: c.id, mwh: m, w: Math.max(1.5, m * ppm), ccy: c.cy });
+      });
+      outs.sort(function (a, b) { return a.ccy - b.ccy; });
+      outs.forEach(function (o) { o.real = !!hc[o.fid + "|" + o.cid]; });
+      var tot = outs.reduce(function (s, o) { return s + o.w; }, 0);
+      var cur = f.cy - tot / 2;
+      outs.forEach(function (o) { o.lY = cur; cur += o.w; flows.push(o); });
+    });
+    custs.forEach(function (c) {
+      var ins = flows.filter(function (o) { return o.cid === c.id; });
+      ins.sort(function (a, b) { return farmById["f" + a.fid].cy - farmById["f" + b.fid].cy; });
+      var tot = ins.reduce(function (s, o) { return s + o.w; }, 0);
+      var cur = c.cy - tot / 2;
+      ins.forEach(function (o) { o.rY = cur; cur += o.w; });
+    });
+
+    var xm = (innerL + innerR) / 2;
+    var svg = '<div class="mm-wrap"><svg class="mm-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="綠電多對多配置圖">';
+    flows.forEach(function (o) {
+      var f = farmById["f" + o.fid], c = custById["c" + o.cid];
+      var t0 = o.lY, t1 = o.rY, w = o.w;
+      var d = "M" + innerL + "," + t0.toFixed(1) +
+        " C" + xm + "," + t0.toFixed(1) + " " + xm + "," + t1.toFixed(1) + " " + innerR + "," + t1.toFixed(1) +
+        " L" + innerR + "," + (t1 + w).toFixed(1) +
+        " C" + xm + "," + (t1 + w).toFixed(1) + " " + xm + "," + (t0 + w).toFixed(1) + " " + innerL + "," + (t0 + w).toFixed(1) + " Z";
+      svg += '<path class="mm-flow ' + (o.real ? "real" : "hypo") + '" d="' + d + '"><title>' +
+        esc(f.code) + " → " + esc(c.code) + " · " + nfmt(o.mwh, 0) + " MWh(占客戶 " + pct(c.thru ? o.mwh / c.thru * 100 : 0, 0) + "%)" +
+        (o.real ? " · 既有合約" : " · 假設新配對") + "</title></path>";
+    });
+    farms.forEach(function (f) {
+      var y = f.cy - boxH / 2;
+      svg += '<g class="mm-node mm-farm">' +
+        '<rect x="' + leftX + '" y="' + y.toFixed(1) + '" width="' + boxW + '" height="' + boxH + '" rx="10"/>' +
+        '<text class="mm-t1" x="' + (leftX + 14) + '" y="' + (y + 25).toFixed(1) + '">' + esc(f.label) + "</text>" +
+        '<text class="mm-t2" x="' + (leftX + 14) + '" y="' + (y + 45).toFixed(1) + '">發 ' + nfmt(f.gen, 0) + " · 餘 " + nfmt(f.surplus, 0) + " MWh</text>" +
+        "<title>" + esc(f.code) + " " + esc(f.label) + "</title></g>";
+    });
+    custs.forEach(function (c) {
+      var y = c.cy - boxH / 2;
+      var dotC = c.met ? "var(--good)" : "var(--warn)";
+      svg += '<g class="mm-node mm-cust">' +
+        '<rect x="' + rightX + '" y="' + y.toFixed(1) + '" width="' + boxW + '" height="' + boxH + '" rx="10"/>' +
+        '<circle cx="' + (rightX + boxW - 16) + '" cy="' + (y + 16) + '" r="5" fill="' + dotC + '"/>' +
+        '<text class="mm-t1" x="' + (rightX + 14) + '" y="' + (y + 25).toFixed(1) + '">' + esc(c.label) + "</text>" +
+        '<text class="mm-t2" x="' + (rightX + 14) + '" y="' + (y + 45).toFixed(1) + '">RE ' + pct(c.re, 0) + "% / 目標 " + (c.target == null ? "–" : pct(c.target, 0) + "%") + "</text>" +
+        "<title>" + esc(c.code) + " " + esc(c.label) + " · " + (c.met ? "達標" : "未達") + "</title></g>";
+    });
+    svg += "</svg></div>";
+    return svg;
   }
 
   // ---------- 轉供結算單 (P5) ----------
