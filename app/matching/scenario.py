@@ -118,7 +118,12 @@ def optimize_scenario(
         return _summaries_only(outcome, farms, demands)
 
     gen = {f.farm_id: f.generated_mwh for f in farms}
-    cons = {d.customer_id: d.consumed_mwh for d in demands}
+    # A customer's green ceiling is its RE-TARGET energy, not its full
+    # consumption: we never allocate a customer more green than it asked for, so
+    # the achieved RE% never exceeds the target the user set (surplus green stays
+    # unsold as farm surplus). This mirrors reality — green demand is bounded by
+    # the customer's RE commitment, not by pushing all of a farm's generation.
+    green_need = {d.customer_id: _re_target_mwh(d) for d in demands}
 
     def feedin(f: FarmSupply) -> float:
         return (
@@ -130,7 +135,7 @@ def optimize_scenario(
     margin = {f.farm_id: price - feedin(f) for f in farms}
 
     def cap(fid: int, kid: int) -> float:
-        return max(0.0, min(gen[fid], cons[kid]))
+        return max(0.0, min(gen[fid], green_need[kid]))
 
     prob = pulp.LpProblem("scenario_matching", pulp.LpMaximize)
     alloc: dict[tuple[int, int], pulp.LpVariable] = {}
@@ -149,11 +154,11 @@ def optimize_scenario(
             pulp.lpSum(alloc[(f.farm_id, d.customer_id)] for d in demands)
             <= gen[f.farm_id]
         )
-    # a customer never receives more than it consumes
+    # a customer never receives more green than its RE target requires
     for d in demands:
         prob += (
             pulp.lpSum(alloc[(f.farm_id, d.customer_id)] for f in farms)
-            <= cons[d.customer_id]
+            <= green_need[d.customer_id]
         )
 
     # link use → allocation, and enforce the minimum per-site allocation floor
@@ -161,7 +166,9 @@ def optimize_scenario(
         for d in demands:
             key = (f.farm_id, d.customer_id)
             prob += alloc[key] <= cap(*key) * use[key]
-            floor = options.min_site_allocation_percent / 100.0 * cons[d.customer_id]
+            floor = (
+                options.min_site_allocation_percent / 100.0 * green_need[d.customer_id]
+            )
             prob += alloc[key] >= max(floor, _EPSILON) * use[key]
 
     # RE target (soft) + minimum sites per customer (soft)

@@ -41,17 +41,31 @@ def test_allocates_without_any_contract():
 
 
 def test_prefers_cheaper_feedin_farm():
-    # Single transfer price → cheaper feed-in = higher margin. Fill demand from
-    # the cheaper farm first, then the pricier one.
+    # Single transfer price → cheaper feed-in = higher margin. Fill the customer's
+    # RE need from the cheaper farm first, then the pricier one.
     farms = [
         FarmSupply(1, 60.0, feed_in_price_per_kwh=4.0),  # margin 1.0
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.5),  # margin 0.5
     ]
-    demands = [_demand(1, 100.0, 0.0)]
+    demands = [_demand(1, 100.0, 100.0)]  # needs 100 MWh green
     out = optimize_scenario("2024-01", farms, demands, OPTS)
     a = _alloc(out)
     assert a[(1, 1)] == pytest.approx(60.0, abs=1e-6)
     assert a[(2, 1)] == pytest.approx(40.0, abs=1e-6)
+
+
+def test_allocation_capped_at_re_target_not_consumption():
+    # Green is abundant (200 available) but the customer's RE target is 50% of
+    # 100 MWh = 50 MWh. Allocation must stop at 50 (RE% ≤ target), never fill the
+    # full consumption; the rest stays as farm surplus.
+    farms = [FarmSupply(1, 200.0, feed_in_price_per_kwh=4.0)]
+    demands = [_demand(1, 100.0, 50.0)]
+    out = optimize_scenario("2024-01", farms, demands, OPTS)
+    ct = {c.customer_id: c for c in out.customer_targets}[1]
+    assert ct.allocated_mwh == pytest.approx(50.0, abs=1e-6)
+    assert ct.re_target_met is True
+    fs = {s.farm_id: s for s in out.farm_summaries}[1]
+    assert fs.unallocated_mwh == pytest.approx(150.0, abs=1e-6)  # green not force-sold
 
 
 def test_re_target_forces_loss_making_farm():
@@ -85,7 +99,7 @@ def test_has_contract_flag_marks_real_pairs():
         FarmSupply(1, 60.0, feed_in_price_per_kwh=4.0),  # cheaper → used first
         FarmSupply(2, 100.0, feed_in_price_per_kwh=4.2),
     ]
-    demands = [_demand(1, 100.0, 0.0)]
+    demands = [_demand(1, 100.0, 100.0)]  # needs 100 MWh green → uses both farms
     out = optimize_scenario("2024-01", farms, demands, OPTS, contract_pairs={(2, 1)})
     flags = {(a.wind_farm_id, a.customer_id): a.has_contract for a in out.allocations}
     assert flags[(1, 1)] is False  # hypothetical (no contract)
