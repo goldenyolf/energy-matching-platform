@@ -376,3 +376,29 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
   background:var(--surface);color:var(--ink);text-align:right}
 .mm-panelactions{display:flex;justify-content:flex-end}
 @media (max-width:720px){ .mm-picks{grid-template-columns:1fr} }
+
+/* 多對多匹配:可展開的演算法說明 */
+.mm-explain{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+.mm-explain>summary{cursor:pointer;list-style:none;padding:14px 18px;font-weight:700;
+  font-size:14px;color:var(--ink);display:flex;align-items:center;gap:9px;user-select:none}
+.mm-explain>summary::-webkit-details-marker{display:none}
+.mm-explain>summary::before{content:"▸";color:var(--brand);font-size:12px;
+  transition:transform .15s;display:inline-block}
+.mm-explain[open]>summary::before{transform:rotate(90deg)}
+.mm-explain>summary:hover{background:var(--surface-2)}
+.mm-explain-body{padding:6px 22px 20px;font-size:13px;line-height:1.75;
+  color:var(--ink);border-top:1px solid var(--line)}
+.mm-explain-body h4{margin:18px 0 6px;font-size:11.5px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted)}
+.mm-explain-body p{margin:6px 0}
+.mm-explain-body .lead{margin-top:14px}
+.mm-explain-body .muted{color:var(--muted);font-size:12.5px}
+.mm-explain-body ul{margin:6px 0;padding-left:20px}
+.mm-explain-body ul li{margin:4px 0}
+.mm-phases{list-style:none;padding-left:0;counter-reset:ph;margin:8px 0}
+.mm-phases li{position:relative;padding:11px 14px 11px 46px;margin:8px 0;
+  border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2)}
+.mm-phases li::before{counter-increment:ph;content:counter(ph);position:absolute;
+  left:13px;top:11px;width:22px;height:22px;border-radius:50%;background:var(--brand);
+  color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
