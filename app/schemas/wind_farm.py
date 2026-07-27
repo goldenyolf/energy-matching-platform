@@ -29,6 +29,7 @@ class WindFarmUpdate(BaseModel):
     operator_name: str | None = None
     location: str | None = None
     installed_capacity_mw: float | None = Field(default=None, gt=0)
+    feed_in_price_per_kwh: float | None = Field(default=None, ge=0)
     commercial_operation_date: date | None = None
     status: WindFarmStatus | None = None
 

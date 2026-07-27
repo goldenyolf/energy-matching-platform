@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # Streamlit dashboard → backend base URL
     api_base_url: str = "http://localhost:8000"
 
+    # Lightweight write gate for the demo (no full auth yet). When set, all
+    # create/update/delete requests must carry a matching `X-Admin-Token` header.
+    # Empty (default) = writes open — SET THIS on any public deployment.
+    admin_write_token: str = ""
+
     # Economics (P2 evaluation) — NTD/kWh
     grey_price_per_kwh: float = 3.0
     default_feed_in_price_per_kwh: float = 4.0

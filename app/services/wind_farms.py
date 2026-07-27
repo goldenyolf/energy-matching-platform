@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models import WindFarm
+from app.models import Contract, GenerationData, WindFarm
 from app.repositories.base import BaseRepository
 from app.schemas.wind_farm import WindFarmCreate, WindFarmUpdate
 
@@ -35,3 +36,24 @@ def list_all(db: Session, *, limit: int = 100, offset: int = 0) -> list[WindFarm
 def update(db: Session, farm_id: int, data: WindFarmUpdate) -> WindFarm:
     farm = get(db, farm_id)
     return _repo(db).update(farm, data.model_dump(exclude_unset=True))
+
+
+def delete(db: Session, farm_id: int) -> None:
+    """Delete a wind farm, refusing if it still has contracts or generation."""
+    farm = get(db, farm_id)
+    contracts = db.scalar(
+        select(func.count())
+        .select_from(Contract)
+        .where(Contract.wind_farm_id == farm_id)
+    )
+    generation = db.scalar(
+        select(func.count())
+        .select_from(GenerationData)
+        .where(GenerationData.wind_farm_id == farm_id)
+    )
+    if contracts or generation:
+        raise ConflictError(
+            f"此案場尚有 {contracts or 0} 筆合約、{generation or 0} 筆發電資料,"
+            "請先移除關聯資料後再刪除。"
+        )
+    _repo(db).delete(farm)
