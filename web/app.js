@@ -1017,6 +1017,16 @@
     return svg;
   }
 
+  // 三階段視覺化小卡(每根柱=一個用電端的配置,演化到公平均攤)
+  function mmPhaseCard(n, title, tag, desc, heights, cls) {
+    var bars = heights.map(function (h) {
+      return '<i class="' + cls + '" style="height:' + h + 'px"></i>';
+    }).join("");
+    return '<div class="mm-exph"><div class="mm-exph-h"><span class="pn">' + n + "</span><b>" + title + "</b>" +
+      '<span class="tg">' + tag + "</span></div>" +
+      '<div class="mm-exbars">' + bars + "</div><p>" + desc + "</p></div>";
+  }
+
   // 可展開的「計算方式與演算流程」說明(預設收合)
   function mmExplainBlock() {
     return '<details class="mm-explain"><summary>計算方式與演算流程 · 點此展開</summary>' +
@@ -1031,17 +1041,22 @@
       "<li><b>RE 目標(填到滿)</b>:綠電足夠時填到目標;不夠時差額記為缺口。</li>" +
       "<li>(選用)最少案場數、單場最小分配比例。</li></ul>" +
       "<h4>目標:三階段「字典序」最佳化</h4>" +
-      "<p>三個目標有優先順序,依序求解;每個階段先<b>鎖住</b>上一階段的成果,再往下最佳化:</p>" +
-      '<ol class="mm-phases">' +
-      "<li><b>先顧達標</b> — 讓「所有客戶未達 RE 目標的總缺口」最小。</li>" +
-      "<li><b>再顧毛利</b> — 不犧牲上一階段下,讓<b>售電毛利</b>最大(最便宜的綠電優先賣;毛利 = 假設轉供價 − 案場躉售成本)。</li>" +
-      "<li><b>最後求公平</b> — 不犧牲前兩階段下,把「<b>最低</b>的 RE 達成率」拉到最高;綠電不夠分時各家<b>按目標比例均攤</b>,而非集中灌給少數幾家。</li></ol>" +
+      "<p>三個目標有優先順序,依序求解;每個階段先<b>鎖住</b>上一階段的成果,再往下最佳化。" +
+      "下圖每根小柱代表一個用電端的配置,看它如何一步步演化到<b>公平均攤</b>:</p>" +
+      '<div class="mm-expipe">' +
+      mmPhaseCard("1", "先顧達標", "最小化 RE 缺口", "讓所有客戶「未達 RE 目標的總缺口」最小。", [22, 27, 13, 31, 17, 10], "g") +
+      '<span class="mm-exarr">▶</span>' +
+      mmPhaseCard("2", "再顧毛利", "最大化毛利", "不犧牲上一關,讓售電毛利最大——便宜綠電優先賣。", [31, 12, 24, 34, 15, 20], "d") +
+      '<span class="mm-exarr">▶</span>' +
+      mmPhaseCard("3", "求公平", "maximin 公平", "不犧牲前兩關,把「最低達成率」拉最高;不夠分時按比例均攤。", [24, 24, 24, 24, 24, 24], "g") +
+      "</div>" +
       "<h4>有沒有迭代?</h4><p>有,兩個層次:</p><ul>" +
       "<li><b>三次依序求解</b>:上面三個階段就是跑三輪 CBC,一輪鎖住結果、下一輪接著最佳化(字典序法)。</li>" +
       "<li><b>求解器內部迭代</b>:每一輪 CBC 以<b>分支定界 + 單純形</b>反覆迭代,直到證明是最佳解(最佳化間隙設為 0,不提早停)。</li></ul>" +
       '<p class="muted">它<b>不是</b>那種「跑很多輪隨機試誤 / 逐步貪婪逼近」的啟發式;每一輪都求到精確最佳。</p>' +
       "<h4>決定性</h4>" +
       '<p class="muted">輸入相同 → 結果永遠相同(案場、客戶先排序,消除退化解的隨機性)。實線=既有合約、虛線=假設新配對,僅影響顯示,不影響計算。</p>' +
+      '<p class="mm-ex-link"><a href="https://claude.ai/code/artifact/efbab99c-5166-4fa4-bcb8-e31aa1d6795b" target="_blank" rel="noopener">看完整視覺化圖解 →</a></p>' +
       "</div></details>";
   }
 

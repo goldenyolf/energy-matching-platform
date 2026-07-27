@@ -402,9 +402,24 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .mm-explain-body .muted{color:var(--muted);font-size:12.5px}
 .mm-explain-body ul{margin:6px 0;padding-left:20px}
 .mm-explain-body ul li{margin:4px 0}
-.mm-phases{list-style:none;padding-left:0;counter-reset:ph;margin:8px 0}
-.mm-phases li{position:relative;padding:11px 14px 11px 46px;margin:8px 0;
-  border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2)}
-.mm-phases li::before{counter-increment:ph;content:counter(ph);position:absolute;
-  left:13px;top:11px;width:22px;height:22px;border-radius:50%;background:var(--brand);
-  color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+/* 三階段視覺化管線 */
+.mm-expipe{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch;margin:12px 0 4px}
+.mm-exarr{align-self:center;color:var(--brand);font-size:12px;opacity:.7}
+.mm-exph{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2);
+  padding:13px 14px;display:flex;flex-direction:column;gap:9px}
+.mm-exph-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mm-exph-h .pn{flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;
+  font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.mm-exph-h b{font-size:14px}
+.mm-exph-h .tg{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.04em;color:var(--muted);
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+.mm-exbars{display:flex;align-items:flex-end;gap:4px;height:38px}
+.mm-exbars i{flex:1;border-radius:3px 3px 1px 1px;opacity:.9}
+.mm-exbars i.g{background:var(--good)} .mm-exbars i.d{background:var(--buyer)}
+.mm-exph p{margin:0;font-size:12px;color:var(--muted);line-height:1.55}
+.mm-ex-link{margin-top:16px}
+.mm-ex-link a{font-weight:600;font-size:13px}
+@media (max-width:640px){
+  .mm-expipe{grid-template-columns:1fr}
+  .mm-exarr{transform:rotate(90deg);justify-self:center}
+}
