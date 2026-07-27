@@ -7,16 +7,63 @@ filling higher-target meters first so each 電號/廠區 shows a distinct RE%.
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models import ConsumptionData, Meter
-from app.schemas.meter import MeterBreakdown, MeterRow
+from app.repositories.base import BaseRepository
+from app.schemas.meter import MeterBreakdown, MeterCreate, MeterRow, MeterUpdate
 from app.services.customer_optimization_service import (
     CustomerOptimizeOptions,
     compute_customer_optimization,
 )
 from app.services.matching_service import period_bounds
+
+
+def _repo(db: Session) -> BaseRepository[Meter]:
+    return BaseRepository(Meter, db)
+
+
+def create(db: Session, data: MeterCreate) -> Meter:
+    repo = _repo(db)
+    if repo.get_by(code=data.code):
+        raise ConflictError(f"電號代碼 '{data.code}' 已存在")
+    return repo.create(Meter(**data.model_dump()))
+
+
+def get(db: Session, meter_id: int) -> Meter:
+    meter = _repo(db).get(meter_id)
+    if meter is None:
+        raise NotFoundError(f"meter {meter_id} not found")
+    return meter
+
+
+def list_all(
+    db: Session, *, customer_id: int | None = None, limit: int = 500, offset: int = 0
+) -> list[Meter]:
+    stmt = select(Meter).order_by(Meter.id)
+    if customer_id is not None:
+        stmt = stmt.where(Meter.customer_id == customer_id)
+    return list(db.execute(stmt.offset(offset).limit(limit)).scalars())
+
+
+def update(db: Session, meter_id: int, data: MeterUpdate) -> Meter:
+    meter = get(db, meter_id)
+    return _repo(db).update(meter, data.model_dump(exclude_unset=True))
+
+
+def delete(db: Session, meter_id: int) -> None:
+    """Delete a meter, refusing if consumption records still reference it."""
+    meter = get(db, meter_id)
+    used = db.scalar(
+        select(func.count())
+        .select_from(ConsumptionData)
+        .where(ConsumptionData.meter_id == meter_id)
+    )
+    if used:
+        raise ConflictError(f"此電號尚有 {used} 筆用電資料,請先移除關聯資料後再刪除。")
+    _repo(db).delete(meter)
 
 
 def compute_meter_breakdown(

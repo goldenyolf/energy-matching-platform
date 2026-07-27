@@ -49,23 +49,37 @@ def build_source(
     raise ValueError(f"unknown source: {name!r} (expected 'sample' or 'taipower')")
 
 
-def _set_customer_tariff_defaults(db) -> None:
-    """Illustrative 高壓三段式時間電價 defaults for demo customers (NTD/kWh, kW)."""
+def _set_demo_defaults(db) -> None:
+    """Illustrative company info (客戶) + per-電號 load data (Meter) for the demo."""
     from sqlalchemy import select
 
-    from app.models import Customer
+    from app.models import Customer, Meter
 
     for c in db.execute(select(Customer)).scalars():
-        if c.annual_consumption_mwh:
-            # rough proxy: avg power / 0.6 load factor
-            c.contracted_capacity_kw = round(
-                c.annual_consumption_mwh * 1000 / 8760 / 0.6
-            )
-        c.tariff_type = "three_stage"
-        c.peak_price_per_kwh = 6.20
-        c.half_peak_price_per_kwh = 4.54
-        c.off_peak_price_per_kwh = 2.31
         c.transfer_price_per_kwh = 4.50
+        c.tax_id = c.tax_id or f"{22000000 + c.id * 111}"
+        c.contact_name = c.contact_name or f"{c.company_name} 能源窗口"
+    # per-電號 annual per-slot load (kWh) from typical shares; cap ~ avg power / 0.6
+    shares = {
+        "peak": 0.14,
+        "half_peak": 0.40,
+        "saturday_half_peak": 0.11,
+        "off_peak": 0.35,
+    }
+    for m in db.execute(select(Meter)).scalars():
+        annual_mwh = m.annual_consumption_mwh or 0.0
+        kwh = annual_mwh * 1000
+        m.usage_name = m.usage_name or m.name
+        m.tariff_type = "hv_three_stage"
+        m.load_data_type = "年度用電量(15分鐘一筆)"
+        m.data_period = "2024-01~2024-12"
+        if annual_mwh:
+            m.contracted_capacity_kw = round(annual_mwh * 1000 / 8760 / 0.6)
+        m.peak_kwh = round(kwh * shares["peak"])
+        m.half_peak_kwh = round(kwh * shares["half_peak"])
+        m.saturday_half_peak_kwh = round(kwh * shares["saturday_half_peak"])
+        m.off_peak_kwh = round(kwh * shares["off_peak"])
+        m.total_kwh = round(kwh)
     db.commit()
 
 
@@ -95,12 +109,13 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
             )
             for err in result.errors[:5]:
                 print(f"    ! {err}")
-        _set_customer_tariff_defaults(db)
         if slot_profiles:
             split_profiles(db)
             print("時段展開      : 發電/用電已拆為尖峰・半尖峰・離峰時段")
             split_consumption_to_meters(db)
             print("電號拆分      : 用電已歸屬至各電號/廠區")
+            _set_demo_defaults(db)
+            print("示範資料補值  : 客戶公司資訊 + 各電號負載/契約容量/時間電價")
             issue_for_period(db, "2024-01")
             for row in get_ledger(db, period="2024-01").batches[:2]:
                 retire(db, row.id)  # retire a couple to show both statuses

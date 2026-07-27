@@ -12,6 +12,7 @@ from app.api.v1 import (
     generation,
     live,
     matching,
+    meters,
     trecs,
     wind_farms,
 )
@@ -19,6 +20,7 @@ from app.api.v1 import (
 api_router = APIRouter()
 api_router.include_router(wind_farms.router)
 api_router.include_router(customers.router)
+api_router.include_router(meters.router)
 api_router.include_router(contracts.router)
 api_router.include_router(generation.router)
 api_router.include_router(consumption.router)

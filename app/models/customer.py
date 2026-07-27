@@ -32,15 +32,16 @@ class Customer(Base, TimestampMixin):
     )
     target_energy_mwh: Mapped[float | None] = mapped_column(Float, default=None)
 
-    # Contract / tariff attributes (stored + editable; not yet wired into calc).
-    contracted_capacity_kw: Mapped[float | None] = mapped_column(Float, default=None)
+    # Company / contact info (用電戶資訊)
+    agent: Mapped[str | None] = mapped_column(String(100), default=None)
+    address: Mapped[str | None] = mapped_column(String(300), default=None)
+    phone: Mapped[str | None] = mapped_column(String(50), default=None)
+    tax_id: Mapped[str | None] = mapped_column(String(20), default=None)  # 統一編號
+    contact_name: Mapped[str | None] = mapped_column(String(100), default=None)
+    contact_email: Mapped[str | None] = mapped_column(String(200), default=None)
+    # customer-level default green transfer price (轉供價); capacity/tariff/slot
+    # consumption live per 電號 on the Meter model.
     transfer_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
-    # tariff type kept as a plain string (not a DB enum) to avoid the Postgres
-    # CREATE TYPE trap on Neon; values: three_stage / two_stage / standard.
-    tariff_type: Mapped[str | None] = mapped_column(String(30), default=None)
-    peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
-    half_peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
-    off_peak_price_per_kwh: Mapped[float | None] = mapped_column(Float, default=None)
 
     contracts: Mapped[list[Contract]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"
