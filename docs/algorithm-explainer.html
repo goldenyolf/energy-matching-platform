@@ -1,0 +1,440 @@
+<style>
+  :root{
+    --bg:#0A1310; --bg2:#0E1A16; --surface:#12211C; --surface2:#16271F;
+    --line:#21362E; --line2:#2C4739;
+    --ink:#E9F1EC; --muted:#93AC9F; --faint:#63796E;
+    --flow:#34D07F; --flow-ink:#7BE6AC; --flow-soft:rgba(52,208,127,.13);
+    --demand:#2BC4BC; --demand-soft:rgba(43,196,188,.13);
+    --amber:#F0A63C; --amber-soft:rgba(240,166,60,.14);
+    --glow:0 0 34px rgba(52,208,127,.30);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,"Menlo","Consolas",monospace;
+    --maxw:1080px;
+  }
+  @media (prefers-color-scheme:light){
+    :root{
+      --bg:#EEF3EF; --bg2:#E6EDE8; --surface:#FFFFFF; --surface2:#F5F9F6;
+      --line:#DAE4DD; --line2:#C6D6CC;
+      --ink:#10241C; --muted:#54685E; --faint:#88A093;
+      --flow:#16A75C; --flow-ink:#0E7C43; --flow-soft:rgba(22,167,92,.10);
+      --demand:#0E9A93; --demand-soft:rgba(14,154,147,.10);
+      --amber:#B8770E; --amber-soft:rgba(184,119,14,.12);
+      --glow:0 0 0 rgba(0,0,0,0);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0A1310; --bg2:#0E1A16; --surface:#12211C; --surface2:#16271F;
+    --line:#21362E; --line2:#2C4739; --ink:#E9F1EC; --muted:#93AC9F; --faint:#63796E;
+    --flow:#34D07F; --flow-ink:#7BE6AC; --flow-soft:rgba(52,208,127,.13);
+    --demand:#2BC4BC; --demand-soft:rgba(43,196,188,.13);
+    --amber:#F0A63C; --amber-soft:rgba(240,166,60,.14); --glow:0 0 34px rgba(52,208,127,.30);
+  }
+  :root[data-theme="light"]{
+    --bg:#EEF3EF; --bg2:#E6EDE8; --surface:#FFFFFF; --surface2:#F5F9F6;
+    --line:#DAE4DD; --line2:#C6D6CC; --ink:#10241C; --muted:#54685E; --faint:#88A093;
+    --flow:#16A75C; --flow-ink:#0E7C43; --flow-soft:rgba(22,167,92,.10);
+    --demand:#0E9A93; --demand-soft:rgba(14,154,147,.10);
+    --amber:#B8770E; --amber-soft:rgba(184,119,14,.12); --glow:0 0 0 rgba(0,0,0,0);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+    background-image:radial-gradient(1200px 600px at 78% -8%,var(--flow-soft),transparent 60%),
+      radial-gradient(1000px 520px at 10% 108%,var(--demand-soft),transparent 60%);}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 26px}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:.005em;text-wrap:balance;line-height:1.18}
+  p{margin:0}
+  .mono{font-family:var(--mono);font-feature-settings:"tnum"}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--flow);font-weight:600}
+  .lede{font-size:clamp(15px,1.9vw,18px);color:var(--muted);max-width:60ch}
+
+  /* theme toggle */
+  .toggle{position:fixed;top:16px;right:18px;z-index:50;display:inline-flex;gap:6px;align-items:center;
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 12px;
+    color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.1em;cursor:pointer}
+  .toggle:hover{color:var(--ink);border-color:var(--line2)}
+
+  /* hero */
+  .hero{padding:96px 0 40px;position:relative}
+  .hero .eyebrow{margin-bottom:18px}
+  .hero h1{font-size:clamp(30px,5.4vw,58px)}
+  .hero h1 .hl{color:var(--flow)}
+  .hero .lede{margin-top:20px;font-size:clamp(16px,2.1vw,20px)}
+  .heroflow{margin:38px 0 6px}
+  .scrollhint{display:inline-flex;align-items:center;gap:8px;color:var(--faint);
+    font-family:var(--mono);font-size:11px;letter-spacing:.15em;margin-top:8px}
+  .scrollhint b{width:16px;height:24px;border:1.5px solid var(--faint);border-radius:9px;position:relative;display:inline-block}
+  .scrollhint b::after{content:"";position:absolute;left:50%;top:5px;width:2.5px;height:5px;border-radius:2px;
+    background:var(--faint);transform:translateX(-50%);animation:sd 1.6s ease-in-out infinite}
+  @keyframes sd{0%,100%{opacity:.3;transform:translate(-50%,0)}50%{opacity:1;transform:translate(-50%,6px)}}
+
+  /* flow svg */
+  .flowbox{width:100%;overflow:visible}
+  .flow-band{fill:none;stroke:var(--flow);opacity:.32;stroke-linecap:round;transition:opacity .3s}
+  .flow-band.hypo{opacity:.16;stroke-dasharray:2 6}
+  .flow-pulse{fill:var(--flow);filter:drop-shadow(var(--glow))}
+  .node rect{fill:var(--surface);stroke:var(--line2);stroke-width:1.5}
+  .node.farm rect{stroke:var(--flow)}
+  .node.cust rect{stroke:var(--demand)}
+  .node .nt{font-family:var(--sans);font-weight:700;font-size:13px;fill:var(--ink)}
+  .node .ns{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+  .node .ns.warn{fill:var(--amber)}
+  .colcap{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;fill:var(--muted)}
+
+  /* sections */
+  section{padding:64px 0;border-top:1px solid var(--line)}
+  .shead{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+  .snum{font-family:var(--mono);font-size:13px;color:var(--flow);font-weight:600;letter-spacing:.1em}
+  .shead h2{font-size:clamp(23px,3.4vw,34px)}
+  .sub{color:var(--muted);max-width:64ch;margin-top:2px}
+
+  .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  /* problem grid / combo */
+  .combo{display:grid;grid-template-columns:1fr auto 1fr;gap:22px;align-items:center;
+    background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .chip{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:11px;padding:11px 14px;font-size:14px}
+  .chip .dotc{width:9px;height:9px;border-radius:3px;flex:none}
+  .chip.g .dotc{background:var(--flow)} .chip.d .dotc{background:var(--demand)}
+  .combomid{text-align:center}
+  .qbig{font-family:var(--mono);font-size:clamp(30px,6vw,52px);font-weight:700;color:var(--amber);line-height:1}
+  .combomid .cl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+  .bignum{font-family:var(--mono);font-size:clamp(34px,7vw,64px);font-weight:800;color:var(--flow);line-height:1;letter-spacing:-.01em}
+
+  /* two-up */
+  .twoup{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 24px}
+  .card h3{font-size:17px;margin-bottom:6px}
+  .card .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}
+  .card.bad{border-color:color-mix(in srgb,var(--amber) 45%,var(--line))}
+  .card.bad .k{color:var(--amber)} .card.good .k{color:var(--flow)}
+  .miniviz{height:96px;margin-top:14px}
+
+  /* tech callout */
+  .tech{margin-top:18px;display:flex;gap:12px;align-items:flex-start;background:var(--surface2);
+    border:1px solid var(--line);border-left:3px solid var(--flow);border-radius:12px;padding:14px 16px}
+  .tech .tt{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--flow);flex:none;padding-top:1px}
+  .tech p{font-size:13.5px;color:var(--muted)}
+  .tech b{color:var(--ink)}
+
+  /* pipeline */
+  .pipe{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  .phase{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 22px 24px;position:relative;overflow:hidden}
+  .phase::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,var(--flow),transparent)}
+  .phase .pn{font-family:var(--mono);font-weight:800;font-size:13px;color:var(--flow);letter-spacing:.08em}
+  .phase h3{font-size:19px;margin:12px 0 6px}
+  .phase .pd{font-size:14px;color:var(--muted)}
+  .phase .lock{margin-top:16px;display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.06em;color:var(--faint);background:var(--surface2);
+    border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+  .phase .tag{position:absolute;top:18px;right:18px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--flow);background:var(--flow-soft);border-radius:7px;padding:4px 8px}
+  .pbars{display:flex;align-items:flex-end;gap:6px;height:64px;margin-top:16px}
+  .pbars i{flex:1;background:var(--flow);border-radius:4px 4px 2px 2px;opacity:.85;
+    transition:height .8s cubic-bezier(.2,.7,.2,1)}
+  .pbars.demand i{background:var(--demand)}
+
+  /* fairness */
+  .fairwrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+  .barsrow{display:flex;flex-direction:column;gap:12px;justify-content:center}
+  .barline{display:grid;grid-template-columns:70px 1fr auto;gap:10px;align-items:center;font-size:13px}
+  .barline .bn{color:var(--muted);font-size:12.5px}
+  .track{height:16px;background:var(--surface2);border:1px solid var(--line);border-radius:9px;overflow:hidden;position:relative}
+  .track i{display:block;height:100%;border-radius:8px;transition:width 1s cubic-bezier(.2,.7,.2,1)}
+  .track i.g{background:var(--flow)} .track i.a{background:var(--amber)}
+  .track .tgt{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+  .barline .pv{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:42px;text-align:right}
+
+  /* tech grid */
+  .tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .tcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px}
+  .tcard .badge{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--flow);
+    background:var(--flow-soft);border-radius:8px;padding:5px 9px;display:inline-block;margin-bottom:12px}
+  .tcard h3{font-size:15.5px;margin-bottom:5px}
+  .tcard p{font-size:13px;color:var(--muted)}
+
+  /* cta */
+  .cta{text-align:center;padding:74px 0 30px;border-top:1px solid var(--line)}
+  .cta h2{font-size:clamp(24px,3.6vw,36px)}
+  .btn{display:inline-flex;align-items:center;gap:9px;margin-top:22px;background:var(--flow);color:#04140C;
+    font-weight:700;text-decoration:none;padding:14px 24px;border-radius:12px;box-shadow:var(--glow);
+    transition:transform .15s}
+  :root[data-theme="light"] .btn,@media (prefers-color-scheme:light){.btn{color:#fff}}
+  .btn:hover{transform:translateY(-2px)}
+  .foot{color:var(--faint);font-size:12px;margin-top:34px;line-height:1.7}
+  .foot .mono{color:var(--muted)}
+
+  @media (max-width:820px){
+    .pipe{grid-template-columns:1fr} .twoup{grid-template-columns:1fr}
+    .tgrid{grid-template-columns:1fr 1fr} .fairwrap{grid-template-columns:1fr}
+    .combo{grid-template-columns:1fr;text-align:left} .combomid{display:flex;gap:18px;align-items:center;justify-content:flex-start}
+  }
+  @media (max-width:520px){ .tgrid{grid-template-columns:1fr} }
+</style>
+
+<button class="toggle" id="tgl" aria-label="切換主題"><span id="tglic">◐</span> 主題</button>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow reveal">綠電媒合平台 · 演算法解說</div>
+    <h1 class="reveal">要怎麼把綠電，<span class="hl">配到剛剛好</span>？</h1>
+    <p class="lede reveal">多個發電案場、多個用電端，一次算出最佳的綠電配置組合——
+      這頁用最白話的方式，把它背後的邏輯一步步拆給你看。不需要懂數學也能看懂；
+      但每一步的「硬技術」也都在。</p>
+    <div class="heroflow reveal"><div id="heroflow" class="flowbox"></div></div>
+    <div class="scrollhint reveal"><b></b> 往下捲，看它怎麼運作</div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">01</span><h2>問題有多難？</h2></div>
+    <p class="sub reveal">一邊是好幾座發電案場，一邊是好幾家企業用戶。每座案場的電要配<b>多少</b>、給<b>誰</b>？
+      光是「配對」的組合就多到爆炸——而且還要同時顧到成本、達標、公平。</p>
+    <div class="combo reveal" style="margin-top:24px">
+      <div class="stack">
+        <div class="chip g"><span class="dotc"></span>發電案場 1 &nbsp;×&nbsp; ?%</div>
+        <div class="chip g"><span class="dotc"></span>發電案場 2 &nbsp;×&nbsp; ?%</div>
+        <div class="chip g"><span class="dotc"></span>發電案場 N &nbsp;×&nbsp; ?%</div>
+      </div>
+      <div class="combomid">
+        <div><div class="qbig">?</div><div class="cl">配多少 · 給誰</div></div>
+      </div>
+      <div class="stack">
+        <div class="chip d"><span class="dotc"></span>用電端 1 &nbsp;·&nbsp; RE 目標</div>
+        <div class="chip d"><span class="dotc"></span>用電端 2 &nbsp;·&nbsp; RE 目標</div>
+        <div class="chip d"><span class="dotc"></span>用電端 N &nbsp;·&nbsp; RE 目標</div>
+      </div>
+    </div>
+    <div class="tech reveal"><span class="tt">本質</span><p>這是一個典型的<b>資源配置最佳化</b>問題。只有 3 座案場 × 5 家用戶，
+      可能的分配方式就已是連續的無限多種；靠人工試或「憑感覺」都不會是最好的。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">02</span><h2>不用「先搶先贏」，而是<span style="color:var(--flow)">全局最佳</span></h2></div>
+    <p class="sub reveal">最直覺的做法是「先搶先贏」——誰先簽約先給電。快，但通常不是最好的：
+      便宜的綠電可能被先到的人用掉，後面的人只能買貴的。我們改用<b>全局最佳化</b>：
+      把所有可能性一次攤開，讓電腦找出<b>數學上的最佳解</b>。</p>
+    <div class="twoup reveal" style="margin-top:24px">
+      <div class="card bad"><div class="k">先搶先贏 · 貪婪</div><h3>快，但常常不划算</h3>
+        <p class="sub" style="font-size:13.5px">按順序一筆一筆分，前面的人把好處用光，整體效益打折。</p>
+        <div class="miniviz" id="viz-greedy"></div></div>
+      <div class="card good"><div class="k">全局最佳化 · 我們用的</div><h3>一次看全局，找最優</h3>
+        <p class="sub" style="font-size:13.5px">同時考慮所有配對與限制，讓總體效益最大、且可重現、可稽核。</p>
+        <div class="miniviz" id="viz-opt"></div></div>
+    </div>
+    <div class="tech reveal"><span class="tt">技術力</span><p>用<b>混合整數線性規劃（MILP）</b>把問題建模，
+      交給 <b>PuLP + CBC</b> 求解器解到最佳——不是啟發式亂試，而是有數學保證的最優解。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">03</span><h2>把它翻成一道數學題</h2></div>
+    <p class="sub reveal">電腦看不懂「綠電配置」，所以我們先把它翻成數學：
+      每一條「案場 → 用戶」的線，要流<b>多少電</b>（這是變數）；再加上幾條<b>鐵律</b>（限制）。</p>
+    <div class="twoup reveal" style="margin-top:24px;grid-template-columns:1fr 1fr">
+      <div class="card"><div class="k" style="color:var(--flow)">變數 · 電腦要決定的</div>
+        <div class="stack">
+          <div class="chip"><span class="dotc" style="background:var(--flow)"></span>每一組（案場 → 用戶）要配多少 MWh</div>
+          <div class="chip"><span class="dotc" style="background:var(--flow)"></span>這組配對要不要啟用（0 / 1）</div>
+        </div></div>
+      <div class="card"><div class="k" style="color:var(--demand)">限制 · 不能違反的鐵律</div>
+        <div class="stack">
+          <div class="chip"><span class="dotc" style="background:var(--demand)"></span>案場配出去的總量 ≤ 它發的電（不會被分兩次）</div>
+          <div class="chip"><span class="dotc" style="background:var(--demand)"></span>用戶最多拿到它的 <b>RE 目標</b>為止（不硬塞）</div>
+          <div class="chip"><span class="dotc" style="background:var(--demand)"></span>綠電不夠時，差額記成「缺口」</div>
+        </div></div>
+    </div>
+    <div class="tech reveal"><span class="tt">關鍵</span><p>「用戶最多拿到 RE 目標為止」是刻意設計的：
+      <b>達成率永遠不會超過你設定的目標</b>，多出來的綠電留成案場餘電，貼近真實的企業採購行為。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">04</span><h2>最聰明的地方：<span style="color:var(--flow)">三階段求解</span></h2></div>
+    <p class="sub reveal">三個目標有優先順序，我們不把它們混在一起算，而是<b>分三關、照順序過</b>；
+      過了上一關才算下一關，而且會把上一關的成果<b>鎖住</b>，下一關不准破壞。</p>
+    <div class="pipe reveal" style="margin-top:26px">
+      <div class="phase"><div class="tag">最小化 RE 缺口</div><div class="pn">PHASE 01</div>
+        <h3>先顧達標</h3><p class="pd">先讓「所有用戶沒達到 RE 目標的<b>總缺口</b>」最小——優先把綠電用在刀口上。</p>
+        <div class="pbars" id="pb1"></div>
+        <div class="lock">▸ 求解後鎖住此結果</div></div>
+      <div class="phase"><div class="tag">最大化毛利</div><div class="pn">PHASE 02</div>
+        <h3>再顧毛利</h3><p class="pd">在不犧牲第一關的前提下，讓<b>售電毛利最大</b>——最便宜的綠電優先賣。</p>
+        <div class="pbars demand" id="pb2"></div>
+        <div class="lock">▸ 求解後鎖住此結果</div></div>
+      <div class="phase"><div class="tag">maximin 公平</div><div class="pn">PHASE 03</div>
+        <h3>最後求公平</h3><p class="pd">在不犧牲前兩關下，把「<b>最低</b>的達成率」拉到最高——綠電不夠時各家公平均攤。</p>
+        <div class="pbars" id="pb3"></div>
+        <div class="lock">▸ 得到最終配置</div></div>
+    </div>
+    <div class="tech reveal"><span class="tt">技術力</span><p>這叫<b>字典序最佳化（lexicographic optimization）</b>：
+      每一關都是一次獨立的求解，把上一關的最優值當成下一關的限制。這樣才能保證優先順序不會被打亂，
+      也讓「毛利」「公平」這些小尺度目標不會被巨大的達標懲罰淹沒。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">05</span><h2>綠電不夠分，怎麼辦？</h2></div>
+    <p class="sub reveal">如果綠電就是不夠所有人達標呢？我們<b>不會</b>讓某幾家吃飽、其他家餓死，
+      而是照目標比例<b>公平均攤</b>，讓每家的「達成比例」一樣高，並清楚標出「發電量不足」。</p>
+    <div class="fairwrap reveal" style="margin-top:24px">
+      <div class="card bad"><div class="k">若只顧總量 · 會失衡</div>
+        <div class="barsrow" id="unfair"></div></div>
+      <div class="card good"><div class="k">maximin 公平均攤 · 我們用的</div>
+        <div class="barsrow" id="fair"></div></div>
+    </div>
+    <div class="tech reveal"><span class="tt">白話</span><p>兩種分法「用掉的綠電總量」一樣多，
+      但公平版讓每家都拉到<b>同一個達成比例</b>（例如都到目標的 72%），而不是有人 100%、有人 0%。
+      橫條長度＝<b>達成 ÷ 目標</b>的比例，滿格代表完全達標；右邊數字是實際的 RE 達成率。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum">06</span><h2>技術亮點一覽</h2></div>
+    <p class="sub reveal">給想看門道的人——支撐上面每一步的關鍵技術。</p>
+    <div class="tgrid reveal" style="margin-top:24px">
+      <div class="tcard"><span class="badge">MILP</span><h3>混合整數線性規劃</h3><p>把配置問題建模成連續量 + 0/1 決策，交給 PuLP 描述、CBC 求解。</p></div>
+      <div class="tcard"><span class="badge">CBC solver</span><h3>解到數學最佳</h3><p>分支定界 + 單純形反覆迭代，最佳化間隙設為 0，不提早停、有最優保證。</p></div>
+      <div class="tcard"><span class="badge">Lexicographic</span><h3>字典序三階段</h3><p>達標 ≫ 毛利 ≫ 公平，逐關求解、逐關鎖定，優先序永不錯亂。</p></div>
+      <div class="tcard"><span class="badge">maximin</span><h3>公平均攤</h3><p>拉高「最低達成率」，讓稀缺綠電按比例分散，而非集中獨厚少數。</p></div>
+      <div class="tcard"><span class="badge">RE-cap</span><h3>不超買綠電</h3><p>用戶綠電上限鎖在其 RE 目標，達成率永不超標，多的留成案場餘電。</p></div>
+      <div class="tcard"><span class="badge">Deterministic</span><h3>同輸入同輸出</h3><p>案場、用戶皆先排序消除退化解隨機性——結果可重現、可稽核。</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="cta">
+  <div class="wrap">
+    <div class="eyebrow reveal" style="margin-bottom:14px">互動情境模擬</div>
+    <h2 class="reveal">想親手玩玩看？</h2>
+    <p class="lede reveal" style="margin:14px auto 0">在平台的「多對多匹配」頁，你可以自選案場與用電端、
+      調整各家 RE 目標與每座案場的躉售價，按一下就重算最佳配置。</p>
+    <a class="btn reveal" href="https://emp-api-bxbe.onrender.com/app/#/matchmap" target="_blank" rel="noopener">開啟多對多匹配 →</a>
+    <p class="foot reveal"><span class="mono">綠電媒合平台 · 演算法解說</span><br>
+      站上數字均為<b>模擬示範資料</b>，與台電、TSEC 或任何能源業者無關；僅供技術說明。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* theme toggle */
+  var tgl=document.getElementById("tgl"), tglic=document.getElementById("tglic");
+  function sync(){var d=root.getAttribute("data-theme")|| (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");tglic.textContent=d==="dark"?"◑":"◐";}
+  tgl.addEventListener("click",function(){var cur=root.getAttribute("data-theme")|| (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");root.setAttribute("data-theme",cur==="dark"?"light":"dark");sync();});
+  sync();
+
+  /* reveal on scroll */
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");if(e.target.__anim){e.target.__anim();}io.unobserve(e.target);}});},{threshold:.14});
+  document.querySelectorAll(".reveal").forEach(function(el,i){el.style.transitionDelay=(Math.min(i%4,3)*70)+"ms";io.observe(el);});
+
+  /* ---- flow diagram builder ---- */
+  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+  function buildFlow(el, opts){
+    var farms=opts.farms, custs=opts.custs, bands=opts.bands;
+    var W=980, boxW=176, boxH=54, padY=18;
+    var F=farms.length, C=custs.length, rows=Math.max(F,C);
+    var pitch=Math.min(96, (opts.h? (opts.h-2*padY)/rows : 96));
+    var H=padY*2+rows*pitch;
+    var leftX=8, rightX=W-8-boxW, innerL=leftX+boxW, innerR=rightX, xm=(innerL+innerR)/2;
+    function cy(i,n){return (H-n*pitch)/2 + i*pitch + pitch/2;}
+    farms.forEach(function(f,i){f.cy=cy(i,F);}); custs.forEach(function(c,j){c.cy=cy(j,C);});
+    var fbyId={},cbyId={}; farms.forEach(function(f){fbyId[f.id]=f;}); custs.forEach(function(c){cbyId[c.id]=c;});
+    // widths
+    var maxThru=1; farms.forEach(function(f){var t=0;bands.forEach(function(b){if(b.f===f.id)t+=b.w;});maxThru=Math.max(maxThru,t);});
+    custs.forEach(function(c){var t=0;bands.forEach(function(b){if(b.c===c.id)t+=b.w;});maxThru=Math.max(maxThru,t);});
+    var ppw=(boxH*0.8)/maxThru;
+    // stack anchors
+    var flows=bands.map(function(b){return {f:b.f,c:b.c,w:Math.max(2,b.w*ppw),hypo:b.hypo};});
+    farms.forEach(function(f){var out=flows.filter(function(o){return o.f===f.id;});out.sort(function(a,b){return cbyId[a.c].cy-cbyId[b.c].cy;});var tot=out.reduce(function(s,o){return s+o.w;},0);var cur=f.cy-tot/2;out.forEach(function(o){o.lY=cur+o.w/2;cur+=o.w;});});
+    custs.forEach(function(c){var ins=flows.filter(function(o){return o.c===c.id;});ins.sort(function(a,b){return fbyId[a.f].cy-fbyId[b.f].cy;});var tot=ins.reduce(function(s,o){return s+o.w;},0);var cur=c.cy-tot/2;ins.forEach(function(o){o.rY=cur+o.w/2;cur+=o.w;});});
+
+    var svg='<svg class="flowbox" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="綠電配置流量圖">';
+    svg+='<text class="colcap" x="'+leftX+'" y="12">發電案場</text>';
+    svg+='<text class="colcap" x="'+innerR+'" y="12" text-anchor="end">用電端 · RE 目標</text>';
+    var paths="";
+    flows.forEach(function(o,i){
+      var d="M"+innerL+","+o.lY.toFixed(1)+" C"+xm+","+o.lY.toFixed(1)+" "+xm+","+o.rY.toFixed(1)+" "+innerR+","+o.rY.toFixed(1);
+      paths+='<path id="'+(opts.pfx||"p")+i+'" class="flow-band'+(o.hypo?" hypo":"")+'" d="'+d+'" stroke-width="'+o.w.toFixed(1)+'"/>';
+    });
+    svg+=paths;
+    // pulses
+    if(!reduce){
+      flows.forEach(function(o,i){
+        var dur=(2.4+ (i%4)*0.5).toFixed(2);
+        svg+='<circle class="flow-pulse" r="'+Math.max(2.2,Math.min(4,o.w/2.4)).toFixed(1)+'"><animateMotion dur="'+dur+'s" repeatCount="indefinite" rotate="auto"><mpath href="#'+(opts.pfx||"p")+i+'"/></animateMotion></circle>';
+      });
+    }
+    farms.forEach(function(f){var y=f.cy-boxH/2;
+      svg+='<g class="node farm"><rect x="'+leftX+'" y="'+y.toFixed(1)+'" width="'+boxW+'" height="'+boxH+'" rx="10"/>'+
+        '<text class="nt" x="'+(leftX+14)+'" y="'+(y+23).toFixed(1)+'">'+esc(f.name)+'</text>'+
+        '<text class="ns" x="'+(leftX+14)+'" y="'+(y+41).toFixed(1)+'">發 '+esc(f.gen)+' MWh</text></g>';
+    });
+    custs.forEach(function(c){var y=c.cy-boxH/2;var warn=c.re<c.tgt;
+      svg+='<g class="node cust"><rect x="'+rightX+'" y="'+y.toFixed(1)+'" width="'+boxW+'" height="'+boxH+'" rx="10"/>'+
+        '<circle cx="'+(rightX+boxW-15)+'" cy="'+(y+15)+'" r="4.5" fill="'+(warn?"var(--amber)":"var(--flow)")+'"/>'+
+        '<text class="nt" x="'+(rightX+14)+'" y="'+(y+23).toFixed(1)+'">'+esc(c.name)+'</text>'+
+        '<text class="ns'+(warn?" warn":"")+'" x="'+(rightX+14)+'" y="'+(y+41).toFixed(1)+'">RE '+c.re+'% / 目標 '+c.tgt+'%</text></g>';
+    });
+    svg+='</svg>';
+    el.innerHTML=svg;
+  }
+
+  var farms=[{id:1,name:"海能風場",gen:"139,655"},{id:2,name:"彰芳暨西島",gen:"232,759"},{id:3,name:"中屯陸域",gen:"6,983"}];
+  var custs=[{id:1,name:"台積電",re:72,tgt:100},{id:2,name:"台達電",re:72,tgt:100},{id:3,name:"友達光電",re:43,tgt:60},{id:4,name:"宏碁",re:58,tgt:80},{id:5,name:"大江生醫",re:36,tgt:50}];
+  var bands=[{f:2,c:1,w:9.0},{f:1,c:1,w:3.0},{f:1,c:2,w:1.6,hypo:true},{f:1,c:3,w:1.4},{f:3,c:3,w:0.35,hypo:true},{f:2,c:4,w:0.25},{f:2,c:5,w:0.06,hypo:true}];
+  buildFlow(document.getElementById("heroflow"),{farms:farms.map(function(f){return Object.assign({},f);}),custs:custs.map(function(c){return Object.assign({},c);}),bands:bands,pfx:"h"});
+
+  /* mini greedy vs optimal */
+  function mini(el,ok){
+    var f=[{id:1,name:"A",gen:""},{id:2,name:"B",gen:""}], c=[{id:1,name:"甲",re:0,tgt:0},{id:2,name:"乙",re:0,tgt:0}];
+    var b= ok? [{f:1,c:1,w:6},{f:2,c:2,w:6}] : [{f:1,c:1,w:8},{f:1,c:2,w:2},{f:2,c:2,w:3}];
+    buildFlow(el,{farms:f,custs:c,bands:b,h:96,pfx:(ok?"o":"g")});
+    // strip labels for compactness
+    el.querySelectorAll(".nt,.ns,.colcap").forEach(function(t){t.remove();});
+  }
+  mini(document.getElementById("viz-greedy"),false);
+  mini(document.getElementById("viz-opt"),true);
+
+  /* phase bars — animate on reveal */
+  function bars(el,vals){el.innerHTML=vals.map(function(){return '<i style="height:4px"></i>';}).join("");
+    return function(){Array.prototype.forEach.call(el.children,function(b,i){b.style.height=(8+vals[i]*0.56)+"px";});};}
+  var p1=bars(document.getElementById("pb1"),[40,42,44,20,10,55,30]);
+  var p2=bars(document.getElementById("pb2"),[62,20,40,90,15,70,45]);
+  var p3=bars(document.getElementById("pb3"),[72,72,72,72,72,72,72]);
+  document.querySelector(".pipe").__anim=function(){setTimeout(p1,120);setTimeout(p2,420);setTimeout(p3,760);};
+
+  /* fairness bars — bar length = 達成/目標 比例 (100% = 完全達標);
+     starved rows read empty, even rows read equal. */
+  function fairBars(el,rows){
+    el.innerHTML=rows.map(function(r){
+      return '<div class="barline"><span class="bn">'+r.n+' · 目標'+r.tgt+'%</span>'+
+        '<span class="track"><i class="'+(r.re>=r.tgt?"g":"a")+'" style="width:0%"></i></span>'+
+        '<span class="pv">'+r.re+'%</span></div>';
+    }).join("");
+    return function(){Array.prototype.forEach.call(el.querySelectorAll(".track > i"),
+      function(i,k){i.style.width=Math.min(100,rows[k].re/rows[k].tgt*100).toFixed(0)+"%";});};
+  }
+  // same total green (~202) in both; unfair concentrates, fair equalizes the ratio (~72%)
+  var unfairRows=[{n:"甲",re:100,tgt:100},{n:"乙",re:80,tgt:80},{n:"丙",re:22,tgt:60},{n:"丁",re:0,tgt:40}];
+  var fairRows=[{n:"甲",re:72,tgt:100},{n:"乙",re:58,tgt:80},{n:"丙",re:43,tgt:60},{n:"丁",re:29,tgt:40}];
+  var uf=fairBars(document.getElementById("unfair"),unfairRows);
+  var fr=fairBars(document.getElementById("fair"),fairRows);
+  document.querySelector(".fairwrap").__anim=function(){setTimeout(uf,140);setTimeout(fr,320);};
+})();
+</script>
