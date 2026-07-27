@@ -226,15 +226,36 @@
   function loadCustomers() {
     var period = periodVal("cu"), body = document.getElementById("cu-body");
     body.innerHTML = '<div class="placeholder">載入中…</div>';
-    Promise.all([api.customers(), api.analyticsCustomers(period)])
+    Promise.all([api.customers(), api.analyticsCustomers(period), api.consumption()])
       .then(function (r) {
-        var custs = r[0], an = r[1];
+        var custs = r[0], an = r[1], cons = r[2] || [];
+        // aggregate this period's consumption by customer × time slot
+        var slotAgg = {};
+        cons.forEach(function (x) {
+          if (String(x.period_start || "").slice(0, 7) !== period) return;
+          var a = slotAgg[x.customer_id] || (slotAgg[x.customer_id] = { peak: 0, half_peak: 0, off_peak: 0 });
+          if (x.time_slot && a[x.time_slot] != null) a[x.time_slot] += x.consumed_energy_mwh || 0;
+        });
+        function pOr(v) { return v != null ? price(v) : "–"; }
         var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>年用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>契約容量 (kW)</th><th>電價方案</th><th>轉供價</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
           html += "<tr><td class=\"code\">" + esc(c.code) + "</td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
-            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" + rowActions("customer", c.id) + "</tr>";
+            "</td><td class=\"num\">" + nfmt(c.annual_consumption_mwh, 0) + "</td><td class=\"num\">" + pct(c.re_target_percent, 0) + "%</td><td class=\"num\">" + esc(c.target_year || "–") + "</td>" +
+            "<td class=\"num\">" + (c.contracted_capacity_kw != null ? nfmt(c.contracted_capacity_kw, 0) : "–") + "</td>" +
+            "<td>" + (c.tariff_type ? (TARIFF_LABEL[c.tariff_type] || c.tariff_type) : "–") + "</td>" +
+            "<td class=\"num\">" + pOr(c.transfer_price_per_kwh) + "</td>" + rowActions("customer", c.id) + "</tr>";
+        });
+        html += "</tbody></table></div></section>";
+        // 各時段用電量(既有資料)+ 各時段灰電價(客戶欄位)
+        html += '<section class="card section-gap"><div class="hd"><h3>各時段用電與灰電價</h3><span class="aside">' + esc(period) + " · 用電為實際資料、灰電價為客戶設定</span></div><div class=\"tablewrap\"><table>" +
+          "<thead><tr><th>客戶</th><th>尖峰用電 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>尖峰價</th><th>半尖峰價</th><th>離峰價</th></tr></thead><tbody>";
+        custs.forEach(function (c) {
+          var a = slotAgg[c.id] || { peak: 0, half_peak: 0, off_peak: 0 };
+          html += "<tr><td>" + esc(c.company_name) + "</td>" +
+            "<td class=\"num\">" + nfmt(a.peak, 0) + "</td><td class=\"num\">" + nfmt(a.half_peak, 0) + "</td><td class=\"num\">" + nfmt(a.off_peak, 0) + "</td>" +
+            "<td class=\"num\">" + pOr(c.peak_price_per_kwh) + "</td><td class=\"num\">" + pOr(c.half_peak_price_per_kwh) + "</td><td class=\"num\">" + pOr(c.off_peak_price_per_kwh) + "</td></tr>";
         });
         html += "</tbody></table></div></section>";
         html += '<section class="card section-gap"><div class="hd"><h3>RE 目標達成分析</h3><span class="aside">' + esc(period) + "</span></div><div class=\"tablewrap\"><table>" +
@@ -1407,7 +1428,14 @@
     { key: "annual_consumption_mwh", label: "年用電 (MWh)", type: "number" },
     { key: "re_target_percent", label: "RE 目標 (%)", type: "number", min: 0, max: 100 },
     { key: "target_year", label: "目標年", type: "number", step: "1" },
+    { key: "contracted_capacity_kw", label: "契約容量 (kW)", type: "number" },
+    { key: "tariff_type", label: "電價方案", type: "select", options: [["", "—"], ["three_stage", "三段式時間電價"], ["two_stage", "二段式時間電價"], ["standard", "標準(非時間電價)"]] },
+    { key: "transfer_price_per_kwh", label: "轉供價格 (NTD/kWh)", type: "number" },
+    { key: "peak_price_per_kwh", label: "尖峰灰電價 (NTD/kWh)", type: "number" },
+    { key: "half_peak_price_per_kwh", label: "半尖峰灰電價 (NTD/kWh)", type: "number" },
+    { key: "off_peak_price_per_kwh", label: "離峰灰電價 (NTD/kWh)", type: "number" },
   ];
+  var TARIFF_LABEL = { three_stage: "三段式", two_stage: "二段式", standard: "標準" };
 
   function entityAddBtn(kind, label) {
     return editMode ? '<button class="btn primary sm entity-add" data-kind="' + kind + '">+ ' + esc(label) + "</button>" : "";

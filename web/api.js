@@ -64,6 +64,7 @@
     deleteCustomer: function (id) { return del("/customers/" + id); },
     contracts: function () { return get("/contracts", { limit: 1000 }); },
     generation: function () { return get("/generation", { limit: 5000 }); },
+    consumption: function () { return get("/consumption", { limit: 5000 }); },
     analyticsSummary: function (period) { return get("/analytics/summary", { period: period }); },
     analyticsCustomers: function (period) { return get("/analytics/customers", { period: period }); },
     analyticsWindFarms: function (period) { return get("/analytics/wind-farms", { period: period }); },
