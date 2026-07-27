@@ -343,6 +343,11 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .mm-cust rect{stroke:var(--buyer)}
 .mm-node .mm-t1{font-size:14px;font-weight:700;fill:var(--ink)}
 .mm-node .mm-t2{font-size:11px;fill:var(--muted);font-family:var(--font-mono)}
+.mm-node .mm-t2.warn{fill:var(--warn)}
+.mm-supply-note{display:flex;gap:10px;align-items:flex-start;margin:0 0 16px;padding:12px 15px;
+  border:1px solid var(--warn);background:var(--warn-soft);border-radius:var(--radius-sm);
+  font-size:12.5px;line-height:1.65;color:var(--ink)}
+.mm-supply-note svg{width:18px;height:18px;flex:none;color:var(--warn);margin-top:1px}
 .mm-caps{display:flex;justify-content:space-between;gap:12px;padding:2px 16px 14px;
   font-size:12px;font-weight:600}
 .mm-caps span:first-child{color:var(--good)}

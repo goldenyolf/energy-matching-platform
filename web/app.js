@@ -859,9 +859,24 @@
       // effective (possibly overridden) target %, derived from the solved target energy
       var tgtPct = (s.consumption_mwh > 0 && t.re_target_mwh != null)
         ? (t.re_target_mwh / s.consumption_mwh * 100) : c.re_target_percent;
+      var re = s.achieved_re_percent != null ? s.achieved_re_percent : 0;
       return { id: id, label: mmShort(c.company_name || c.code || ("#" + id), 8), code: c.code || ("#" + id),
-        re: (s.achieved_re_percent != null ? s.achieved_re_percent : 0), target: tgtPct, met: !!t.re_target_met, thru: thru };
+        re: re, target: tgtPct, met: !!t.re_target_met, thru: thru,
+        gap: Math.max(0, (tgtPct || 0) - re),  // percentage points short of target
+        targetMwh: t.re_target_mwh || 0, allocMwh: t.allocated_mwh || 0 };
     });
+
+    // 供電不足偵測:target-cap 後,任何「未達」都是因為可用綠電不夠(非設定問題)
+    var unmet = custs.filter(function (c) { return !c.met && c.gap > 0.05; });
+    var needTotal = 0, allocTotal = 0;
+    custs.forEach(function (c) { needTotal += c.targetMwh; allocTotal += c.allocMwh; });
+    if (unmet.length) {
+      html += '<div class="mm-supply-note">' + iconWarn() +
+        "<div><b>發電量不足以完整滿足用電端 RE 目標。</b> 此情境綠電總配置 " + nfmt(allocTotal, 0) +
+        " MWh、用電端目標合計 " + nfmt(needTotal, 0) + " MWh(缺口 " + nfmt(Math.max(0, needTotal - allocTotal), 0) +
+        " MWh)。已把可用綠電<b>盡量分配</b>給各用電端;下方標「發電不足」者受限於可用綠電,並非目標設定問題。" +
+        "</div></div>";
+    }
 
     html += '<section class="card mm-card"><div class="hd"><h3>綠電配置最佳解</h3>' +
       '<span class="aside">帶寬 ∝ 配置電量 · 實線=既有合約 · 虛線=假設新配對</span></div>' +
@@ -871,6 +886,27 @@
       buildFlowSVG(farms, custs, pair, hc) +
       '<div class="mm-caps"><span>提升售電業總營收利潤,消化案場餘電</span>' +
       '<span>實現企業 RE 綠電目標</span></div></section>';
+
+    // 用電端 RE 達成(目標 vs 實際),未達者標「發電不足」——最不足者排前
+    var attain = custs.slice().sort(function (a, b) {
+      var ra = a.target > 0 ? a.re / a.target : 1, rb = b.target > 0 ? b.re / b.target : 1;
+      return ra - rb;
+    });
+    html += '<section class="card"><div class="hd"><h3>用電端 RE 達成</h3>' +
+      '<span class="aside">目標 vs 實際配置 · 未達=發電不足</span></div><div class="tablewrap"><table>' +
+      "<thead><tr><th>用電端</th><th>RE 目標</th><th>配置綠電 (MWh)</th><th>達成率</th><th>距目標</th><th>狀態</th></tr></thead><tbody>";
+    attain.forEach(function (c) {
+      var cust = cm[c.id] || {};
+      html += "<tr><td style=\"text-align:left\"><span class=\"code\">" + esc(c.code) + "</span> " + esc(cust.company_name || "") + "</td>" +
+        "<td class=\"num\">" + (c.target == null ? "–" : pct(c.target, 0) + "%") + "</td>" +
+        "<td class=\"num\">" + nfmt(c.allocMwh, 0) + "</td>" +
+        "<td class=\"num\">" + reCell(c.re) + "</td>" +
+        "<td class=\"num\">" + (c.met ? "—" : '<span class="neg">缺 ' + pct(c.gap, 0) + "%</span>") + "</td>" +
+        "<td>" + (c.met
+          ? '<span class="pill ok"><span class="dot"></span>達標</span>'
+          : '<span class="pill bad"><span class="dot"></span>發電不足</span>') + "</td></tr>";
+    });
+    html += "</tbody></table></div></section>";
 
     var rows = pairKeys.map(function (k) {
       var p = k.split("|"); return { fid: +p[0], cid: +p[1], mwh: pair[k] };
@@ -964,8 +1000,10 @@
         '<rect x="' + rightX + '" y="' + y.toFixed(1) + '" width="' + boxW + '" height="' + boxH + '" rx="10"/>' +
         '<circle cx="' + (rightX + boxW - 16) + '" cy="' + (y + 16) + '" r="5" fill="' + dotC + '"/>' +
         '<text class="mm-t1" x="' + (rightX + 14) + '" y="' + (y + 25).toFixed(1) + '">' + esc(c.label) + "</text>" +
-        '<text class="mm-t2" x="' + (rightX + 14) + '" y="' + (y + 45).toFixed(1) + '">RE ' + pct(c.re, 0) + "% / 目標 " + (c.target == null ? "–" : pct(c.target, 0) + "%") + "</text>" +
-        "<title>" + esc(c.code) + " " + esc(c.label) + " · " + (c.met ? "達標" : "未達") + "</title></g>";
+        '<text class="' + (c.met ? "mm-t2" : "mm-t2 warn") + '" x="' + (rightX + 14) + '" y="' + (y + 45).toFixed(1) + '">RE ' +
+        pct(c.re, 0) + "% / 目標 " + (c.target == null ? "–" : pct(c.target, 0) + "%") +
+        (!c.met && c.gap > 0.5 ? " · 缺 " + pct(c.gap, 0) + "%" : "") + "</text>" +
+        "<title>" + esc(c.code) + " " + esc(c.label) + " · " + (c.met ? "達標" : "發電不足,缺 " + pct(c.gap, 0) + "%") + "</title></g>";
     });
     svg += "</svg></div>";
     return svg;
@@ -1276,6 +1314,7 @@
   function iconMoney() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'; }
   function iconBolt() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>'; }
   function iconInfo() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>'; }
+  function iconWarn() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>'; }
 
   // ---------- theme toggle ----------
   document.getElementById("themeBtn").addEventListener("click", function () {
