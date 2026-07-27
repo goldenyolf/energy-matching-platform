@@ -18,10 +18,6 @@ class CustomerBase(BaseModel):
     target_year: int | None = Field(default=None, ge=2000, le=2100)
     green_target_type: GreenTargetType = GreenTargetType.RE_PERCENT
     target_energy_mwh: float | None = Field(default=None, ge=0)
-    # company info (用電戶資訊)
-    agent: str | None = Field(default=None, max_length=100)
-    address: str | None = Field(default=None, max_length=300)
-    phone: str | None = Field(default=None, max_length=50)
 
 
 class CustomerCreate(CustomerBase):
@@ -34,9 +30,6 @@ class CustomerUpdate(BaseModel):
     annual_consumption_mwh: float | None = Field(default=None, ge=0)
     re_target_percent: float | None = Field(default=None, ge=0, le=100)
     target_year: int | None = Field(default=None, ge=2000, le=2100)
-    agent: str | None = Field(default=None, max_length=100)
-    address: str | None = Field(default=None, max_length=300)
-    phone: str | None = Field(default=None, max_length=50)
 
 
 class CustomerRead(CustomerBase):

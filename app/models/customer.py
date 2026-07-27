@@ -31,12 +31,7 @@ class Customer(Base, TimestampMixin):
         SAEnum(GreenTargetType), default=GreenTargetType.RE_PERCENT
     )
     target_energy_mwh: Mapped[float | None] = mapped_column(Float, default=None)
-
-    # Company info (用電戶資訊). Capacity/tariff/slot consumption live per 電號
-    # on the Meter model.
-    agent: Mapped[str | None] = mapped_column(String(100), default=None)
-    address: Mapped[str | None] = mapped_column(String(300), default=None)
-    phone: Mapped[str | None] = mapped_column(String(50), default=None)
+    # Capacity / tariff / per-slot consumption live per 電號 on the Meter model.
 
     contracts: Mapped[list[Contract]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"

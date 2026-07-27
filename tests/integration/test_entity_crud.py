@@ -66,27 +66,25 @@ def test_update_customer(client):
     assert resp.json()["re_target_percent"] == 90.0
 
 
-def test_customer_company_fields_roundtrip(client):
+def test_customer_basic_fields_roundtrip(client):
     resp = client.post(
         "/api/v1/customers",
         json={
             "code": "CUST-EXT",
             "company_name": "世通國際",
+            "industry": "半導體",
+            "annual_consumption_mwh": 1906.0,
             "re_target_percent": 50.0,
-            "address": "桃園市龍潭區中原路二段一號",
-            "agent": "王大明",
+            "target_year": 2030,
         },
     )
     assert resp.status_code == 201
     b = resp.json()
-    assert b["address"] == "桃園市龍潭區中原路二段一號"
-    assert b["agent"] == "王大明"
-    up = client.put(
-        f"/api/v1/customers/{b['id']}",
-        json={"phone": "03-1234567"},
-    )
+    assert b["industry"] == "半導體"
+    assert b["annual_consumption_mwh"] == 1906.0
+    up = client.put(f"/api/v1/customers/{b['id']}", json={"target_year": 2035})
     assert up.status_code == 200
-    assert up.json()["phone"] == "03-1234567"
+    assert up.json()["target_year"] == 2035
 
 
 def _make_meter_customer(client):

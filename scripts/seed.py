@@ -50,32 +50,43 @@ def build_source(
 
 
 def _set_demo_defaults(db) -> None:
-    """Simulated per-電號 load data (Meter) for the demo (kWh, kW)."""
+    """Simulated per-電號 load data, scaled so Σ電號 total = customer 總用電 (MWh)."""
     from sqlalchemy import select
 
-    from app.models import Meter
+    from app.models import Customer, Meter
 
-    # per-電號 annual per-slot load (kWh) from typical shares; cap ~ avg power / 0.6
-    shares = {
-        "peak": 0.14,
-        "half_peak": 0.40,
-        "saturday_half_peak": 0.11,
-        "off_peak": 0.35,
-    }
-    for m in db.execute(select(Meter)).scalars():
-        annual_mwh = m.annual_consumption_mwh or 0.0
-        kwh = annual_mwh * 1000
-        m.usage_name = m.usage_name or m.name
-        m.tariff_type = "hv_three_stage"
-        m.load_data_type = "年度用電量(15分鐘一筆)"
-        m.data_period = "2024-01~2024-12"
-        if annual_mwh:
-            m.contracted_capacity_kw = round(annual_mwh * 1000 / 8760 / 0.6)
-        m.peak_kwh = round(kwh * shares["peak"])
-        m.half_peak_kwh = round(kwh * shares["half_peak"])
-        m.saturday_half_peak_kwh = round(kwh * shares["saturday_half_peak"])
-        m.off_peak_kwh = round(kwh * shares["off_peak"])
-        m.total_kwh = round(kwh)
+    peak_s, half_s, sat_s = 0.14, 0.40, 0.11
+    customers = {c.id: c for c in db.execute(select(Customer)).scalars()}
+    by_cust: dict[int, list[Meter]] = {}
+    for m in db.execute(select(Meter).order_by(Meter.id)).scalars():
+        by_cust.setdefault(m.customer_id, []).append(m)
+
+    for cid, ms in by_cust.items():
+        cust = customers.get(cid)
+        total_kwh = round((cust.annual_consumption_mwh or 0.0) * 1000) if cust else 0
+        weights = [m.annual_consumption_mwh or 0.0 for m in ms]
+        wsum = sum(weights)
+        assigned = 0
+        for i, m in enumerate(ms):
+            if i == len(ms) - 1:  # last 電號 takes the remainder → exact total
+                mt = total_kwh - assigned
+            elif wsum > 0:
+                mt = round(total_kwh * weights[i] / wsum)
+            else:
+                mt = round(total_kwh / len(ms))
+            assigned += mt
+            m.usage_name = m.usage_name or m.name
+            m.tariff_type = "hv_three_stage"
+            m.load_data_type = "年度用電量(15分鐘一筆)"
+            m.data_period = "2024-01~2024-12"
+            m.contracted_capacity_kw = round(mt / 8760 / 0.6) if mt else None
+            m.peak_kwh = round(mt * peak_s)
+            m.half_peak_kwh = round(mt * half_s)
+            m.saturday_half_peak_kwh = round(mt * sat_s)
+            m.off_peak_kwh = (
+                mt - m.peak_kwh - m.half_peak_kwh - m.saturday_half_peak_kwh
+            )
+            m.total_kwh = mt
     db.commit()
 
 
@@ -111,7 +122,7 @@ def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
             split_consumption_to_meters(db)
             print("電號拆分      : 用電已歸屬至各電號/廠區")
             _set_demo_defaults(db)
-            print("示範資料補值  : 客戶公司資訊 + 各電號負載/契約容量/時間電價")
+            print("電號負載模擬  : 各電號負載/契約容量/時間電價(加總 = 客戶總用電)")
             issue_for_period(db, "2024-01")
             for row in get_ledger(db, period="2024-01").batches[:2]:
                 retire(db, row.id)  # retire a couple to show both statuses
