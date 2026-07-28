@@ -472,30 +472,39 @@
       var totGen = Object.keys(agg).reduce(function (s, k) { return s + agg[k].total; }, 0);
       var prices = farms.map(function (f) { return f.feed_in_price_per_kwh; }).filter(function (v) { return v != null; });
       var avgPrice = prices.length ? prices.reduce(function (s, v) { return s + v; }, 0) / prices.length : null;
+      var cfs = farms.map(function (f) { return f.capacity_factor_percent; }).filter(function (v) { return v != null; });
+      var avgCf = cfs.length ? cfs.reduce(function (s, v) { return s + v; }, 0) / cfs.length : null;
+      var expOf = function (f) { return f.capacity_factor_percent != null ? f.installed_capacity_mw * 8760 * f.capacity_factor_percent / 100 : null; };
 
       var html = '<div class="kpis">' +
         kpi("案場數", farms.length + "<small>場</small>", "已納入媒合", "hl") +
         kpi("總裝置容量", nfmt(totCap, 1) + "<small>MW</small>", "跨全部案場") +
         kpi("總發電量", nfmt(totGen, 0) + "<small>MWh</small>", "資料區間累積") +
+        kpi("平均容量因數", avgCf != null ? pct(avgCf, 1) + "<small>%</small>" : "–", "P50 預期") +
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
-      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電與容量因數" + "</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
+        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90</th><th>躉售價</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
-        html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td>" +
-          "<td style=\"text-align:left\">" + esc(f.operator_name || "–") + "</td>" +
+        var exp = expOf(f);
+        var cfCell = f.capacity_factor_percent != null
+          ? pct(f.capacity_factor_percent, 0) + "% / " + (f.p90_capacity_factor_percent != null ? pct(f.p90_capacity_factor_percent, 0) + "%" : "–")
+          : "–";
+        var achv = (exp && exp > 0) ? reCell(a.total / exp * 100) : '<span class="u">–</span>';
+        html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + farmTypeBadge(f.farm_type) + "</td>" +
           "<td style=\"text-align:left\">" + esc(f.location || "–") + "</td>" +
           "<td class=\"num\">" + nfmt(f.installed_capacity_mw, 1) + "</td>" +
-          "<td class=\"num\">" + esc(f.commercial_operation_date || "–") + "</td>" +
+          "<td class=\"num\">" + cfCell + "</td>" +
           "<td class=\"num\">" + (f.feed_in_price_per_kwh != null ? price(f.feed_in_price_per_kwh) : "–") + "</td>" +
           "<td>" + statusPill(f.status) + "</td>" +
-          "<td class=\"num\">" + nfmt(a.peak, 0) + "</td><td class=\"num\">" + nfmt(a.half_peak, 0) + "</td><td class=\"num\">" + nfmt(a.off_peak, 0) + "</td>" +
-          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(a.total, 0) + "</td>" + rowActions("farm", f.id) + "</tr>";
+          "<td class=\"num\" style=\"font-weight:700\">" + nfmt(a.total, 0) + "</td>" +
+          "<td class=\"num\">" + (exp != null ? nfmt(exp, 0) : "–") + "</td>" +
+          "<td class=\"num\">" + achv + "</td>" + rowActions("farm", f.id) + "</tr>";
       });
       html += "</tbody></table></div></section>";
-      html += '<div class="foot-note">' + iconInfo() + "示範資料為模擬。各時段發電由 generate_slot_profiles 依風電典型占比拆分(離峰較高)。</div>";
+      html += '<div class="foot-note">' + iconInfo() + "預期年發電 P50 = 裝置容量 × 8760h × 容量因數;達成 = 實際/預期。示範資料為模擬,各時段發電依風電典型占比拆分。</div>";
       body.innerHTML = html;
     }).catch(function (err) { body.innerHTML = errbox("載入發電案場", err); });
   }
@@ -519,18 +528,20 @@
       '<form class="formcard" id="invForm"><div class="formgrid">' +
       '<div class="field"><label>每 MW 建置成本</label><input id="i-capex" class="num" type="number" min="1" step="any" placeholder="載入中…"><span class="hint">NTD / MW · 可覆寫</span></div>' +
       '<div class="field"><label>年 O&amp;M 費率</label><input id="i-om" class="num" type="number" min="0" max="100" step="any" placeholder="載入中…"><span class="hint">% of CAPEX · 可覆寫</span></div>' +
+      '<div class="field"><label>發電情境</label><select id="i-scenario"><option value="actual">實際 (量測發電)</option><option value="p50">P50 預期 (容量因數)</option><option value="p90">P90 保守 (下行風險)</option></select><span class="hint">P50/P90 以容量因數推估年發電</span></div>' +
       '</div><div class="formactions"><button class="btn primary" type="submit">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>計算投資效益</button></div></form>' +
       '<div id="inv-body"><div class="placeholder">載入中…</div></div>';
 
     var capexEl = document.getElementById("i-capex");
     var omEl = document.getElementById("i-om");
+    var scenEl = document.getElementById("i-scenario");
     var body = document.getElementById("inv-body");
     var loaded = false;
 
     function load(capex, om) {
       showModal("正在計算投資效益…");
-      api.investment(capex, om)
+      api.investment(capex, om, scenEl.value)
         .then(function (r) {
           if (!loaded) { capexEl.value = r.capex_per_mw; omEl.value = r.om_rate_percent; loaded = true; }
           renderInvestmentResult(body, r);
@@ -538,12 +549,14 @@
         .catch(function (err) { body.innerHTML = errbox("計算投資效益", err); })
         .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
     }
-
-    document.getElementById("invForm").addEventListener("submit", function (e) {
-      e.preventDefault();
+    function submit() {
       var cv = capexEl.value.trim(), ov = omEl.value.trim();
       load(cv === "" ? null : parseFloat(cv), ov === "" ? null : parseFloat(ov));
+    }
+    document.getElementById("invForm").addEventListener("submit", function (e) {
+      e.preventDefault(); submit();
     });
+    scenEl.addEventListener("change", submit);  // switching scenario re-runs
     load(null, null);
   }
 
@@ -559,7 +572,9 @@
       kpi("組合回收期", t.payback_years == null ? '<span class="neg">–</span>' : nfmt(t.payback_years, 1) + "<small>年</small>", t.payback_years == null ? "當前假設下無法回收" : "靜態回收(未折現)") +
       "</div>";
 
-    html += '<section class="card"><div class="hd"><h3>逐案場投資效益</h3><span class="aside">' + farms.length +
+    var scenLabel = { actual: "實際 (量測發電)", p50: "P50 預期", p90: "P90 保守" }[r.scenario] || r.scenario;
+    var scenCls = r.scenario === "p90" ? "warnp" : (r.scenario === "p50" ? "info" : "neut");
+    html += '<section class="card"><div class="hd"><h3>逐案場投資效益</h3><span class="aside"><span class="pill ' + scenCls + '" style="height:20px;font-size:10.5px;padding:0 8px">情境 · ' + esc(scenLabel) + "</span> · " + farms.length +
       " 場 · 依 ROI 排序</span></div><div class=\"tablewrap\"><table>" +
       "<thead><tr><th>案場</th><th>裝置容量 (MW)</th><th>年發電 (MWh)</th><th>躉售價</th>" +
       "<th>年收入 (億)</th><th>CAPEX (億)</th><th>年 O&amp;M (億)</th><th>年淨利 (億)</th><th>ROI (%/年)</th><th>回收期</th></tr></thead><tbody>";
@@ -1469,10 +1484,20 @@
     { key: "operator_name", label: "營運商" },
     { key: "location", label: "場址" },
     { key: "installed_capacity_mw", label: "裝置容量 (MW)", type: "number", required: true },
+    { key: "farm_type", label: "類型", type: "select", options: [["", "—"], ["offshore", "離岸"], ["onshore", "陸域"]] },
+    { key: "capacity_factor_percent", label: "容量因數 P50 (%)", type: "number", min: 0, max: 100 },
+    { key: "p90_capacity_factor_percent", label: "容量因數 P90 (%)", type: "number", min: 0, max: 100 },
+    { key: "turbine_count", label: "風機數", type: "number", step: "1" },
+    { key: "grid_connection_voltage", label: "並網電壓", placeholder: "161kV" },
     { key: "feed_in_price_per_kwh", label: "躉售價 (NTD/kWh)", type: "number" },
     { key: "commercial_operation_date", label: "商轉日", placeholder: "2024-01-01" },
     { key: "status", label: "狀態", type: "select", options: [["operational", "營運中"], ["under_construction", "建置中"], ["planning", "規劃中"], ["decommissioned", "除役"]] },
   ];
+  var FARM_TYPE_LABEL = { offshore: "離岸", onshore: "陸域" };
+  function farmTypeBadge(t) {
+    if (!t) return "";
+    return ' <span class="pill ' + (t === "offshore" ? "info" : "neut") + '" style="height:19px;font-size:10.5px;padding:0 7px">' + esc(FARM_TYPE_LABEL[t] || t) + "</span>";
+  }
   var CUST_FIELDS = [
     { key: "code", label: "客戶代碼", createOnly: true, required: true, placeholder: "CUST-XXX" },
     { key: "company_name", label: "公司名稱", required: true },

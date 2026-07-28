@@ -125,10 +125,11 @@
         min_site_allocation_percent: opts.minPct,
       });
     },
-    investment: function (capexPerMw, omRatePercent) {
+    investment: function (capexPerMw, omRatePercent, scenario) {
       return get("/analytics/investment", {
         capex_per_mw: capexPerMw,
         om_rate_percent: omRatePercent,
+        scenario: scenario,
       });
     },
     settlement: function (customerId, period, transferPrice, wheelingFee) {
