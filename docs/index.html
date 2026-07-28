@@ -646,11 +646,12 @@
     document.getElementById("wm-take").innerHTML='<b>看到了嗎：</b>'+MODES[mode].take;
     tweenTo(mode,620);
   }
-  document.getElementById("wm-seg").addEventListener("click",function(e){var b=e.target.closest("button");if(b)setMode(b.getAttribute("data-mode"));});
+  document.getElementById("wm-seg").addEventListener("click",function(e){var b=e.target.closest("button");if(b){stopAuto();setMode(b.getAttribute("data-mode"));}});
 
   /* hover 追蹤 */
   var tip=document.getElementById("wm-tip"), wrap=svg.parentNode;
   svg.addEventListener("mousemove",function(e){
+    stopAuto();
     var r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)/r.width*Wd;
     var h=Math.round((sx-ML)/PW*24); if(h<0||h>23){tip.style.opacity=0;return;}
     var w=wind[h],so=(curMode==="wind"?0:solar[h]),d=demand[h],re=w+so,m=Math.min(re,d),g=Math.max(0,d-m);
@@ -671,9 +672,20 @@
   /* 首次進入視野再播放進場（從 0 長上來 + RE 數字跑上去） */
   setMode("wind"); frame(); // 靜態底稿
   disp={wind:Z(),renew:Z(),dis:Z(),dem:Z()}; frame(); stats();
-  var played=false;
-  function play(){if(played)return;played=true;document.getElementById("lg-solar").style.opacity=.32;document.getElementById("lg-batt").style.opacity=.32;tweenTo("wind",950);}
-  var io2=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){play();io2.disconnect();}});},{threshold:.25});
+  var played=false, auto=null;
+  function stopAuto(){if(auto){clearInterval(auto);auto=null;}}
+  function play(){
+    if(played)return;played=true;
+    document.getElementById("lg-solar").style.opacity=.32;document.getElementById("lg-batt").style.opacity=.32;
+    tweenTo("wind",950);
+    if(!reduce){                                   // 自動循環,使用者一互動就停
+      var order=["wind","ws","wss"],i=0;
+      auto=setInterval(function(){i=(i+1)%3;setMode(order[i]);},3200);
+    }
+  }
+  var io2=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting){play();} else {stopAuto();}   // 捲離視野也停,回來不再自動(已互動過)
+  });},{threshold:.25});
   io2.observe(document.getElementById("wm-sec"));
 })();
 </script>
