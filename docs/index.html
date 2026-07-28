@@ -192,6 +192,104 @@
   </div>
 </header>
 
+<style>
+  .wm{--wm-solar:var(--amber); --wm-solar-soft:var(--amber-soft); --wm-grey:color-mix(in srgb,var(--faint) 34%,transparent)}
+  .wm .shead .snum.hook{color:var(--amber);border-color:var(--amber)}
+  .wm-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    padding:20px 22px 22px;margin-top:26px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 20px 50px rgba(0,0,0,.10)}
+  .wm-seg{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line2);border-radius:12px;background:var(--bg2);flex-wrap:wrap}
+  .wm-seg button{appearance:none;border:0;background:transparent;color:var(--muted);cursor:pointer;
+    font:600 13.5px/1 var(--sans);padding:9px 14px;border-radius:9px;transition:.2s;white-space:nowrap;display:flex;align-items:center;gap:7px}
+  .wm-seg button:hover{color:var(--ink)}
+  .wm-seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+  .wm-seg button.on .wm-dot{transform:scale(1.15)}
+  .wm-dot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none;transition:.2s}
+  .wm-seghint{color:var(--faint);font-size:12.5px;margin-left:2px;margin-top:9px}
+  .wm-main{display:grid;grid-template-columns:1.55fr .95fr;gap:22px;margin-top:18px;align-items:stretch}
+  @media(max-width:820px){.wm-main{grid-template-columns:1fr}}
+  .wm-chartwrap{position:relative}
+  .wm-chartwrap svg{width:100%;height:auto;display:block;overflow:visible}
+  .wm-ax{fill:var(--faint);font:500 11.5px var(--mono)}
+  .wm-axt{fill:var(--muted);font:600 11px var(--sans);letter-spacing:.05em}
+  .wm-dline{fill:none;stroke:var(--demand);stroke-width:3;stroke-linejoin:round;stroke-linecap:round;
+    filter:drop-shadow(0 0 6px color-mix(in srgb,var(--demand) 45%,transparent))}
+  .wm-tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;transform:translate(-50%,0);
+    background:var(--surface2);border:1px solid var(--line2);border-radius:10px;padding:9px 11px;
+    font:500 11.5px/1.5 var(--sans);color:var(--muted);box-shadow:0 8px 24px rgba(0,0,0,.22);z-index:5;min-width:132px}
+  .wm-tip b{color:var(--ink);font-weight:700}
+  .wm-tip .r{display:flex;justify-content:space-between;gap:14px}
+  .wm-tip .r span:last-child{font-family:var(--mono);color:var(--ink)}
+  .wm-tip .hh{font-weight:700;color:var(--ink);margin-bottom:4px;font-family:var(--mono)}
+  .wm-side{display:flex;flex-direction:column;justify-content:center;gap:14px;
+    background:linear-gradient(160deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:14px;padding:20px}
+  .wm-relab{font-size:12.5px;color:var(--muted);font-weight:600}
+  .wm-rebig{font:800 clamp(42px,8vw,60px)/1 var(--sans);letter-spacing:-.03em;color:var(--flow);font-variant-numeric:tabular-nums}
+  .wm-rebig small{font-size:.4em;font-weight:700;color:var(--muted);margin-left:4px;letter-spacing:0}
+  .wm-bar{position:relative;height:12px;border-radius:8px;background:var(--bg2);border:1px solid var(--line);overflow:visible;margin:2px 0 4px}
+  .wm-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--flow),var(--flow-ink));transition:width .1s linear;box-shadow:var(--glow)}
+  .wm-mark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--faint);transition:left .1s linear}
+  .wm-mark::after{content:"帳面 "attr(data-v)"%";position:absolute;top:-19px;left:50%;transform:translate(-50%,0);
+    white-space:nowrap;font:600 10.5px var(--sans);color:var(--faint)}
+  .wm-substats{display:flex;gap:10px;margin-top:6px}
+  .wm-ss{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .wm-ss .k{font-size:11px;color:var(--muted);font-weight:600}
+  .wm-ss .v{font:700 19px var(--sans);font-variant-numeric:tabular-nums;margin-top:2px}
+  .wm-ss .v small{font-size:11px;color:var(--faint);font-weight:600;margin-left:2px}
+  .wm-note{font-size:11.5px;color:var(--faint);line-height:1.5;margin-top:2px}
+  .wm-legend{display:flex;flex-wrap:wrap;gap:12px 20px;margin-top:16px;padding-top:15px;border-top:1px solid var(--line)}
+  .wm-lg{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .wm-sw{width:16px;height:11px;border-radius:3px;flex:none}
+  .wm-sw.line{height:0;border-top:3px solid var(--demand);border-radius:0;width:18px}
+  .wm-take{margin-top:22px;font-size:15px;color:var(--muted);max-width:70ch}
+  .wm-take b{color:var(--ink);font-weight:650}
+  .wm-take .arrow{color:var(--flow);font-weight:700}
+</style>
+
+<section class="wm reveal" id="wm-sec">
+  <div class="wrap">
+    <div class="shead"><span class="snum hook">破題</span><h2>帳面上綠電滿滿，實際<span style="color:var(--amber)">對得上時間</span>的才算數</h2></div>
+    <p class="sub">合約寫「佔某風場 70%」，或看「日總量」，這天的 RE 都很漂亮。但風電<b>夜裡強、白天弱</b>，
+      跟工廠<b>白天的用電尖峰</b>錯開了——真正<b>逐時匹配</b>到的綠電少很多。
+      <b style="color:var(--ink)">按下面切換，看看加了太陽能、加了儲能，真綠電怎麼一路補起來。</b></p>
+
+    <div class="wm-card">
+      <div class="wm-seg" id="wm-seg" role="tablist" aria-label="供給組合">
+        <button class="on" data-mode="wind" role="tab"><span class="wm-dot" style="color:var(--flow)"></span>只有風電</button>
+        <button data-mode="ws" role="tab"><span class="wm-dot" style="color:var(--amber)"></span>風 ＋ 太陽能</button>
+        <button data-mode="wss" role="tab"><span class="wm-dot" style="color:var(--demand)"></span>風 ＋ 光 ＋ 儲能</button>
+      </div>
+      <div class="wm-seghint" id="wm-hint"></div>
+
+      <div class="wm-main">
+        <div class="wm-chartwrap">
+          <svg id="wm-chart" viewBox="0 0 720 380" role="img" aria-label="24 小時綠電與用電逐時匹配互動圖"></svg>
+          <div class="wm-tip" id="wm-tip"></div>
+        </div>
+        <aside class="wm-side">
+          <div class="wm-relab">逐時真正匹配到的綠電</div>
+          <div class="wm-rebig"><span id="wm-re">0</span><small>% RE</small></div>
+          <div class="wm-bar"><div class="wm-fill" id="wm-fill" style="width:0"></div><div class="wm-mark" id="wm-mark" data-v="92" style="left:92%"></div></div>
+          <div class="wm-note" id="wm-gapnote"></div>
+          <div class="wm-substats">
+            <div class="wm-ss"><div class="k">灰電補足（缺口）</div><div class="v" style="color:var(--muted)"><span id="wm-short">0</span><small>MWh</small></div></div>
+            <div class="wm-ss"><div class="k">綠電外溢（浪費）</div><div class="v" style="color:var(--flow)"><span id="wm-spill">0</span><small>MWh</small></div></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="wm-legend">
+        <span class="wm-lg"><span class="wm-sw" style="background:var(--flow)"></span>風電（已匹配）</span>
+        <span class="wm-lg" id="lg-solar"><span class="wm-sw" style="background:var(--amber)"></span>太陽能</span>
+        <span class="wm-lg" id="lg-batt"><span class="wm-sw" style="background:repeating-linear-gradient(45deg,var(--flow),var(--flow) 2px,transparent 2px,transparent 4px)"></span>儲能放電</span>
+        <span class="wm-lg"><span class="wm-sw" style="background:var(--wm-grey);border:1px solid var(--faint)"></span>灰電補足</span>
+        <span class="wm-lg"><span class="wm-sw line"></span>用電需求</span>
+      </div>
+    </div>
+
+    <p class="wm-take" id="wm-take"></p>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
     <div class="shead reveal"><span class="snum">01</span><h2>問題有多難？</h2></div>
@@ -436,5 +534,146 @@
   var uf=fairBars(document.getElementById("unfair"),unfairRows);
   var fr=fairBars(document.getElementById("fair"),fairRows);
   document.querySelector(".fairwrap").__anim=function(){setTimeout(uf,140);setTimeout(fr,320);};
+})();
+</script>
+
+<script>
+/* ── 破題互動圖：單日 風/光/儲 逐時匹配 ── */
+(function(){
+  var reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var wind   =[70,72,71,68,64,58,50,42,36,32,30,29,30,32,34,36,34,30,28,30,36,46,58,66];
+  var demand =[34,32,30,30,34,40,50,64,76,84,88,90,88,86,84,82,84,86,82,74,64,54,44,38];
+  var solar  =[0,0,0,0,0,2,8,18,30,42,50,54,55,52,46,36,24,12,4,0,0,0,0,0];
+  var Z=function(){return new Array(25).fill(0);};
+  function cyc(a){return a.concat([a[0]]);}                 // 0..24（跨午夜連續）
+  var Wc=cyc(wind), Dc=cyc(demand), Sc=cyc(solar);
+
+  /* 儲能：時序貪婪充放（夜間風、午間光的多餘 → 補早晚缺口）*/
+  function battery(renew){
+    var cap=190, rate=48, soc=0, dis=new Array(24).fill(0);
+    for(var h=0;h<24;h++){
+      var net=renew[h]-demand[h];
+      if(net>0){ soc=Math.min(cap, soc+Math.min(net,rate)); }
+      else { var d=Math.min(-net, rate, soc); soc-=d; dis[h]=d; }
+    }
+    return cyc(dis);
+  }
+  function target(mode){
+    var re=Wc.map(function(w,h){return w+(mode==="wind"?0:Sc[h]);});
+    return {wind:Wc.slice(), renew:re, dis:(mode==="wss"?battery(re.slice(0,24).map(function(v,i){return wind[i]+solar[i];})):Z()), dem:Dc.slice()};
+  }
+
+  var MODES={
+    wind:{hint:"風電夜間強、白天弱——跟工廠白天用電尖峰完全錯開。",
+      take:'只有風電時，帳面日總量看似很高，但<b>逐時真正匹配只有 <span class="arrow">55%</span></b>——白天到傍晚的缺口只能買灰電，夜間多餘的綠電外溢浪費。'},
+    ws:{hint:"太陽能白天發電，正好補上風電最弱、用電最高的時段。",
+      take:'加入太陽能後，白天的缺口被<b>風光互補</b>大幅填平，逐時 RE 一口氣拉高——這就是為什麼綠電組合要「<span class="arrow">風＋光</span>」而不是只押一種。'},
+    wss:{hint:"儲能把夜間風、午間光的多餘電，挪到早晚缺口放出來。",
+      take:'再加上儲能，把多餘的綠電<b>存起來、在缺口時放出</b>，逐時 RE 逼近帳面——這正是平台要幫售電業算的：<span class="arrow">什麼組合、配給誰、配多少，才最划算又最達標</span>。'}
+  };
+
+  var svg=document.getElementById("wm-chart");
+  var Wd=720,Ht=380,ML=40,MR=14,MT=30,MB=34,PW=Wd-ML-MR,PH=Ht-MT-MB,YMAX=100;
+  var X=function(h){return ML+h/24*PW;}, Y=function(v){return MT+PH-Math.max(0,v)/YMAX*PH;};
+  var disp={wind:Z(),renew:Z(),dis:Z(),dem:Z()}, curMode="wind";
+
+  function area(low,up){var d="M "+X(0)+" "+Y(low[0]);for(var i=1;i<25;i++)d+=" L "+X(i)+" "+Y(up[i]===undefined?up[i-1]:0);return d;} // unused guard
+  function bandPath(low,up){var d="M "+X(0)+" "+Y(up[0]);for(var i=1;i<25;i++)d+=" L "+X(i)+" "+Y(up[i]);for(var j=24;j>=0;j--)d+=" L "+X(j)+" "+Y(low[j]);return d+" Z";}
+  function linePath(a){var d="";for(var i=0;i<25;i++)d+=(i?" L ":"M ")+X(i)+" "+Y(a[i]);return d;}
+  function baseArr(){return new Array(25).fill(0);}
+
+  function frame(){
+    var w=disp.wind, re=disp.renew, dis=disp.dis, dm=disp.dem;
+    var minRD=re.map(function(v,i){return Math.min(v,dm[i]);});
+    var battHi=minRD.map(function(v,i){return v+dis[i];});
+    var s="";
+    // TOU 背景
+    [[0,9,"var(--faint)",.05,"離峰"],[9,16,"var(--amber)",.05,"半尖峰"],[16,22,"var(--demand)",.06,"尖峰"],[22,24,"var(--amber)",.05,"半尖峰"]].forEach(function(t){
+      s+='<rect x="'+X(t[0])+'" y="'+MT+'" width="'+(X(t[1])-X(t[0]))+'" height="'+PH+'" fill="'+t[2]+'" fill-opacity="'+t[3]+'"/>';
+      if(t[1]-t[0]>=2)s+='<text class="wm-axt" x="'+((X(t[0])+X(t[1]))/2)+'" y="'+(MT-11)+'" text-anchor="middle" opacity=".75">'+t[4]+'</text>';
+    });
+    // 網格 + Y
+    [0,50,100].forEach(function(v){s+='<line x1="'+ML+'" y1="'+Y(v)+'" x2="'+(Wd-MR)+'" y2="'+Y(v)+'" stroke="var(--line)"/>'+'<text class="wm-ax" x="'+(ML-7)+'" y="'+(Y(v)+3.5)+'" text-anchor="end">'+v+'</text>';});
+    // 填色（下→上）
+    s+='<path d="'+bandPath(baseArr(),w)+'" fill="var(--flow)" fill-opacity=".85"/>';        // 風電
+    s+='<path d="'+bandPath(w,re)+'" fill="var(--wm-solar)" fill-opacity=".82"/>';             // 太陽能
+    s+='<path d="'+bandPath(minRD,battHi)+'" fill="url(#wmHatch)"/>';                           // 儲能放電
+    s+='<path d="'+bandPath(battHi,dm)+'" fill="var(--wm-grey)"/>';                             // 灰電缺口
+    // 發電總曲線（風+光上緣，虛線）
+    s+='<path d="'+linePath(re)+'" fill="none" stroke="var(--flow-ink)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".55"/>';
+    // 用電線
+    s+='<path class="wm-dline" d="'+linePath(dm)+'"/>';
+    // X 軸
+    for(var t2=0;t2<=24;t2+=6)s+='<text class="wm-ax" x="'+X(t2)+'" y="'+(MT+PH+20)+'" text-anchor="middle">'+t2+'</text>';
+    s+='<text class="wm-ax" x="'+(ML+PW/2)+'" y="'+(MT+PH+20)+'" text-anchor="middle" opacity="0"></text>';
+    svg.innerHTML='<defs><pattern id="wmHatch" width="5" height="5" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'+
+      '<rect width="5" height="5" fill="var(--flow)" fill-opacity=".14"/><line x1="0" y1="0" x2="0" y2="5" stroke="var(--flow)" stroke-width="1.7" opacity=".8"/></pattern></defs>'+s;
+  }
+
+  function stats(){
+    var used=0,disch=0,gen=0,dem=0;
+    for(var h=0;h<24;h++){var r=disp.renew[h],d=disp.dem[h];used+=Math.min(r,d);disch+=disp.dis[h];gen+=r;dem+=d;}
+    var matched=used+disch, RE=dem?matched/dem*100:0, paper=dem?Math.min(gen,dem)/dem*100:0;
+    var shortfall=dem-matched, spill=Math.max(0,gen-used-disch);
+    var f0=function(n){return Math.round(n).toLocaleString("en-US");};
+    document.getElementById("wm-re").textContent=Math.round(RE);
+    document.getElementById("wm-fill").style.width=RE+"%";
+    var mk=document.getElementById("wm-mark");mk.style.left=Math.min(100,paper)+"%";mk.setAttribute("data-v",Math.round(paper));
+    document.getElementById("wm-short").textContent=f0(shortfall);
+    document.getElementById("wm-spill").textContent=f0(spill);
+    document.getElementById("wm-gapnote").innerHTML="帳面（日總量）RE "+Math.round(paper)+"%，逐時實際 "+Math.round(RE)+"%——差距就是<b style='color:var(--muted)'>對不上時間</b>的部分。";
+  }
+
+  function easeOut(t){return 1-Math.pow(1-t,3);}
+  function tweenTo(mode,dur){
+    var tg=target(mode), from={wind:disp.wind.slice(),renew:disp.renew.slice(),dis:disp.dis.slice(),dem:disp.dem.slice()};
+    if(reduce||dur<=0){disp=tg;frame();stats();return;}
+    var t0=performance.now();
+    requestAnimationFrame(function step(now){
+      var k=Math.min(1,(now-t0)/dur),e=easeOut(k);
+      ["wind","renew","dis","dem"].forEach(function(key){for(var i=0;i<25;i++)disp[key][i]=from[key][i]+(tg[key][i]-from[key][i])*e;});
+      frame();stats();
+      if(k<1)requestAnimationFrame(step); else disp=tg;
+    });
+  }
+
+  function setMode(mode){
+    curMode=mode;
+    Array.prototype.forEach.call(document.querySelectorAll("#wm-seg button"),function(b){b.classList.toggle("on",b.getAttribute("data-mode")===mode);});
+    document.getElementById("lg-solar").style.opacity=(mode==="wind")?.32:1;
+    document.getElementById("lg-batt").style.opacity=(mode==="wss")?1:.32;
+    document.getElementById("wm-hint").textContent=MODES[mode].hint;
+    document.getElementById("wm-take").innerHTML='<b>看到了嗎：</b>'+MODES[mode].take;
+    tweenTo(mode,620);
+  }
+  document.getElementById("wm-seg").addEventListener("click",function(e){var b=e.target.closest("button");if(b)setMode(b.getAttribute("data-mode"));});
+
+  /* hover 追蹤 */
+  var tip=document.getElementById("wm-tip"), wrap=svg.parentNode;
+  svg.addEventListener("mousemove",function(e){
+    var r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)/r.width*Wd;
+    var h=Math.round((sx-ML)/PW*24); if(h<0||h>23){tip.style.opacity=0;return;}
+    var w=wind[h],so=(curMode==="wind"?0:solar[h]),d=demand[h],re=w+so,m=Math.min(re,d),g=Math.max(0,d-m);
+    var rows='<div class="hh">'+h+":00–"+(h+1)+':00</div>'+
+      '<div class="r"><span>風電</span><span>'+w+'</span></div>'+
+      (curMode!=="wind"?'<div class="r"><span>太陽能</span><span>'+so+'</span></div>':'')+
+      '<div class="r"><span>用電</span><span>'+d+'</span></div>'+
+      '<div class="r"><span style="color:var(--flow)">匹配</span><span>'+m+'</span></div>'+
+      (g>0?'<div class="r"><span style="color:var(--muted)">缺口</span><span>'+g+'</span></div>':'');
+    tip.innerHTML=rows;
+    var px=(e.clientX-r.left)/r.width*wrap.clientWidth;
+    tip.style.left=Math.max(70,Math.min(wrap.clientWidth-70,px))+"px";
+    tip.style.top=(e.clientY-r.top)/r.height*wrap.clientHeight-tip.offsetHeight-14+"px";
+    tip.style.opacity=1;
+  });
+  svg.addEventListener("mouseleave",function(){tip.style.opacity=0;});
+
+  /* 首次進入視野再播放進場（從 0 長上來 + RE 數字跑上去） */
+  setMode("wind"); frame(); // 靜態底稿
+  disp={wind:Z(),renew:Z(),dis:Z(),dem:Z()}; frame(); stats();
+  var played=false;
+  function play(){if(played)return;played=true;document.getElementById("lg-solar").style.opacity=.32;document.getElementById("lg-batt").style.opacity=.32;tweenTo("wind",950);}
+  var io2=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){play();io2.disconnect();}});},{threshold:.25});
+  io2.observe(document.getElementById("wm-sec"));
 })();
 </script>
