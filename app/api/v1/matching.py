@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, solver_slot
 from app.core.config import settings
 from app.matching.optimizer import OptimizeOptions
+from app.schemas.hourly_matching import HourlyMatchingResult
 from app.schemas.matching import (
     MatchingResultRead,
     MatchingRunCreate,
@@ -17,8 +18,13 @@ from app.schemas.matching import (
 from app.schemas.optimization import OptimizationResult
 from app.schemas.scenario import ScenarioResult
 from app.schemas.slot_matching import SlotMatchingResult
+from app.services import (
+    hourly_matching_service,
+    optimize_service,
+    scenario_service,
+    slot_matching_service,
+)
 from app.services import matching_service as svc
-from app.services import optimize_service, scenario_service, slot_matching_service
 from app.services.scenario_service import ScenarioRequest
 
 router = APIRouter(prefix="/matching", tags=["matching"])
@@ -188,3 +194,19 @@ def slots(
 ) -> SlotMatchingResult:
     """Per-time-slot (TOU) matching for a period (compute-only)."""
     return slot_matching_service.compute_slot_outcome(db, period)
+
+
+@router.get("/hourly", response_model=HourlyMatchingResult)
+def hourly(
+    period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
+    customer_id: int | None = Query(
+        default=None, description="Narrow the customers list to one id"
+    ),
+    db: Session = Depends(get_db),
+) -> HourlyMatchingResult:
+    """Hourly (24/7 CFE) time-coincident matching for a period (compute-only).
+
+    Only the per-hour overlap of modeled wind generation and load counts as
+    matched green; reports the true CFE% against the paper (monthly-netting)
+    figure. Curves are typical-day modeled, not measured."""
+    return hourly_matching_service.compute_hourly_outcome(db, period, customer_id)
