@@ -87,6 +87,10 @@ def compute_outcome(db: Session, period: str) -> MatchingOutcome:
             priority=c.priority,
             contracted_energy_mwh=c.contracted_energy_mwh,
             contracted_percentage=c.contracted_percentage,
+            monthly_shares=c.monthly_shares,
+            min_offtake_percent=c.min_offtake_percent,
+            price_escalation_percent=c.price_escalation_percent,
+            price_base_year=c.price_base_year,
         )
         for c in db.execute(select(Contract).order_by(Contract.id)).scalars()
     ]

@@ -9,6 +9,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.matching.contract_terms import monthly_volume_cap
 from app.models import Contract, Customer, WindFarm
 from app.models.enums import ContractStatus
 from app.schemas.risk import RiskAlert, RiskCounts, RiskReport
@@ -132,8 +133,11 @@ def compute_contract_risks(
         if c.status != ContractStatus.ACTIVE:
             continue
         caps: list[float] = []
-        if c.contracted_energy_mwh:
-            caps.append(c.contracted_energy_mwh)
+        vol = monthly_volume_cap(
+            c.contracted_energy_mwh, c.monthly_shares, int(period.split("-")[1])
+        )
+        if vol:
+            caps.append(vol)
         if c.contracted_percentage:
             caps.append(
                 c.contracted_percentage / 100.0 * farm_gen.get(c.wind_farm_id, 0.0)

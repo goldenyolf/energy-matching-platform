@@ -119,7 +119,7 @@ def optimize_period(
 
     def cap(c: ContractInput) -> float:
         gen = generation.get(c.wind_farm_id, 0.0)
-        lim = _contract_limit(c, gen)
+        lim = _contract_limit(c, gen, period_start.month)
         if lim is None:
             return max(0.0, min(gen, consumption.get(c.customer_id, 0.0)))
         return max(0.0, lim)
@@ -230,7 +230,9 @@ def optimize_period(
     for c in eligible:
         v = alloc_val[c.contract_id]
         gross_margin += v * _KWH * margin(c)
-        lim = _contract_limit(c, generation.get(c.wind_farm_id, 0.0))
+        lim = _contract_limit(
+            c, generation.get(c.wind_farm_id, 0.0), period_start.month
+        )
         outcome.allocations.append(
             Allocation(
                 contract_id=c.contract_id,

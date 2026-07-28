@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from app.matching.contract_terms import monthly_volume_cap
+
 # Floating-point tolerance for "is this the binding constraint" comparisons.
 _EPS = 1e-9
 
@@ -54,6 +56,10 @@ class ContractInput:
     contracted_energy_mwh: float | None = None
     contracted_percentage: float | None = None
     price_per_kwh: float | None = None
+    monthly_shares: list[float] | None = None
+    min_offtake_percent: float | None = None
+    price_escalation_percent: float | None = None
+    price_base_year: int | None = None
 
 
 @dataclass
@@ -124,11 +130,18 @@ def _is_eligible(
     return None
 
 
-def _contract_limit(contract: ContractInput, farm_generation: float) -> float | None:
-    """The contract's monthly allocation cap (``None`` = uncapped)."""
+def _contract_limit(
+    contract: ContractInput, farm_generation: float, month: int
+) -> float | None:
+    """The contract's cap for this month (``None`` = uncapped). The annual
+    contracted volume is spread across months by the contract's shape (flat
+    1/12 by default); the farm-share cap is applied on top."""
     limits: list[float] = []
-    if contract.contracted_energy_mwh is not None:
-        limits.append(contract.contracted_energy_mwh)
+    vol = monthly_volume_cap(
+        contract.contracted_energy_mwh, contract.monthly_shares, month
+    )
+    if vol is not None:
+        limits.append(vol)
     if contract.contracted_percentage is not None:
         limits.append(contract.contracted_percentage / 100.0 * farm_generation)
     return min(limits) if limits else None
@@ -218,7 +231,7 @@ def match_period(
         customer_remaining = consumption.get(
             contract.customer_id, 0.0
         ) - allocated_to_customer.get(contract.customer_id, 0.0)
-        limit = _contract_limit(contract, farm_gen)
+        limit = _contract_limit(contract, farm_gen, period_start.month)
 
         candidates = [max(0.0, farm_remaining), max(0.0, customer_remaining)]
         if limit is not None:

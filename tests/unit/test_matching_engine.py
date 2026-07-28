@@ -28,7 +28,11 @@ def contract(
     status="active",
     start=date(2023, 1, 1),
     end=date(2030, 1, 1),
+    monthly_shares=None,
 ):
+    # ``energy`` here is the desired MONTHLY cap; contracted_energy_mwh is an
+    # annual volume, so store 12× — with the default flat 1/12 share the single
+    # test month's cap is exactly ``energy``.
     return ContractInput(
         contract_id=cid,
         contract_number=f"C{cid}",
@@ -38,8 +42,9 @@ def contract(
         end_date=end,
         status=status,
         priority=priority,
-        contracted_energy_mwh=energy,
+        contracted_energy_mwh=None if energy is None else energy * 12,
         contracted_percentage=pct,
+        monthly_shares=monthly_shares,
     )
 
 
@@ -67,6 +72,51 @@ def test_volume_contract_allocates_fixed_energy():
         [contract(1, 1, 1, energy=250)],
     )
     assert out.allocations[0].allocated_mwh == pytest.approx(250)
+
+
+def test_annual_volume_is_spread_across_months():
+    # 1200 MWh annual, flat 1/12 → 100 MWh cap in any single month.
+    out = run(
+        [FarmSupply(1, 1000)],
+        [CustomerDemand(1, 1000)],
+        [
+            ContractInput(
+                contract_id=1,
+                contract_number="C1",
+                wind_farm_id=1,
+                customer_id=1,
+                start_date=date(2023, 1, 1),
+                end_date=date(2030, 1, 1),
+                status="active",
+                contracted_energy_mwh=1200.0,
+            )
+        ],
+    )
+    assert out.allocations[0].allocated_mwh == pytest.approx(100.0)
+
+
+def test_monthly_shares_weight_the_cap():
+    # A winter-heavy shape puts more of the annual 1400 MWh into January.
+    shares = [3.0] + [1.0] * 11  # Jan weight 3 of total 14
+    out = run(
+        [FarmSupply(1, 5000)],
+        [CustomerDemand(1, 5000)],
+        [
+            ContractInput(
+                contract_id=1,
+                contract_number="C1",
+                wind_farm_id=1,
+                customer_id=1,
+                start_date=date(2023, 1, 1),
+                end_date=date(2030, 1, 1),
+                status="active",
+                contracted_energy_mwh=1400.0,
+                monthly_shares=shares,
+            )
+        ],
+    )
+    # Jan share = 3/14 → 1400 × 3/14 = 300 MWh
+    assert out.allocations[0].allocated_mwh == pytest.approx(300.0)
 
 
 def test_both_caps_use_the_tighter_one():
