@@ -9,9 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.matching.contract_terms import min_offtake_mwh, monthly_volume_cap
+from app.models import Contract
+from app.models.enums import ContractStatus
 from app.schemas.settlement import (
     SettlementParty,
     SettlementResult,
@@ -22,8 +26,30 @@ from app.services.customer_optimization_service import (
     CustomerOptimizeOptions,
     compute_customer_optimization,
 )
+from app.services.matching_service import period_bounds
 
 _KWH = 1000.0
+
+
+def _take_or_pay_floor(db: Session, customer_id: int, period: str) -> float:
+    """Sum of this month's take-or-pay floors across the customer's active,
+    in-force volume contracts (MWh). Percentage-only contracts have no volume
+    floor and are skipped."""
+    start, end = period_bounds(period)
+    month = start.month
+    floor = 0.0
+    for c in db.execute(
+        select(Contract).where(Contract.customer_id == customer_id)
+    ).scalars():
+        if (
+            c.status != ContractStatus.ACTIVE
+            or c.start_date > end
+            or c.end_date < start
+        ):
+            continue
+        cap = monthly_volume_cap(c.contracted_energy_mwh, c.monthly_shares, month)
+        floor += min_offtake_mwh(cap, c.min_offtake_percent)
+    return floor
 
 
 @dataclass(frozen=True)
@@ -80,12 +106,19 @@ def compute_settlement(
             )
         )
 
+    # Take-or-pay: the buyer pays for any guaranteed monthly volume it did not
+    # receive, at the transfer price. The retailer collects it as margin (the
+    # farm produced nothing for it).
+    top_floor = _take_or_pay_floor(db, customer_id, period)
+    top_shortfall = max(0.0, top_floor - green_total)
+    top_charge = top_shortfall * _KWH * price
+
     green_transfer_cost = co.seller.sales_revenue
     wheeling_fee = green_total * _KWH * wheeling
     grey_cost = sum(row.grey_cost for row in slots)
-    customer_payable = green_transfer_cost + wheeling_fee
+    customer_payable = green_transfer_cost + wheeling_fee + top_charge
     farm_receivable = co.seller.procurement_cost
-    retailer_margin = green_transfer_cost - farm_receivable - wheeling_fee
+    retailer_margin = green_transfer_cost - farm_receivable - wheeling_fee + top_charge
     margin_pct = (
         retailer_margin / customer_payable * 100.0 if customer_payable > 0 else 0.0
     )
@@ -119,6 +152,8 @@ def compute_settlement(
             green_transfer_cost=round(green_transfer_cost, 2),
             wheeling_fee=round(wheeling_fee, 2),
             grey_cost=round(grey_cost, 2),
+            take_or_pay_shortfall_mwh=round(top_shortfall, 3),
+            take_or_pay_charge=round(top_charge, 2),
             customer_payable=round(customer_payable, 2),
             farm_receivable=round(farm_receivable, 2),
             retailer_margin=round(retailer_margin, 2),

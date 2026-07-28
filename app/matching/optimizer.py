@@ -15,6 +15,7 @@ from datetime import date
 
 import pulp
 
+from app.matching.contract_terms import effective_price
 from app.matching.engine import (
     _EPS,
     Allocation,
@@ -112,7 +113,15 @@ def optimize_period(
         return val if val is not None else options.default_feed_in_price_per_kwh
 
     def price(c: ContractInput) -> float:
-        return c.price_per_kwh if c.price_per_kwh is not None else feedin(c)
+        if c.price_per_kwh is None:
+            return feedin(c)
+        # Apply the contract's annual CPI escalation for this period's year.
+        return effective_price(
+            c.price_per_kwh,
+            c.price_escalation_percent,
+            c.price_base_year,
+            period_start.year,
+        )
 
     def margin(c: ContractInput) -> float:
         return price(c) - feedin(c)

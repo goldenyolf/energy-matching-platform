@@ -15,6 +15,7 @@ from datetime import date
 
 import pulp
 
+from app.matching.contract_terms import monthly_volume_cap
 from app.matching.engine import (
     _EPS,
     ContractInput,
@@ -187,9 +188,12 @@ def optimize_slots(
     for c in eligible:
         total_c = pulp.lpSum(alloc[(c.contract_id, s)] for s in SLOT_ORDER)
         use_cap = sum(slot_cap(c, s) for s in SLOT_ORDER)
-        if c.contracted_energy_mwh is not None:
-            prob += total_c <= c.contracted_energy_mwh
-            use_cap = min(use_cap, c.contracted_energy_mwh)
+        vol_cap = monthly_volume_cap(
+            c.contracted_energy_mwh, c.monthly_shares, period_start.month
+        )
+        if vol_cap is not None:
+            prob += total_c <= vol_cap
+            use_cap = min(use_cap, vol_cap)
         prob += total_c <= use_cap * use[c.contract_id]
         floor = (
             options.min_site_allocation_percent

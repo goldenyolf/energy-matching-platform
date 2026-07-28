@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import NotFoundError
+from app.matching.contract_terms import effective_price
 from app.matching.engine import ContractInput, CustomerDemand, FarmSupply
 from app.matching.optimizer import OptimizeOptions, optimize_period
 from app.matching.slot_engine import SlotCustomerDemand, SlotFarmSupply
@@ -230,7 +231,12 @@ def _compute_slot(
             return options.transfer_price_per_kwh
         c = contracts_orm.get(contract_id)
         p = c.price_per_kwh if c else None
-        return p if p is not None else feed_of(farm_id)
+        if p is None or c is None:
+            return feed_of(farm_id)
+        # Apply the contract's annual CPI escalation for this period's year.
+        return effective_price(
+            p, c.price_escalation_percent, c.price_base_year, int(period[:4])
+        )
 
     focus = [
         a
@@ -395,7 +401,12 @@ def _compute_monthly(
             return options.transfer_price_per_kwh
         c = contracts_orm.get(contract_id)
         p = c.price_per_kwh if c else None
-        return p if p is not None else feed_of(farm_id)
+        if p is None or c is None:
+            return feed_of(farm_id)
+        # Apply the contract's annual CPI escalation for this period's year.
+        return effective_price(
+            p, c.price_escalation_percent, c.price_base_year, int(period[:4])
+        )
 
     focus = [
         a

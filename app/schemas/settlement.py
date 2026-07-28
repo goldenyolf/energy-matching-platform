@@ -28,6 +28,9 @@ class SettlementTotals(BaseModel):
     green_transfer_cost: float
     wheeling_fee: float
     grey_cost: float
+    # Take-or-pay: buyer pays for any guaranteed volume not delivered this period.
+    take_or_pay_shortfall_mwh: float = 0.0
+    take_or_pay_charge: float = 0.0
     customer_payable: float
     farm_receivable: float
     retailer_margin: float

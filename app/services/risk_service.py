@@ -9,7 +9,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.matching.contract_terms import monthly_volume_cap
+from app.matching.contract_terms import min_offtake_mwh, monthly_volume_cap
 from app.models import Contract, Customer, WindFarm
 from app.models.enums import ContractStatus
 from app.schemas.risk import RiskAlert, RiskCounts, RiskReport
@@ -148,6 +148,27 @@ def compute_contract_risks(
         if expected <= 0:
             continue
         dv = delivered.get(c.id, 0.0)
+        # Take-or-pay: delivered below the guaranteed volume floor → the buyer
+        # pays for undelivered energy. Flag it (high severity — it has a cost).
+        floor = min_offtake_mwh(vol, c.min_offtake_percent)
+        if floor > 0 and dv + 1e-6 < floor:
+            gap = floor - dv
+            alerts.append(
+                RiskAlert(
+                    severity="high",
+                    category="take_or_pay",
+                    contract_number=c.contract_number,
+                    wind_farm_code=fcode(c),
+                    customer_code=ccode(c),
+                    title="保證量未達 (take-or-pay)",
+                    detail=(
+                        f"{c.contract_number} 於 {period} 實送 {round(dv, 1)} MWh,"
+                        f"低於保證量 {round(floor, 1)} MWh,買方須為差額 "
+                        f"{round(gap, 1)} MWh 付費。"
+                    ),
+                    suggested_action="增加供給或調整優先序;否則將產生保證量差額費用。",
+                )
+            )
         short_pct = (expected - dv) / expected * 100.0
         if short_pct > 5.0:
             sev = (
