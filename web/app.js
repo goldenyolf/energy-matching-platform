@@ -1210,6 +1210,9 @@
     html += '<div class="rows">' +
       erow("綠電轉供費", money(t.green_transfer_cost), "NTD") +
       erow("台電輸配費", "+" + money(t.wheeling_fee), "NTD") +
+      (t.take_or_pay_charge > 0
+        ? erow("保證量差額 (take-or-pay)", "+" + money(t.take_or_pay_charge) + "（未達 " + nfmt(t.take_or_pay_shortfall_mwh, 0) + " MWh）", "NTD", "prem")
+        : "") +
       erowTotal("客戶應付合計", money(t.customer_payable), "NTD", "pos") +
       erow("風場應收", money(t.farm_receivable), "NTD") +
       erow("售電業毛利", money(t.retailer_margin) + " (" + pct(t.retailer_margin_percent) + "%)", "NTD", t.retailer_margin >= 0 ? "pos" : "neg") +
@@ -1482,6 +1485,9 @@
   var contractFarmOpts = [];
   var contractCustOpts = [];
   var CONTRACT_STATUS = [["active", "生效中"], ["pending", "待生效"], ["expired", "已到期"], ["terminated", "已終止"]];
+  // 風電季節曲線權重(冬高夏低);後端會正規化。前端只送平均分攤(null)或此曲線。
+  var WIND_WEIGHTS = [1.35, 1.25, 1.05, 0.85, 0.70, 0.55, 0.55, 0.60, 0.85, 1.15, 1.30, 1.40];
+  var SHARE_OPTS = [["flat", "平均分攤 (每月相同)"], ["wind", "風電季節曲線 (冬高夏低)"]];
   var CONTRACT_FIELDS = [
     { key: "contract_number", label: "合約編號", createOnly: true, required: true, placeholder: "PPA-2024-001" },
     { key: "wind_farm_id", label: "發電案場", type: "select", options: contractFarmOpts, required: true, createOnly: true },
@@ -1489,8 +1495,12 @@
     { key: "start_date", label: "起始日", type: "date", required: true, placeholder: "2024-01-01" },
     { key: "end_date", label: "結束日", type: "date", required: true, placeholder: "2033-12-31" },
     { key: "contracted_energy_mwh", label: "合約年電量 (MWh)", type: "number" },
+    { key: "monthly_shares", label: "月別配比", type: "select", options: SHARE_OPTS },
     { key: "contracted_percentage", label: "合約比例 (%)", type: "number", min: 0, max: 100 },
+    { key: "min_offtake_percent", label: "保證量 take-or-pay (% 月上限)", type: "number", min: 0, max: 100 },
     { key: "price_per_kwh", label: "轉供價格 (NTD/kWh)", type: "number" },
+    { key: "price_escalation_percent", label: "價格年漲幅 CPI (%/年)", type: "number", min: 0, max: 100 },
+    { key: "price_base_year", label: "漲幅基準年", type: "number", step: "1", placeholder: "2024" },
     { key: "priority", label: "優先序 (小=優先)", type: "number", step: "1" },
     { key: "status", label: "狀態", type: "select", options: CONTRACT_STATUS },
   ];
@@ -1604,12 +1614,16 @@
     var create = { farm: api.createFarm, customer: api.createCustomer, meter: api.createMeter, contract: api.createContract }[kind];
     var upd = { farm: api.updateFarm, customer: api.updateCustomer, meter: api.updateMeter, contract: api.updateContract }[kind];
     var fields = cfg.filter(function (f) { return !(item && f.createOnly); });
+    // 月別配比:陣列 ↔ 下拉值("wind"/"flat")互轉,供表單顯示。
+    var values = item ? Object.assign({}, item) : {};
+    if (kind === "contract") values.monthly_shares = item && item.monthly_shares ? "wind" : "flat";
     showFormModal({
       title: (item ? "編輯" : "新增") + ENTITY_NAME[kind],
-      fields: fields, values: item || {}, submitLabel: item ? "儲存" : "新增",
+      fields: fields, values: values, submitLabel: item ? "儲存" : "新增",
       note: ENTITY_NOTE[kind],
       simulate: kind === "meter" ? simulateMeterValues : undefined,
       onSubmit: function (vals, done) {
+        if (kind === "contract") vals.monthly_shares = vals.monthly_shares === "wind" ? WIND_WEIGHTS : null;
         if (preset) Object.keys(preset).forEach(function (k) { vals[k] = preset[k]; });
         var p = item ? upd(item.id, vals) : create(vals);
         p.then(function () { done(); toast((item ? "已儲存" : "已新增") + ENTITY_NAME[kind]); route(); })
