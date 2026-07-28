@@ -484,7 +484,7 @@
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
       html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電與容量因數" + "</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90" + infoTip("cf") + "</th><th>躉售價</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)" + infoTip("expP50") + "</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90" + infoTip("cf") + "</th><th>躉售價" + infoTip("feedIn") + "</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)" + infoTip("expP50") + "</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
@@ -1236,8 +1236,8 @@
         : "") +
       erowTotal("客戶應付合計", money(t.customer_payable), "NTD", "pos") +
       erow("風場應收", money(t.farm_receivable), "NTD") +
-      erow("售電業毛利", money(t.retailer_margin) + " (" + pct(t.retailer_margin_percent) + "%)", "NTD", t.retailer_margin >= 0 ? "pos" : "neg") +
-      erow("灰電補足（參考）", money(t.grey_cost), "NTD", "prem") +
+      erow("售電業毛利", money(t.retailer_margin) + " (" + pct(t.retailer_margin_percent) + "%)", "NTD", t.retailer_margin >= 0 ? "pos" : "neg", null, "retailerMargin") +
+      erow("灰電補足（參考）", money(t.grey_cost), "NTD", "prem", null, "greyTopup") +
       '</div>';
     html += '<div class="slotnote">' + iconInfo() + "減碳量 <b>" + nfmt(t.carbon_avoided_tco2e, 0) + " tCO₂e</b>(綠電 " + nfmt(t.green_mwh, 0) + " MWh × " + price(r.grid_emission_factor_kg_per_kwh) + " kgCO₂e/kWh)。灰電補足為客戶剩餘用電成本,僅供參考、不計入應付。</div>";
     html += "</section>";
@@ -1405,7 +1405,7 @@
       erow("— 綠電用電量", nfmt(buyer.green_mwh, 0), "MWh", "", "color:var(--buyer)") +
       erow("— 灰電用電量", nfmt(buyer.grey_mwh, 0), "MWh") +
       erow("用電平均單價", price(buyer.avg_price_per_kwh), "NTD/kWh") +
-      erowTotal("增加用電成本(綠電溢價)", signed(buyer.added_cost), "NTD", "prem") +
+      erowTotal("增加用電成本(綠電溢價)", signed(buyer.added_cost), "NTD", "prem", "addedCost") +
       "</div></section>";
 
     html += '</div><div class="stack">';
@@ -1480,12 +1480,12 @@
     return '<div class="kpi"><span class="k">' + esc(k) + '</span><span class="v ' + (cls || "") + ' num">' + v +
       '</span><span class="sub ' + (subcls || "") + '">' + esc(sub) + "</span></div>";
   }
-  function erow(lab, val, u, valcls, style) {
-    return '<div class="row"><span class="lab">' + esc(lab) + '</span><span class="val num ' + (valcls || "") + '"' + (style ? ' style="' + style + '"' : "") + ">" +
+  function erow(lab, val, u, valcls, style, tip) {
+    return '<div class="row"><span class="lab">' + esc(lab) + (tip ? infoTip(tip) : "") + '</span><span class="val num ' + (valcls || "") + '"' + (style ? ' style="' + style + '"' : "") + ">" +
       val + (u ? '<span class="u">' + esc(u) + "</span>" : "") + "</span></div>";
   }
-  function erowTotal(lab, val, u, valcls) {
-    return '<div class="row total"><span class="lab">' + esc(lab) + '</span><span class="val num ' + (valcls || "") + '">' +
+  function erowTotal(lab, val, u, valcls, tip) {
+    return '<div class="row total"><span class="lab">' + esc(lab) + (tip ? infoTip(tip) : "") + '</span><span class="val num ' + (valcls || "") + '">' +
       val + (u ? '<span class="u">' + esc(u) + "</span>" : "") + "</span></div>";
   }
   function iconMoney() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'; }
@@ -1509,6 +1509,41 @@
         "<p><b>預期年發電（P50）</b>＝ 裝置容量(MW) × 8760 小時 × 容量因數 P50(%)。</p>" +
         "<p>代表「一般風況年」的預估年發電量；表格右側的「<b>達成</b>」＝ 實際發電 ÷ 這個預期。</p>" +
         '<p class="tip-eg">若改用 P90 容量因數，得到的是保守年發電（數字較低）。</p>',
+    },
+    feedIn: {
+      title: "躉售價（FIT）",
+      html:
+        "<p><b>躉售價（Feed-in Tariff）</b>＝再生能源躉購費率，台電依 20 年費率向案場「保證收購」每度電的價格。</p>" +
+        "<p>在本平台，躉售價當作<b>案場的售電成本基準</b>（把電賣給企業客戶時，案場少賺的機會成本）；售電業毛利＝綠電售價 − 躉售成本。</p>" +
+        '<p class="tip-eg">注意：這不是「轉供價」（轉供價是企業客戶付的價）。</p>',
+    },
+    addedCost: {
+      title: "增加用電成本（綠電溢價）",
+      html:
+        "<p>＝客戶改用綠電後，比原本全部向台電買灰電<b>多付</b>的錢。</p>" +
+        "<p>綠電（PPA）每度通常比灰電略貴，這個差額 × 綠電度數就是溢價；反映「為了達成 RE 目標付出的代價」。</p>" +
+        '<p class="tip-eg">正值＝多付；若綠電比灰電便宜也可能為負（省錢）。</p>',
+    },
+    greyTopup: {
+      title: "灰電補足（參考）",
+      html:
+        "<p>綠電不足以覆蓋全部用電時，剩餘用電仍向台電買「<b>灰電</b>」補足。</p>" +
+        "<p>這欄是那部分灰電的用電成本（依尖/半/離峰 TOU 電價估算）。</p>" +
+        '<p class="tip-eg">僅供參考、<b>不計入本結算單應付</b>——結算單只計綠電轉供。</p>',
+    },
+    retailerMargin: {
+      title: "售電業毛利",
+      html:
+        "<p>售電業（本平台使用者）從轉供賺的<b>毛利</b>＝綠電轉供收入 − 向案場採購的躉售成本。</p>" +
+        "<p>百分比＝毛利 ÷ 轉供收入。</p>" +
+        '<p class="tip-eg">為毛利、非淨利——尚未計營運、台電輸配等其他費用。</p>',
+    },
+    paperVsCfe: {
+      title: "帳面 RE% vs 逐時 CFE%",
+      html:
+        "<p><b>帳面 RE%</b>：以「月／年總量淨額」計——只要期間買的綠電總量 ≥ 用電就算 100%，不論時間對不對得上。</p>" +
+        "<p><b>逐時 CFE%</b>：只有「同一小時內發電與用電<b>重疊</b>」的部分才算（24/7 CFE）；發電時沒人用、用電時沒風都不算。</p>" +
+        '<p class="tip-eg">逐時 CFE% 通常低於帳面，差距＝時間錯配。更嚴的國際標準（如 Google 24/7）看的是逐時。</p>',
     },
   };
   function infoTip(key) {
