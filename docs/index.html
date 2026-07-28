@@ -249,7 +249,7 @@
   <div class="wrap">
     <div class="shead"><span class="snum hook">破題</span><h2>帳面上綠電滿滿，實際<span style="color:var(--amber)">對得上時間</span>的才算數</h2></div>
     <p class="sub">合約寫「佔某風場 70%」，或看「日總量」，這天的 RE 都很漂亮。但風電<b>夜裡強、白天弱</b>，
-      跟工廠<b>白天的用電尖峰</b>錯開了——真正<b>逐時匹配</b>到的綠電少很多。
+      而半導體晶圓廠是<b>24 小時不停的高用電</b>——白天風一弱，缺口就來了；真正<b>逐時匹配</b>到的綠電少很多。
       <b style="color:var(--ink)">按下面切換，看看加了太陽能、加了儲能，真綠電怎麼一路補起來。</b></p>
 
     <div class="wm-card">
@@ -287,6 +287,7 @@
     </div>
 
     <p class="wm-take" id="wm-take"></p>
+    <p style="font-size:12px;color:var(--faint);margin-top:8px">用電曲線＝半導體晶圓廠 24h 連續高基載典型（平台旗艦客群）；發電＝風／光典型日型。數值為模擬示意，皆由曲線即時計算。</p>
   </div>
 </section>
 
@@ -541,16 +542,18 @@
 /* ── 破題互動圖：單日 風/光/儲 逐時匹配 ── */
 (function(){
   var reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var wind   =[70,72,71,68,64,58,50,42,36,32,30,29,30,32,34,36,34,30,28,30,36,46,58,66];
-  var demand =[34,32,30,30,34,40,50,64,76,84,88,90,88,86,84,82,84,86,82,74,64,54,44,38];
-  var solar  =[0,0,0,0,0,2,8,18,30,42,50,54,55,52,46,36,24,12,4,0,0,0,0,0];
+  /* 用電：半導體晶圓廠典型負載——24h 連續、高基載、白天略高（示意）。
+     發電：風電夜強日弱、太陽能日間鐘形（典型日型，示意）。*/
+  var wind   =[96,100,98,92,84,72,60,50,44,40,38,40,43,46,48,50,47,42,40,44,52,66,82,92];
+  var demand =[82,80,79,79,81,84,88,92,95,97,97,96,95,95,96,96,95,94,92,90,88,86,84,82];
+  var solar  =[0,0,0,0,0,3,10,24,40,54,64,70,72,66,56,42,26,12,4,0,0,0,0,0];
   var Z=function(){return new Array(25).fill(0);};
   function cyc(a){return a.concat([a[0]]);}                 // 0..24（跨午夜連續）
   var Wc=cyc(wind), Dc=cyc(demand), Sc=cyc(solar);
 
   /* 儲能：時序貪婪充放（夜間風、午間光的多餘 → 補早晚缺口）*/
   function battery(renew){
-    var cap=190, rate=48, soc=0, dis=new Array(24).fill(0);
+    var cap=200, rate=55, soc=0, dis=new Array(24).fill(0);
     for(var h=0;h<24;h++){
       var net=renew[h]-demand[h];
       if(net>0){ soc=Math.min(cap, soc+Math.min(net,rate)); }
@@ -564,8 +567,8 @@
   }
 
   var MODES={
-    wind:{hint:"風電夜間強、白天弱——跟工廠白天用電尖峰完全錯開。",
-      take:'只有風電時，帳面日總量看似很高，但<b>逐時真正匹配只有 <span class="arrow">55%</span></b>——白天到傍晚的缺口只能買灰電，夜間多餘的綠電外溢浪費。'},
+    wind:{hint:"風電夜間強、白天弱；半導體廠卻是 24h 高基載，白天風一弱就出現大缺口。",
+      take:'只有風電時，帳面日總量看似很高，但<b>逐時真正匹配只有 <span class="arrow">65</span>%</b>——白天到傍晚的缺口只能買灰電（半導體廠 24h 不停電），夜間多餘的綠電外溢浪費。'},
     ws:{hint:"太陽能白天發電，正好補上風電最弱、用電最高的時段。",
       take:'加入太陽能後，白天的缺口被<b>風光互補</b>大幅填平，逐時 RE 一口氣拉高——這就是為什麼綠電組合要「<span class="arrow">風＋光</span>」而不是只押一種。'},
     wss:{hint:"儲能把夜間風、午間光的多餘電，挪到早晚缺口放出來。",
@@ -573,7 +576,7 @@
   };
 
   var svg=document.getElementById("wm-chart");
-  var Wd=720,Ht=380,ML=40,MR=14,MT=30,MB=34,PW=Wd-ML-MR,PH=Ht-MT-MB,YMAX=100;
+  var Wd=720,Ht=380,ML=40,MR=14,MT=30,MB=34,PW=Wd-ML-MR,PH=Ht-MT-MB,YMAX=125;
   var X=function(h){return ML+h/24*PW;}, Y=function(v){return MT+PH-Math.max(0,v)/YMAX*PH;};
   var disp={wind:Z(),renew:Z(),dis:Z(),dem:Z()}, curMode="wind";
 
