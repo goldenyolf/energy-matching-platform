@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, read_upload, require_write_access
 from app.ingestion import csv_importer
 from app.schemas.common import ImportResult
 from app.schemas.generation import GenerationCreate, GenerationRead
 from app.services import measurements as svc
 
 router = APIRouter(prefix="/generation", tags=["generation"])
+_write = Depends(require_write_access)
 
 
 @router.get("", response_model=list[GenerationRead])
@@ -26,15 +27,20 @@ def list_generation(
     )
 
 
-@router.post("", response_model=GenerationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=GenerationRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[_write],
+)
 def create_generation(payload: GenerationCreate, db: Session = Depends(get_db)):
     return svc.create_generation(db, payload)
 
 
-@router.post("/import", response_model=ImportResult)
+@router.post("/import", response_model=ImportResult, dependencies=[_write])
 async def import_generation(
     file: UploadFile = File(..., description="CSV file of generation rows"),
     db: Session = Depends(get_db),
 ) -> ImportResult:
-    rows = csv_importer.parse_csv(await file.read())
+    rows = csv_importer.parse_csv(await read_upload(file))
     return csv_importer.import_generation(db, rows)

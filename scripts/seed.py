@@ -90,13 +90,34 @@ def _set_demo_defaults(db) -> None:
     db.commit()
 
 
-def seed(source, reset: bool = False, slot_profiles: bool = True) -> None:
+def _already_seeded() -> bool:
+    """True if the DB already holds core data (used by ``--if-empty``)."""
+    from sqlalchemy import func, select
+
+    from app.models import WindFarm
+
+    db = SessionLocal()
+    try:
+        return bool(db.scalar(select(func.count()).select_from(WindFarm)))
+    finally:
+        db.close()
+
+
+def seed(
+    source,
+    reset: bool = False,
+    slot_profiles: bool = True,
+    if_empty: bool = False,
+) -> None:
     if reset:
         import app.models  # noqa: F401  (register tables)
 
         Base.metadata.drop_all(bind=engine)
         print("dropped all tables")
     create_all()
+    if if_empty and _already_seeded():
+        print("DB already seeded — skipping (non-destructive --if-empty).")
+        return
 
     db = SessionLocal()
     try:
@@ -136,6 +157,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed demo data")
     parser.add_argument("--reset", action="store_true", help="drop tables first")
     parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="seed only when the DB has no data yet (non-destructive; safe on boot)",
+    )
+    parser.add_argument(
         "--source",
         choices=["sample", "taipower"],
         default="sample",
@@ -162,7 +188,12 @@ def main() -> None:
         args.source, months=args.months, fetch=args.fetch, csv_path=args.csv_path
     )
     # Synthetic time slots only for the demo sample; real Taipower data is left as-is.
-    seed(source, reset=args.reset, slot_profiles=(args.source == "sample"))
+    seed(
+        source,
+        reset=args.reset,
+        slot_profiles=(args.source == "sample"),
+        if_empty=args.if_empty,
+    )
 
 
 if __name__ == "__main__":

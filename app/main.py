@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
@@ -33,6 +34,14 @@ app = FastAPI(
         "Demo data is simulated; not affiliated with any energy company."
     ),
 )
+
+# Loudly warn if a public deploy left writes wide open (see app/api/deps.py).
+if settings.environment == "production" and not settings.admin_write_token:
+    logging.getLogger("app").warning(
+        "ADMIN_WRITE_TOKEN is unset in production — all create/update/delete/"
+        "import endpoints are OPEN to the public. Set ADMIN_WRITE_TOKEN to "
+        "require an X-Admin-Token header for writes."
+    )
 
 # Health at root (per spec) and under the versioned prefix.
 app.include_router(health_router)

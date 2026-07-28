@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, read_upload, require_write_access
 from app.ingestion import csv_importer
 from app.schemas.common import ImportResult
 from app.schemas.consumption import ConsumptionCreate, ConsumptionRead
 from app.services import measurements as svc
 
 router = APIRouter(prefix="/consumption", tags=["consumption"])
+_write = Depends(require_write_access)
 
 
 @router.get("", response_model=list[ConsumptionRead])
@@ -24,15 +25,20 @@ def list_consumption(
     return svc.list_consumption(db, customer_id=customer_id, limit=limit, offset=offset)
 
 
-@router.post("", response_model=ConsumptionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ConsumptionRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[_write],
+)
 def create_consumption(payload: ConsumptionCreate, db: Session = Depends(get_db)):
     return svc.create_consumption(db, payload)
 
 
-@router.post("/import", response_model=ImportResult)
+@router.post("/import", response_model=ImportResult, dependencies=[_write])
 async def import_consumption(
     file: UploadFile = File(..., description="CSV file of consumption rows"),
     db: Session = Depends(get_db),
 ) -> ImportResult:
-    rows = csv_importer.parse_csv(await file.read())
+    rows = csv_importer.parse_csv(await read_upload(file))
     return csv_importer.import_consumption(db, rows)

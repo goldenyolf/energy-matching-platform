@@ -240,6 +240,33 @@ def test_contract_write_gate(client, monkeypatch):
     assert blocked.status_code == 403
 
 
+def test_import_endpoints_require_token(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_write_token", "secret")
+    gcsv = (
+        "wind_farm_code,period_start,period_end,generated_energy_mwh,data_source\n"
+        "WF-X,2024-01-01,2024-01-31,1,mock\n"
+    )
+    ccsv = (
+        "customer_code,period_start,period_end,consumed_energy_mwh,data_source\n"
+        "C-X,2024-01-01,2024-01-31,1,mock\n"
+    )
+    g = client.post(
+        "/api/v1/generation/import", files={"file": ("g.csv", gcsv, "text/csv")}
+    )
+    assert g.status_code == 403
+    c = client.post(
+        "/api/v1/consumption/import", files={"file": ("c.csv", ccsv, "text/csv")}
+    )
+    assert c.status_code == 403
+    # ...and the correct token lets it through
+    ok = client.post(
+        "/api/v1/generation/import",
+        files={"file": ("g.csv", gcsv, "text/csv")},
+        headers={"X-Admin-Token": "secret"},
+    )
+    assert ok.status_code == 200
+
+
 def test_write_gate_requires_token(client, monkeypatch):
     monkeypatch.setattr(settings, "admin_write_token", "secret")
     # no token → blocked
