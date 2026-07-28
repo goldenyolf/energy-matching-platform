@@ -1216,6 +1216,12 @@
       '<div class="rows"><div class="row"><span class="lab">用電戶</span><span class="val">' + esc(r.company_name) + " (" + esc(r.customer_code) + ")</span></div>" +
       '<div class="row"><span class="lab">供電風場</span><span class="val">' + farms + "</span></div>" +
       '<div class="row"><span class="lab">轉供價 / 輸配費</span><span class="val num">' + price(r.transfer_price_per_kwh) + " / " + price(r.wheeling_fee_per_kwh) + '<span class="u">NTD/kWh</span></span></div></div>';
+    // 時段別供需匹配圖(結算的綠/灰電量 → 用電=綠+灰、已分配=綠)
+    html += '<div class="subhd"><span>時段別供需匹配</span><small>風電進來怎麼對上用電</small></div>' +
+      slotMatchViz((r.slots || []).map(function (s) {
+        var cons = (s.green_mwh || 0) + (s.grey_mwh || 0);
+        return { slot: s.slot, consumption_mwh: cons, allocated_mwh: s.green_mwh || 0, re_percent: cons > 0 ? (s.green_mwh || 0) / cons * 100 : 0 };
+      }));
     html += '<div class="tablewrap"><table><thead><tr><th>時段</th><th>綠電量 (MWh)</th><th>轉供價</th><th>綠電金額</th><th>灰電量 (MWh)</th><th>灰電TOU價</th><th>灰電金額</th></tr></thead><tbody>';
     (r.slots || []).forEach(function (s) {
       html += "<tr><td>" + slotName(s.slot) + "</td><td class=\"num\">" + nfmt(s.green_mwh, 0) + "</td><td class=\"num\">" + price(s.transfer_price_per_kwh) +
