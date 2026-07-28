@@ -32,5 +32,5 @@ jobs:
       - name: Type check (mypy)
         run: .venv/bin/mypy app
 
-      - name: Tests + coverage
-        run: .venv/bin/pytest --cov=app.matching --cov=app.services --cov-report=term-missing
+      - name: Tests + coverage (gate at 90%)
+        run: .venv/bin/pytest --cov=app --cov-report=term-missing --cov-fail-under=90
