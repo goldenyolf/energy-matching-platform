@@ -1307,6 +1307,39 @@
       "</p><button class=\"btn ghost\" onclick=\"location.reload()\">重新載入</button></div>";
   }
 
+  // 三時段供需匹配圖:每段一根長條,高度=用電,綠色=已分配綠電、灰色=缺口(需灰電)
+  function slotMatchViz(rows) {
+    if (!rows || !rows.length) return "";
+    var ord = { peak: 0, half_peak: 1, off_peak: 2 };
+    var slots = rows.slice().sort(function (a, b) { return (ord[a.slot] || 0) - (ord[b.slot] || 0); });
+    var maxC = Math.max.apply(null, slots.map(function (s) { return s.consumption_mwh || 0; }).concat([1]));
+    var W = 560, H = 210, padT = 22, padB = 46, bw = 104, gapW = 56;
+    var left = (W - (bw * slots.length + gapW * (slots.length - 1))) / 2;
+    var base = H - padB, top = padT;
+    var yv = function (v) { return base - (base - top) * (v / maxC); };
+    var defs = "", body = "";
+    slots.forEach(function (s, i) {
+      var x = left + i * (bw + gapW);
+      var cy = yv(s.consumption_mwh || 0), ay = yv(s.allocated_mwh || 0);
+      var re = Math.max(0, s.re_percent || 0);
+      defs += '<clipPath id="scv' + i + '"><rect x="' + x + '" y="' + cy + '" width="' + bw + '" height="' + (base - cy) + '" rx="8"/></clipPath>';
+      body += '<g clip-path="url(#scv' + i + ')">' +
+        '<rect x="' + x + '" y="' + cy + '" width="' + bw + '" height="' + (base - cy) + '" fill="var(--faint)" fill-opacity=".22"/>' +
+        '<rect x="' + x + '" y="' + ay + '" width="' + bw + '" height="' + (base - ay) + '" fill="var(--good)"/></g>';
+      // 缺口分隔線
+      if (s.allocated_mwh < s.consumption_mwh - 0.5)
+        body += '<line x1="' + x + '" y1="' + ay + '" x2="' + (x + bw) + '" y2="' + ay + '" stroke="var(--good)" stroke-width="1.5" opacity=".5"/>';
+      body += '<text x="' + (x + bw / 2) + '" y="' + (cy - 8) + '" text-anchor="middle" style="font-size:15px;font-weight:800;fill:' + (re >= 60 ? "var(--good)" : re >= 40 ? "var(--warn)" : "var(--bad)") + '">' + pct(re, 0) + '%</text>' +
+        '<text x="' + (x + bw / 2) + '" y="' + (base + 20) + '" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--ink)">' + esc(slotName(s.slot)) + '</text>' +
+        '<text x="' + (x + bw / 2) + '" y="' + (base + 37) + '" text-anchor="middle" style="font-size:11px;fill:var(--muted)">綠 ' + nfmt(s.allocated_mwh, 0) + ' / 用 ' + nfmt(s.consumption_mwh, 0) + '</text>';
+    });
+    return '<div class="slotviz"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="三時段供需匹配圖">' +
+      '<defs>' + defs + '</defs>' + body + '</svg>' +
+      '<div class="slotviz-lg"><span><i style="background:var(--good)"></i>已分配綠電</span>' +
+      '<span><i style="background:var(--faint);opacity:.4"></i>缺口(需灰電補足)</span>' +
+      '<span class="slotviz-hint">長條高=該時段用電;綠色越滿代表綠電越對得上該時段</span></div></div>';
+  }
+
   function renderResult(root, r, customer) {
     var seller = r.seller, buyer = r.buyer;
     var reTargetPct = r.re_target_percent;
@@ -1395,7 +1428,9 @@
 
     // 時段別(與經濟同源;綠電受各時段用電上限)
     var slotLabel = { peak: ["尖峰", "s-peak"], half_peak: ["半尖峰", "s-half"], off_peak: ["離峰", "s-off"] };
-    html += '<section class="card"><div class="hd"><h3>時段別達成</h3><span class="aside" style="color:var(--buyer)">台電時間電價</span></div><div class="tablewrap"><table>' +
+    html += '<section class="card"><div class="hd"><h3>時段別供需匹配</h3><span class="aside" style="color:var(--buyer)">台電時間電價 · 風電進來怎麼對上用電</span></div>' +
+      slotMatchViz(r.slot_breakdown) +
+      '<div class="tablewrap"><table>' +
       "<thead><tr><th>時段</th><th>灰電價</th><th>用電量 (MWh)</th><th>綠電分配 (MWh)</th><th>時段 RE</th></tr></thead><tbody>";
     var peakRe = null;
     (r.slot_breakdown || []).forEach(function (b) {

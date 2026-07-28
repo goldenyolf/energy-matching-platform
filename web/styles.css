@@ -144,6 +144,13 @@ button{font-family:inherit}
 .toubar i{display:block;height:100%}
 .toubar i.sp{background:var(--bad)} .toubar i.hp{background:var(--warn)} .toubar i.op{background:var(--good)}
 .toutxt{font-size:11px;color:var(--muted);margin-top:3px;text-align:right;font-variant-numeric:tabular-nums}
+/* 三時段供需匹配圖 */
+.slotviz{padding:18px 18px 6px}
+.slotviz svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
+.slotviz-lg{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.slotviz-lg span{display:flex;align-items:center;gap:7px}
+.slotviz-lg i{width:14px;height:11px;border-radius:3px;display:inline-block}
+.slotviz-hint{color:var(--faint);font-size:11.5px}
 /* toast 通知 + 求解中文字 chip */
 #toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast{display:flex;align-items:center;gap:8px;max-width:min(90vw,420px);padding:10px 15px;border-radius:11px;
