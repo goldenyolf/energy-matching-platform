@@ -68,6 +68,9 @@
   .setrow{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
   .setbtn{cursor:pointer;border:1px solid var(--line2);background:var(--panel2);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
   .setbtn.on{color:#fff} .mlink{display:inline-flex;gap:7px;margin-top:18px;color:var(--brand);font-weight:600;font-size:13px;text-decoration:none}
+  .mbody code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  .decbox{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--pc);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.75;color:var(--muted)}
+  .decbox .hi{color:var(--ink);font-weight:650}
   .foot{padding:0 24px 40px;color:var(--faint);font-size:12px;line-height:1.7}
   .navlink{color:var(--brand);text-decoration:none;font-weight:600}
 </style>
@@ -150,6 +153,7 @@ function openM(id){
     <div class="fld"><div class="fl">目標</div><p>${it.goal}</p></div>
     <div class="fld"><div class="fl">好處 / 為何</div><p>${it.benefit}</p></div>
     <div class="fld"><div class="fl">工項（${it.tasks.length}）</div><ul>${tasks}</ul></div>
+    ${it.decision?`<div class="fld"><div class="fl">🎯 選型建議（決策）</div><div class="decbox">${it.decision}</div></div>`:''}
     ${it.link?`<a class="mlink" href="${it.link}" target="_blank" rel="noopener">↗ 打開相關頁面（線上 Demo）</a>`:''}
    </div>`;
   $('#ov').classList.add('show');

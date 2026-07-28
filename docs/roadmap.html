@@ -93,6 +93,9 @@
   .fld li::before{content:"";position:absolute;left:4px;top:10px;width:6px;height:6px;border-radius:2px;background:var(--pc);opacity:.7}
   .deps{display:flex;gap:8px;flex-wrap:wrap} .depchip{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--muted);cursor:pointer}
   .depchip:hover{color:var(--ink);border-color:var(--brand)}
+  .mbody code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  .decbox{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--pc);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.75;color:var(--muted)}
+  .decbox .hi{color:var(--ink);font-weight:650}
   .mlink{display:inline-flex;gap:7px;margin-top:20px;color:var(--brand);font-weight:600;font-size:13.5px;text-decoration:none}
   .foot{padding:14px 26px 40px;color:var(--faint);font-size:12px;line-height:1.7}
   .themebtn{position:fixed;top:18px;right:22px;z-index:30;width:34px;height:34px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--muted);cursor:pointer;font-size:15px}
@@ -199,6 +202,7 @@ function openM(id){
    <div class="fld"><div class="fl">目標</div><p>${it.goal}</p></div>
    <div class="fld"><div class="fl">好處 / 為何</div><p>${it.benefit}</p></div>
    <div class="fld"><div class="fl">${it.done?'已完成工項':'工項'}（${it.tasks.length}）</div><ul>${tasks}</ul></div>
+   ${it.decision?`<div class="fld"><div class="fl">🎯 選型建議（決策）</div><div class="decbox">${it.decision}</div></div>`:''}
    ${deps?`<div class="fld"><div class="fl">依賴（先做）</div><div class="deps">${deps}</div></div>`:''}
    ${dpts?`<div class="fld"><div class="fl">被誰依賴（下游）</div><div class="deps">${dpts}</div></div>`:''}
    ${it.link?`<a class="mlink" href="${it.link}" target="_blank" rel="noopener">↗ 打開相關頁面（線上 Demo）</a>`:''}

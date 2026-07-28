@@ -102,7 +102,7 @@ window.RM = (function () {
       '一鍵可部署的線上 demo。', '隨時可展示。', ['Dockerfile', '啟動跑 alembic upgrade', 'SPA 資產內容雜湊 cache-busting', 'SEED_ON_START 非破壞'], []),
     T('H2', 'H', 5, '後端部署選型與正式架構', '評估並選定正式後端；建立 prod/staging。',
       '選最適合的後端，離開免費層、近台灣、可靠。', '正式營運的地基。',
-      ['選型評估：Cloud Run(asia-east1) / Fly.io(Tokyo) / AWS ECS+Fargate / Render 付費', '評估準則：近台灣延遲、成本、可靠度、資料落地、CBC CPU-bound、擴展', '初步建議：Cloud Run(asia-east1) 或 Fly.io(Tokyo)＋managed Postgres', 'prod/staging 環境', '離開免費層、避免冷啟動休眠'], ['H1']),
+      ['選型評估與 PoC（Cloud Run / Fly.io / AWS ECS+RDS / Render 付費）', '評估準則：資料落地台灣、延遲、成本、可靠度、CBC CPU-bound、擴展', '定案並記錄決策（見下方選型建議）', '建立 prod / staging 環境', 'Docker 映像 + migration 上線流程', '離開免費層、設 min-instances=1（免冷啟動）', '網域、TLS、健康檢查上線'], ['H1']),
     T('H3', 'H', 5, '資料庫正式化', 'managed Postgres、連線池、備份＋PITR＋還原演練。',
       '資料可靠、救得回。', '避免資料遺失。', ['managed Postgres（Neon 付費/Cloud SQL）', '連線池調校', '自動備份＋PITR', '還原演練紀錄'], ['H2']),
     T('H4', 'H', 5, 'MILP 求解移出請求執行緒', '背景任務佇列＋輪詢，取代同步＋semaphore。',
@@ -123,5 +123,14 @@ window.RM = (function () {
   const byId = {}; ITEMS.forEach(it => byId[it.id] = it);
   const cnt = {}; ITEMS.forEach(it => { cnt[it.a] = (cnt[it.a] || 0) + 1; it.n = cnt[it.a]; });
   ITEMS.forEach(it => it.dependents = []); ITEMS.forEach(it => it.deps.forEach(d => byId[d] && byId[d].dependents.push(it.id)));
+
+  // 選型決策（顯示於卡片 modal 的「選型建議」區塊）
+  byId['H2'].decision =
+    '<b class="hi">首選：GCP Cloud Run（asia-east1／彰化）＋ Cloud SQL for PostgreSQL（asia-east1）。</b><br>' +
+    '· <b class="hi">為何</b>：唯一有<b class="hi">台灣境內區域</b> → 最低延遲＋<b class="hi">資料落地台灣</b>（面對能源 B2B 客戶談資安/合規/信任是實在加分）；全託管、可設 <code>min-instances=1</code> 免冷啟動；repo 已有 <code>scripts/deploy_cloudrun.sh</code>；與 Cloud Tasks 天生一對，可把 MILP 求解移出請求執行緒（H4）。<br>' +
+    '· <b class="hi">替代</b>：Fly.io(Tokyo)＋managed Postgres＝最省又 always-on，但<b>資料出境</b>；AWS ECS+RDS＝企業級但無台灣區、較重；Render 付費＝最少改動的跳板（新加坡區）。<br>' +
+    '· <b class="hi">搭配必做</b>：managed Postgres 備份＋PITR（H3）、求解移背景佇列（H4）、prod/staging＋secrets、觀測性 Sentry＋指標＋告警（H5）。<br>' +
+    '· <b class="hi">成本感</b>：Cloud Run＋Cloud SQL 小型實例約月數十美元（依流量）；Fly.io 更省（~$5–15/月，代價是資料出境）。';
+
   return { PH, PHS, AREAS, ITEMS, byId };
 })();
