@@ -18,6 +18,12 @@ class WindFarmBase(BaseModel):
     feed_in_price_per_kwh: float | None = Field(default=None, ge=0)
     commercial_operation_date: date | None = None
     status: WindFarmStatus = WindFarmStatus.OPERATIONAL
+    # 風電工程屬性
+    farm_type: str | None = Field(default=None, max_length=20)
+    capacity_factor_percent: float | None = Field(default=None, ge=0, le=100)
+    p90_capacity_factor_percent: float | None = Field(default=None, ge=0, le=100)
+    turbine_count: int | None = Field(default=None, ge=0)
+    grid_connection_voltage: str | None = Field(default=None, max_length=40)
 
 
 class WindFarmCreate(WindFarmBase):
@@ -32,6 +38,11 @@ class WindFarmUpdate(BaseModel):
     feed_in_price_per_kwh: float | None = Field(default=None, ge=0)
     commercial_operation_date: date | None = None
     status: WindFarmStatus | None = None
+    farm_type: str | None = Field(default=None, max_length=20)
+    capacity_factor_percent: float | None = Field(default=None, ge=0, le=100)
+    p90_capacity_factor_percent: float | None = Field(default=None, ge=0, le=100)
+    turbine_count: int | None = Field(default=None, ge=0)
+    grid_connection_voltage: str | None = Field(default=None, max_length=40)
 
 
 class WindFarmRead(WindFarmBase):

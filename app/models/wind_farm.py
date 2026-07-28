@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, Enum, Float, String
+from sqlalchemy import Date, Enum, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -29,6 +29,20 @@ class WindFarm(Base, TimestampMixin):
     commercial_operation_date: Mapped[date | None] = mapped_column(Date, default=None)
     status: Mapped[WindFarmStatus] = mapped_column(
         Enum(WindFarmStatus), default=WindFarmStatus.OPERATIONAL
+    )
+
+    # 風電工程屬性. farm_type is plain String ("offshore"/"onshore") to avoid the
+    # Postgres CREATE TYPE trap on Neon. capacity_factor_percent is the expected
+    # (P50) annual CF; p90_capacity_factor_percent is the conservative (P90) one.
+    # Expected annual generation = installed_capacity_mw × 8760 × CF/100.
+    farm_type: Mapped[str | None] = mapped_column(String(20), default=None)
+    capacity_factor_percent: Mapped[float | None] = mapped_column(Float, default=None)
+    p90_capacity_factor_percent: Mapped[float | None] = mapped_column(
+        Float, default=None
+    )
+    turbine_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    grid_connection_voltage: Mapped[str | None] = mapped_column(
+        String(40), default=None
     )
 
     contracts: Mapped[list[Contract]] = relationship(

@@ -20,11 +20,25 @@ from app.schemas.investment import (
 )
 
 _KWH = 1000.0
+_HOURS_PER_YEAR = 8760.0
+
+
+def expected_annual_mwh(capacity_mw: float, cf_percent: float | None) -> float | None:
+    """Expected annual generation from a capacity factor (None if no CF)."""
+    if cf_percent is None:
+        return None
+    return capacity_mw * _HOURS_PER_YEAR * cf_percent / 100.0
 
 
 def compute_investment(
-    db: Session, capex_per_mw: float, om_rate_percent: float
+    db: Session,
+    capex_per_mw: float,
+    om_rate_percent: float,
+    scenario: str = "actual",
 ) -> InvestmentResult:
+    """ROI/payback per farm. ``scenario`` picks the annual generation basis:
+    ``actual`` (measured), ``p50`` (capacity × 8760 × CF), or ``p90`` (the
+    conservative CF). p50/p90 fall back to actual for farms with no CF set."""
     default_feed = settings.default_feed_in_price_per_kwh
 
     gen_total: dict[int, float] = {}
@@ -37,7 +51,15 @@ def compute_investment(
     t_cap = t_gen = t_rev = t_capex = t_om = t_net = 0.0
     for f in db.execute(select(WindFarm).order_by(WindFarm.id)).scalars():
         cap_mw = f.installed_capacity_mw
-        annual_gen = gen_total.get(f.id, 0.0)
+        actual_gen = gen_total.get(f.id, 0.0)
+        if scenario == "p50":
+            annual_gen = expected_annual_mwh(cap_mw, f.capacity_factor_percent)
+        elif scenario == "p90":
+            annual_gen = expected_annual_mwh(cap_mw, f.p90_capacity_factor_percent)
+        else:
+            annual_gen = actual_gen
+        if annual_gen is None:  # p50/p90 with no CF → fall back to measured
+            annual_gen = actual_gen
         price = (
             f.feed_in_price_per_kwh
             if f.feed_in_price_per_kwh is not None
@@ -63,6 +85,8 @@ def compute_investment(
                 annual_net=round(net, 2),
                 roi_percent=round(roi, 4),
                 payback_years=(round(payback, 2) if payback is not None else None),
+                farm_type=f.farm_type,
+                capacity_factor_percent=f.capacity_factor_percent,
             )
         )
         t_cap += cap_mw
@@ -77,6 +101,7 @@ def compute_investment(
     return InvestmentResult(
         capex_per_mw=capex_per_mw,
         om_rate_percent=om_rate_percent,
+        scenario=scenario,
         farms=farms,
         total=InvestmentTotal(
             capacity_mw=round(t_cap, 3),

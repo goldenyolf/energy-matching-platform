@@ -1,4 +1,4 @@
-code,name,operator_name,location,installed_capacity_mw,commercial_operation_date,status,feed_in_price_per_kwh
-WF-FORMOSA2,海能風場 (Formosa 2),海能風力發電,苗栗外海,376,2023-06-01,operational,3.9
-WF-CHANGFANG,彰芳暨西島風場 (Changfang & Xidao),彰芳西島風力發電,彰化外海,589,2024-01-01,operational,4.0
-WF-ZHONGTUN,中屯陸域風場,台電,澎湖,8,2001-01-01,operational,4.5
+code,name,operator_name,location,installed_capacity_mw,commercial_operation_date,status,feed_in_price_per_kwh,farm_type,capacity_factor_percent,p90_capacity_factor_percent,turbine_count,grid_connection_voltage
+WF-FORMOSA2,海能風場 (Formosa 2),海能風力發電,苗栗外海,376,2023-06-01,operational,3.9,offshore,45,40,47,161kV
+WF-CHANGFANG,彰芳暨西島風場 (Changfang & Xidao),彰芳西島風力發電,彰化外海,589,2024-01-01,operational,4.0,offshore,44,39,62,161kV
+WF-ZHONGTUN,中屯陸域風場,台電,澎湖,8,2001-01-01,operational,4.5,onshore,30,26,8,11.4kV

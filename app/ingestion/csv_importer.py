@@ -59,6 +59,11 @@ def import_wind_farms(db: Session, rows: Iterable[dict]) -> ImportResult:
                 status=WindFarmStatus(
                     p.s(row.get("status")) or WindFarmStatus.OPERATIONAL.value
                 ),
+                farm_type=p.s(row.get("farm_type")),
+                capacity_factor_percent=p.f(row.get("capacity_factor_percent")),
+                p90_capacity_factor_percent=p.f(row.get("p90_capacity_factor_percent")),
+                turbine_count=p.i(row.get("turbine_count")),
+                grid_connection_voltage=p.s(row.get("grid_connection_voltage")),
             )
             wind_farm_svc.create(db, data)
             imported += 1

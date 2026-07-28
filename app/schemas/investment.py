@@ -18,6 +18,8 @@ class FarmInvestment(BaseModel):
     annual_net: float
     roi_percent: float
     payback_years: float | None
+    farm_type: str | None = None
+    capacity_factor_percent: float | None = None
 
 
 class InvestmentTotal(BaseModel):
@@ -34,5 +36,6 @@ class InvestmentTotal(BaseModel):
 class InvestmentResult(BaseModel):
     capex_per_mw: float
     om_rate_percent: float
+    scenario: str = "actual"  # actual | p50 | p90
     farms: list[FarmInvestment]
     total: InvestmentTotal

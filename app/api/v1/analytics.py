@@ -98,15 +98,18 @@ def customer_optimization(
 def investment(
     capex_per_mw: float | None = Query(None, gt=0.0),
     om_rate_percent: float | None = Query(None, ge=0.0, le=100.0),
+    scenario: str = Query("actual", pattern="^(actual|p50|p90)$"),
     db: Session = Depends(get_db),
 ) -> InvestmentResult:
-    """Per-farm and portfolio ROI / payback. CAPEX and O&M rate overridable."""
+    """Per-farm and portfolio ROI / payback. CAPEX and O&M rate overridable;
+    ``scenario`` picks the generation basis (actual / p50 / p90)."""
     return inv_svc.compute_investment(
         db,
         capex_per_mw=(settings.capex_per_mw if capex_per_mw is None else capex_per_mw),
         om_rate_percent=(
             settings.om_rate_percent if om_rate_percent is None else om_rate_percent
         ),
+        scenario=scenario,
     )
 
 
