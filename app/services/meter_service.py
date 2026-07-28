@@ -135,17 +135,22 @@ def compute_meter_breakdown(
                 cons[m.id] = v
                 assigned += v
     else:
-        for m in meters:
-            cons[m.id] = sum(
-                row.consumed_energy_mwh
-                for row in db.execute(
-                    select(ConsumptionData).where(
-                        ConsumptionData.meter_id == m.id,
-                        ConsumptionData.period_start >= start,
-                        ConsumptionData.period_start <= end,
-                    )
-                ).scalars()
+        # One grouped query for all meters (avoids a SELECT per meter).
+        summed = db.execute(
+            select(
+                ConsumptionData.meter_id,
+                func.sum(ConsumptionData.consumed_energy_mwh),
             )
+            .where(
+                ConsumptionData.meter_id.in_([m.id for m in meters]),
+                ConsumptionData.period_start >= start,
+                ConsumptionData.period_start <= end,
+            )
+            .group_by(ConsumptionData.meter_id)
+        ).all()
+        by_meter = {mid: float(total or 0.0) for mid, total in summed}
+        for m in meters:
+            cons[m.id] = by_meter.get(m.id, 0.0)
 
     give: dict[int, float] = {m.id: 0.0 for m in meters}
     remaining = total_green
