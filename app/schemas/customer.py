@@ -10,7 +10,7 @@ from app.models.enums import GreenTargetType
 
 
 class CustomerBase(BaseModel):
-    code: str = Field(..., max_length=50, examples=["CUST-TSMC"])
+    code: str = Field(..., max_length=50, examples=["CUST-C1"])
     company_name: str = Field(..., max_length=200)
     industry: str | None = None
     annual_consumption_mwh: float = Field(0.0, ge=0)

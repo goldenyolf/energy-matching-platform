@@ -495,7 +495,7 @@
   }
 
   var farms=[{id:1,name:"海能風場",gen:"139,655"},{id:2,name:"彰芳暨西島",gen:"232,759"},{id:3,name:"中屯陸域",gen:"6,983"}];
-  var custs=[{id:1,name:"台積電",re:72,tgt:100},{id:2,name:"台達電",re:72,tgt:100},{id:3,name:"友達光電",re:43,tgt:60},{id:4,name:"宏碁",re:58,tgt:80},{id:5,name:"大江生醫",re:36,tgt:50}];
+  var custs=[{id:1,name:"用電廠 1",re:72,tgt:100},{id:2,name:"用電廠 2",re:72,tgt:100},{id:3,name:"用電廠 3",re:43,tgt:60},{id:4,name:"用電廠 4",re:58,tgt:80},{id:5,name:"用電廠 5",re:36,tgt:50}];
   var bands=[{f:2,c:1,w:9.0},{f:1,c:1,w:3.0},{f:1,c:2,w:1.6,hypo:true},{f:1,c:3,w:1.4},{f:3,c:3,w:0.35,hypo:true},{f:2,c:4,w:0.25},{f:2,c:5,w:0.06,hypo:true}];
   buildFlow(document.getElementById("heroflow"),{farms:farms.map(function(f){return Object.assign({},f);}),custs:custs.map(function(c){return Object.assign({},c);}),bands:bands,pfx:"h"});
 

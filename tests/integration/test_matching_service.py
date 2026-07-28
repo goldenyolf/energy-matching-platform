@@ -36,17 +36,17 @@ def test_undersupplied_customer_has_gap(seeded_db):
     rows = {
         c.code: c for c in analytics_service.customer_analytics(seeded_db, "2024-01")
     }
-    tsmc = rows["CUST-TSMC"]
-    assert tsmc.achieved_re_percent < 100
-    assert tsmc.gap_to_target_mwh > 0
-    assert tsmc.target_met is False
+    biggest = rows["CUST-C1"]
+    assert biggest.achieved_re_percent < 100
+    assert biggest.gap_to_target_mwh > 0
+    assert biggest.target_met is False
 
 
 def test_small_customer_meets_target(seeded_db):
     rows = {
         c.code: c for c in analytics_service.customer_analytics(seeded_db, "2024-01")
     }
-    assert rows["CUST-TCI"].target_met is True
+    assert rows["CUST-C5"].target_met is True
 
 
 def test_wind_farm_analytics_reports_utilization(seeded_db):
