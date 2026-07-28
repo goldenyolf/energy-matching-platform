@@ -5,7 +5,13 @@
 媒合引擎，算出每家企業每個月真正拿到多少綠電、離 RE 目標還差多遠——最後把整套決策流程
 （媒合、售電評估、投資效益、轉供結算、憑證追蹤、風險告警）收成一個售電業會用得上的介面。
 
-🔗 **線上 Demo：<https://emp-api-bxbe.onrender.com/app/>**　·　API 文件：`/docs`　·　🎬 [演算法圖解](https://claude.ai/code/artifact/efbab99c-5166-4fa4-bcb8-e31aa1d6795b)
+### 🔗 快速連結
+
+| | |
+|---|---|
+| 📖 **[產品介紹 · 演算法圖解](https://goldenyolf.github.io/energy-matching-platform/)** | 小白也能懂的視覺化解說（GitHub Pages，隨開隨看） |
+| 🚀 **[線上 Demo](https://emp-api-bxbe.onrender.com/app/)** | 完整平台（Render 免費方案，首次開啟可能要等冷啟動） |
+| 📑 API 文件 | 上方 Demo 網域的 `/docs`（Swagger UI） |
 
 > **聲明**：站上所有數字都是**模擬示範資料**，與台電、TSEC 或任何能源業者無關；
 > 只有「即時再生能源」頁抓的是台電公開的即時資料。這是技術作品集，不是正式的結算、
