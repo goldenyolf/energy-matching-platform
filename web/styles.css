@@ -136,7 +136,24 @@ button{font-family:inherit}
 .pill.ok{background:var(--good-soft);color:var(--good)}
 .pill.warnp{background:var(--warn-soft);color:var(--warn)}
 .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neut{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--muted)}
+.pill.info{background:color-mix(in srgb,var(--brand) 15%,transparent);color:var(--brand)}
 .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+/* toast 通知 + 求解中文字 chip */
+#toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{display:flex;align-items:center;gap:8px;max-width:min(90vw,420px);padding:10px 15px;border-radius:11px;
+  background:var(--surface);border:1px solid var(--line-strong);box-shadow:0 8px 26px rgba(10,18,28,.20);
+  font-size:13px;font-weight:600;color:var(--ink);opacity:0;transform:translateY(8px);transition:opacity .22s,transform .22s}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.toast.ok .dot{background:var(--good)} .toast.bad .dot{background:var(--bad)} .toast.info .dot{background:var(--brand)}
+#loadmsg{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:120;display:none;align-items:center;gap:9px;
+  padding:7px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--line-strong);
+  box-shadow:0 6px 20px rgba(10,18,28,.18);font-size:12.5px;font-weight:600;color:var(--ink)}
+#loadmsg.on{display:inline-flex}
+#loadmsg .spin{width:13px;height:13px;border-radius:50%;border:2px solid var(--line-strong);border-top-color:var(--brand);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#loadmsg .spin{animation:none}.toast{transition:none}}
 
 /* form panel */
 .formcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);

@@ -40,10 +40,30 @@
     var f = farmsCache && farmsCache[id];
     return f ? { code: f.code, name: f.name } : { code: "#" + id, name: "" };
   }
-  // loading now uses a light non-blocking top bar instead of a full-screen modal
+  // loading: light non-blocking top bar + optional "求解中" text chip
   var loadbar = document.getElementById("loadbar");
-  function showModal() { loadbar.classList.add("on"); }
-  function hideModal() { loadbar.classList.remove("on"); }
+  var loadmsg = document.getElementById("loadmsg");
+  var loadmsgTxt = document.getElementById("loadmsg-txt");
+  function showModal(msg) {
+    loadbar.classList.add("on");
+    if (msg) { loadmsgTxt.textContent = msg; loadmsg.classList.add("on"); }
+  }
+  function hideModal() { loadbar.classList.remove("on"); loadmsg.classList.remove("on"); }
+
+  // 短暫的成功/錯誤提示(toast);kind: "ok" | "bad" | "info"
+  var toastBox = document.getElementById("toasts");
+  function toast(msg, kind) {
+    var t = document.createElement("div");
+    t.className = "toast " + (kind || "ok");
+    t.innerHTML = '<span class="dot"></span><span></span>';
+    t.lastChild.textContent = msg;
+    toastBox.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add("show"); });
+    setTimeout(function () {
+      t.classList.remove("show");
+      setTimeout(function () { t.remove(); }, reduce ? 0 : 240);
+    }, 2200);
+  }
 
   // shared "last used period" so it carries across pages
   var _period = null;
@@ -169,8 +189,8 @@
       : '<span class="pill warnp"><span class="dot"></span>未達</span>';
   }
   function contractStatusPill(s) {
-    var m = { active: ["有效", "ok"], pending: ["待生效", "warnp"], expired: ["已到期", "warnp"], terminated: ["已終止", "warnp"] };
-    var x = m[s] || [s, "warnp"];
+    var m = { active: ["有效", "ok"], pending: ["待生效", "neut"], expired: ["已到期", "neut"], terminated: ["已終止", "bad"] };
+    var x = m[s] || [s, "neut"];
     return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + esc(x[0]) + "</span>";
   }
 
@@ -416,9 +436,9 @@
   function statusPill(s) {
     var m = {
       operational: ["運轉中", "ok"], under_construction: ["建置中", "warnp"],
-      planning: ["規劃中", "warnp"], decommissioned: ["除役", "warnp"],
+      planning: ["規劃中", "neut"], decommissioned: ["除役", "neut"],
     };
-    var x = m[s] || [s || "–", "warnp"];
+    var x = m[s] || [s || "–", "neut"];
     return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + esc(x[0]) + "</span>";
   }
 
@@ -564,7 +584,7 @@
   function trecStatusPill(s) {
     return s === "retired"
       ? '<span class="pill ok"><span class="dot"></span>已註銷</span>'
-      : '<span class="pill warnp"><span class="dot"></span>已移轉</span>';
+      : '<span class="pill info"><span class="dot"></span>已移轉</span>';
   }
 
   function renderTrecs() {
@@ -588,16 +608,23 @@
     document.getElementById("trForm").addEventListener("submit", function (e) { e.preventDefault(); load(); });
     document.getElementById("t-issue").addEventListener("click", function () {
       showModal("正在由媒合結果發行本期憑證…");
-      api.trecsIssue(period()).then(function (r) { renderTrecLedger(body, r); })
+      api.trecsIssue(period()).then(function (r) { renderTrecLedger(body, r); toast("已發行本期憑證"); })
         .catch(function (err) { body.innerHTML = errbox("發行憑證", err); })
         .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
     });
     body.addEventListener("click", function (e) {
       var btn = e.target.closest("[data-retire]"); if (!btn) return;
-      showModal("正在註銷憑證…");
-      api.trecRetire(btn.getAttribute("data-retire")).then(function () { load(); })
-        .catch(function (err) { body.innerHTML = errbox("註銷憑證", err); })
-        .then(function () { setTimeout(hideModal, reduce ? 0 : 300); });
+      var id = btn.getAttribute("data-retire");
+      var row = btn.closest("tr");
+      var no = row ? (row.querySelector(".code") || {}).textContent || "" : "";
+      showFormModal({
+        title: "註銷憑證", fields: [], danger: true, submitLabel: "確定註銷",
+        note: "確定要註銷憑證「<b>" + esc(no) + "</b>」嗎?註銷後用於抵充 RE、<b>不可再交易</b>,此動作無法復原。",
+        onSubmit: function (_v, done) {
+          api.trecRetire(id).then(function () { done(); toast("已註銷憑證"); load(); })
+            .catch(function (err) { done(writeErr(err)); });
+        },
+      });
     });
     load();
   }
@@ -1184,9 +1211,9 @@
 
   // ---------- flagship: 最佳化評估 ----------
   function renderEvaluate() {
-    crumb.textContent = "售電評估工具";
+    crumb.textContent = "售電評估";
     view.innerHTML =
-      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>最佳化評估</h1></div>' +
+      '<div class="pagehead"><div class="title"><span class="bar"></span><h1>售電評估</h1></div>' +
       '<div class="meta"><span>對選定用電戶跑最佳化媒合,產出雙面經濟評估與時段別達成。</span></div></div>' +
       '<form class="formcard" id="evalForm"><div class="formgrid">' +
       '<div class="field"><label>用電戶<span class="req">*</span></label><select id="f-customer" required><option value="">載入中…</option></select></div>' +
@@ -1396,7 +1423,9 @@
     var root = document.documentElement;
     var cur = root.getAttribute("data-theme");
     if (!cur) cur = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    var next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("emp-theme", next); } catch (e) { /* ignore */ }
   });
   overlay.addEventListener("click", function (e) { if (e.target === overlay) hideModal(); });
 
@@ -1572,7 +1601,8 @@
       onSubmit: function (vals, done) {
         if (preset) Object.keys(preset).forEach(function (k) { vals[k] = preset[k]; });
         var p = item ? upd(item.id, vals) : create(vals);
-        p.then(function () { done(); route(); }).catch(function (err) { done(writeErr(err)); });
+        p.then(function () { done(); toast((item ? "已儲存" : "已新增") + ENTITY_NAME[kind]); route(); })
+          .catch(function (err) { done(writeErr(err)); });
       },
     });
   }
@@ -1583,7 +1613,8 @@
       title: "刪除" + ENTITY_NAME[kind], fields: [], danger: true, submitLabel: "確定刪除",
       note: "確定要刪除「<b>" + nm + "</b>」嗎?此動作無法復原;若仍有關聯資料(合約/發電/用電)會被擋下。",
       onSubmit: function (_vals, done) {
-        del(item.id).then(function () { done(); route(); }).catch(function (err) { done(writeErr(err)); });
+        del(item.id).then(function () { done(); toast("已刪除" + ENTITY_NAME[kind]); route(); })
+          .catch(function (err) { done(writeErr(err)); });
       },
     });
   }

@@ -6,9 +6,12 @@
   <title>綠電媒合平台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%234C6EF5'/%3E%3Ccircle cx='12' cy='12' r='2' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <script>try{var t=localStorage.getItem("emp-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 </head>
 <body>
   <div id="loadbar" aria-hidden="true"></div>
+  <div id="loadmsg" role="status" aria-live="polite"><span class="spin"></span><span id="loadmsg-txt"></span></div>
+  <div id="toasts" aria-live="polite"></div>
   <div class="app">
     <aside class="rail">
       <div class="brand">
