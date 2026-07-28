@@ -1455,6 +1455,11 @@
       (peakRe != null ? "風電離峰(夜間)發電多、尖峰用電在日間 → <b>尖峰 RE 僅 " + pct(peakRe) + "%</b>。" : "") +
       (surplus > 0.5 ? "尚差 <b>" + nfmt(surplus, 0) + " MWh</b> 因時段錯配無法媒合(離峰過剩發電對不上日間用電),RE 目標未達。" : "") +
       "月度加總會高估;逐時段最佳化才是真實達成。</div>";
+    html += '<details class="concept"><summary>為什麼「逐時匹配」這麼重要?<span>概念示意 · 點開</span></summary>' +
+      '<div class="concept-body">上面這張是<b>這家客戶的真實三時段資料</b>。若把一天攤成 24 小時看更直覺:' +
+      '風電夜裡強、白天弱,跟用電對不上時,帳面上的綠電就有一部分「對不上時間」——這正是逐時最佳化要解決的。' +
+      '<a href="https://goldenyolf.github.io/energy-matching-platform/" target="_blank" rel="noopener">看 24 小時互動示意 →</a>' +
+      '<span class="concept-note">⚠ 互動示意為模型曲線、非本客戶實測;實際評估請以上方真實三時段為準。</span></div></details>';
     html += "</section>";
 
     html += "</div></div>"; // grid
