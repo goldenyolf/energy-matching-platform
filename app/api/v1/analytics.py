@@ -7,7 +7,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, solver_slot
 from app.core.config import settings
 from app.schemas.analytics import (
     CustomerAnalytics,
@@ -58,7 +58,9 @@ def period_summary(
     return svc.period_summary(db, period)
 
 
-@router.get("/evaluation", response_model=EvaluationResult)
+@router.get(
+    "/evaluation", response_model=EvaluationResult, dependencies=[Depends(solver_slot)]
+)
 def evaluation(
     customer_id: int = Query(..., ge=1),
     start: str | None = Query(None, examples=["2025-01"]),
@@ -68,7 +70,11 @@ def evaluation(
     return eval_svc.evaluate(db, customer_id, start=start, end=end)
 
 
-@router.get("/customer-optimization", response_model=CustomerOptimizationResult)
+@router.get(
+    "/customer-optimization",
+    response_model=CustomerOptimizationResult,
+    dependencies=[Depends(solver_slot)],
+)
 def customer_optimization(
     customer_id: int = Query(..., ge=1),
     period: str = _period,
@@ -113,7 +119,9 @@ def investment(
     )
 
 
-@router.get("/settlement", response_model=SettlementResult)
+@router.get(
+    "/settlement", response_model=SettlementResult, dependencies=[Depends(solver_slot)]
+)
 def settlement(
     customer_id: int = Query(..., ge=1),
     period: str = _period,
@@ -145,7 +153,11 @@ def contract_risks(
     )
 
 
-@router.get("/meter-breakdown", response_model=MeterBreakdown)
+@router.get(
+    "/meter-breakdown",
+    response_model=MeterBreakdown,
+    dependencies=[Depends(solver_slot)],
+)
 def meter_breakdown(
     customer_id: int = Query(..., ge=1),
     period: str = _period,
@@ -155,7 +167,11 @@ def meter_breakdown(
     return meter_svc.compute_meter_breakdown(db, customer_id, period)
 
 
-@router.get("/re-recommendations", response_model=ReTargetAdvice)
+@router.get(
+    "/re-recommendations",
+    response_model=ReTargetAdvice,
+    dependencies=[Depends(solver_slot)],
+)
 def re_recommendations(
     customer_id: int = Query(..., ge=1),
     period: str = _period,

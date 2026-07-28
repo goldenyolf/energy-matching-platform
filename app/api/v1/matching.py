@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, solver_slot
 from app.core.config import settings
 from app.matching.optimizer import OptimizeOptions
 from app.schemas.matching import (
@@ -65,7 +65,11 @@ def list_results(
     )
 
 
-@router.get("/optimize", response_model=OptimizationResult)
+@router.get(
+    "/optimize",
+    response_model=OptimizationResult,
+    dependencies=[Depends(solver_slot)],
+)
 def optimize(
     period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
     min_sites: int | None = Query(default=None, ge=0),
@@ -127,7 +131,11 @@ def _parse_float_map(
     return out
 
 
-@router.get("/scenario", response_model=ScenarioResult)
+@router.get(
+    "/scenario",
+    response_model=ScenarioResult,
+    dependencies=[Depends(solver_slot)],
+)
 def scenario(
     period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
     farm_ids: str | None = Query(None, description="CSV of farm ids; empty = all"),
@@ -169,7 +177,11 @@ def scenario(
     return scenario_service.compute_scenario(db, period, req)
 
 
-@router.get("/slots", response_model=SlotMatchingResult)
+@router.get(
+    "/slots",
+    response_model=SlotMatchingResult,
+    dependencies=[Depends(solver_slot)],
+)
 def slots(
     period: str = Query(..., examples=["2024-01"], description="Period 'YYYY-MM'"),
     db: Session = Depends(get_db),

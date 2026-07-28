@@ -24,9 +24,13 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging import configure_logging, get_logger
+from app.core.ratelimit import RateLimiter
+from app.matching.solver import configure_solver
 
 configure_logging()
 logger = get_logger("app")
+configure_solver(settings.solver_time_limit_seconds)
+_rate_limiter = RateLimiter(settings.rate_limit_per_minute)
 
 _HTTP_422 = 422  # Unprocessable content (avoids a renamed-constant deprecation)
 
@@ -47,6 +51,21 @@ if settings.environment == "production" and not settings.admin_write_token:
         "import endpoints are OPEN to the public. Set ADMIN_WRITE_TOKEN to "
         "require an X-Admin-Token header for writes."
     )
+
+
+@app.middleware("http")
+async def rate_limit(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Per-IP fixed-window rate limit on the API (static SPA is exempt)."""
+    if request.url.path.startswith(settings.api_v1_prefix):
+        client = request.client.host if request.client else "anon"
+        if not _rate_limiter.check(client, time.monotonic()):
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "請求過於頻繁,請稍後再試。"},
+            )
+    return await call_next(request)
 
 
 @app.middleware("http")

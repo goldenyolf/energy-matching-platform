@@ -3,16 +3,38 @@
 from __future__ import annotations
 
 import hmac
+import os
+import threading
+from collections.abc import Iterator
 
 from fastapi import Header, HTTPException, UploadFile, status
 
 from app.core.config import settings
 from app.db.session import get_db
 
-__all__ = ["get_db", "read_upload", "require_write_access"]
+__all__ = ["get_db", "read_upload", "require_write_access", "solver_slot"]
 
 # Cap CSV uploads so a hostile/oversized file can't exhaust memory.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MiB
+
+# Bound how many MILP solves run at once so a burst can't oversubscribe the CPU
+# and stall the worker. Excess requests wait briefly, then get a 503.
+_solver_max = settings.solver_max_concurrent or max(1, (os.cpu_count() or 2) - 1)
+_solver_sem = threading.BoundedSemaphore(_solver_max)
+
+
+def solver_slot() -> Iterator[None]:
+    """Dependency for MILP-heavy endpoints: acquire a solver slot (or 503 if the
+    server is saturated), releasing it when the request finishes."""
+    if not _solver_sem.acquire(timeout=settings.solver_acquire_timeout_seconds):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="求解服務忙碌中,請稍後再試。",
+        )
+    try:
+        yield
+    finally:
+        _solver_sem.release()
 
 
 def require_write_access(

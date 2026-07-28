@@ -29,6 +29,7 @@ from app.matching.engine import (
     build_customer_summary,
     build_farm_summary,
 )
+from app.matching.solver import cbc
 
 _KWH = 1000.0
 _P_RE = 1e6
@@ -204,7 +205,7 @@ def optimize_period(
         - _EPSILON * pulp.lpSum(use.values())
     )
 
-    prob.solve(pulp.PULP_CBC_CMD(msg=0, threads=1))
+    prob.solve(cbc())
     outcome.solver_status = pulp.LpStatus[prob.status]
 
     # ---- extract allocations ----

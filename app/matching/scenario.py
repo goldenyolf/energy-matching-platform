@@ -25,6 +25,7 @@ from app.matching.engine import (
     build_farm_summary,
 )
 from app.matching.optimizer import CustomerTarget, _re_target_mwh
+from app.matching.solver import cbc
 
 # The objective is lexicographic, solved in three phases (see optimize_scenario),
 # each a single normalized objective with the previous phase's result locked in:
@@ -220,7 +221,7 @@ def optimize_scenario(
     site_sum = pulp.lpSum(site_short.values())
     # Exact solve (no MIP gap): later phases optimize a term that is small in
     # absolute value, so an early gap-based stop would drop it.
-    solver = pulp.PULP_CBC_CMD(msg=0, threads=1, gapRel=0.0, gapAbs=0.0)
+    solver = cbc(exact=True)
 
     # Phase 1 — minimize RE shortfall (≫ site shortfall).
     prob += -_P_RE * (re_sum / re_ub) - _P_SITE * (site_sum / site_ub)

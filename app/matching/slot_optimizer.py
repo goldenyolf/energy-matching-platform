@@ -23,6 +23,7 @@ from app.matching.engine import (
     _is_eligible,
 )
 from app.matching.slot_engine import SlotCustomerDemand, SlotFarmSupply
+from app.matching.solver import cbc
 from app.matching.tou import SLOT_ORDER, season_of
 from app.models.enums import Season, TimeSlot
 
@@ -220,7 +221,7 @@ def optimize_slots(
         + _EPSILON * pulp.lpSum(use[c.contract_id] for c in eligible)
     )
 
-    prob.solve(pulp.PULP_CBC_CMD(msg=0, threads=1))
+    prob.solve(cbc())
     outcome.solver_status = pulp.LpStatus[prob.status]
 
     av: dict[tuple[int, TimeSlot], float] = {

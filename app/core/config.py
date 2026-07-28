@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     wheeling_fee_per_kwh: float = 0.1  # NTD/kWh Taipower 轉供/輸配 service fee
     grid_emission_factor_kg_per_kwh: float = 0.494  # Taiwan 2023 grid factor
 
+    # Solver & API protection (工程優化)
+    solver_time_limit_seconds: float = 20.0  # CBC wall-clock cap (0 = unbounded)
+    solver_max_concurrent: int = 0  # concurrent MILP solves (0 = auto: cores−1)
+    solver_acquire_timeout_seconds: float = 8.0  # wait for a solver slot → 503
+    rate_limit_per_minute: int = 240  # per-IP request cap (0 = disabled)
+
     @field_validator("database_url")
     @classmethod
     def _use_psycopg3_driver(cls, v: str) -> str:
