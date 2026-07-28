@@ -112,6 +112,9 @@
       return get("/analytics/evaluation", { customer_id: customerId, start: start, end: end });
     },
     slots: function (period) { return get("/matching/slots", { period: period }); },
+    hourlyMatching: function (period, customerId) {
+      return get("/matching/hourly", customerId != null ? { period: period, customer_id: customerId } : { period: period });
+    },
     scenario: function (period, opts) {
       opts = opts || {};
       return get("/matching/scenario", {

@@ -128,7 +128,7 @@
       overview: renderOverview, farms: renderFarms, customers: renderCustomers,
       meters: renderMeters, contracts: renderContracts, evaluate: renderEvaluate,
       investment: renderInvestment, recommend: renderRecommend,
-      matchmap: renderMatchmap,
+      matchmap: renderMatchmap, cfe: renderCfe,
       settlement: renderSettlement, trecs: renderTrecs, risks: renderRisks,
       live: renderLive,
     };
@@ -1242,6 +1242,150 @@
     html += '<div class="slotnote">' + iconInfo() + "減碳量 <b>" + nfmt(t.carbon_avoided_tco2e, 0) + " tCO₂e</b>(綠電 " + nfmt(t.green_mwh, 0) + " MWh × " + price(r.grid_emission_factor_kg_per_kwh) + " kgCO₂e/kWh)。灰電補足為客戶剩餘用電成本,僅供參考、不計入應付。</div>";
     html += "</section>";
     root.innerHTML = html;
+  }
+
+  // ---------- 逐時匹配 (24/7 CFE) ----------
+  function renderCfe() {
+    crumb.textContent = "逐時匹配";
+    view.innerHTML = pageHeadWithPeriod(
+      "逐時匹配 (24/7 CFE)",
+      "只有同一小時內發電與用電重疊才算真綠電;逐時 CFE% 對照帳面 RE%,差距即時間錯配。",
+      "cfe"
+    );
+    function load() {
+      var period = periodVal("cfe");
+      var body = document.getElementById("cfe-body");
+      body.innerHTML = '<div class="placeholder">計算中…</div>';
+      api.hourlyMatching(period).then(function (r) {
+        body.innerHTML = cfeBody(r);
+        wireCfe(r);
+      }).catch(function (err) { body.innerHTML = errbox("逐時匹配", err); });
+    }
+    bindPeriod("cfe", load);
+    load();
+  }
+
+  function cfeBody(r) {
+    var gap = Math.max(0, r.paper_re_percent - r.cfe_percent);
+    var kpis = '<div class="kpis">' +
+      kpi("逐時 CFE%", pct(r.cfe_percent) + "<small>%</small>", "真時間匹配率", "hl") +
+      kpi("帳面 RE%", pct(r.paper_re_percent) + "<small>%</small>", "月總量淨額") +
+      kpi("時間錯配", '<span class="' + (gap > 0.05 ? "neg" : "pos") + '">' + pct(gap) + "</span><small>pt</small>", "帳面 − 逐時") +
+      kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", "發電時沒人用") +
+      kpi("缺口", nfmt(r.total_shortfall_mwh, 0) + "<small>MWh</small>", "用電時沒風→灰電") +
+      "</div>";
+    var opts = '<option value="__all">全系統</option>' + r.customers.map(function (c) {
+      return '<option value="' + c.customer_id + '">' + esc(c.name) + "</option>";
+    }).join("");
+    var chart = '<section class="card"><div class="hd"><h3>24 小時供需匹配</h3>' +
+      '<span class="aside" style="display:inline-flex;align-items:center;gap:4px">帳面 vs 逐時' + infoTip("paperVsCfe") + "</span>" +
+      '<label class="cfe-selwrap">檢視 <select id="cfe-cust" class="cfe-select">' + opts + "</select></label></div>" +
+      '<div id="cfe-chart-wrap"></div><div id="cfe-legend"></div>' +
+      cfeConcept() + "</section>";
+    var rows = r.customers.slice().sort(function (a, b) {
+      return (b.paper_re_percent - b.cfe_percent) - (a.paper_re_percent - a.cfe_percent);
+    }).map(function (c) {
+      var g = Math.max(0, c.paper_re_percent - c.cfe_percent);
+      return '<tr data-cust="' + c.customer_id + '"><td><span class="code">' + esc(c.name) + "</span></td>" +
+        "<td>" + esc(c.industry || "–") + "</td>" +
+        '<td class="num">' + pct(c.paper_re_percent) + "%</td>" +
+        '<td class="num" style="font-weight:700">' + pct(c.cfe_percent) + "%</td>" +
+        '<td class="num">' + (g > 0.05 ? '<span class="neg">−' + pct(g) + "</span>" : '<span class="u">–</span>') + "</td>" +
+        "<td>" + cfeGapBar(c.cfe_percent, c.paper_re_percent) + "</td></tr>";
+    }).join("");
+    var table = '<section class="card"><div class="hd"><h3>各客戶 · 帳面 vs 逐時</h3><span class="aside">按時間錯配排序 · 點列查看該客戶</span></div>' +
+      '<div class="tablewrap"><table><thead><tr><th>客戶</th><th>產業</th><th>帳面 RE%</th><th>逐時 CFE%</th><th>時間錯配</th><th>對比</th></tr></thead><tbody>' +
+      rows + "</tbody></table></div></section>";
+    var note = '<div class="foot-note">' + iconInfo() +
+      "逐時曲線為典型日型建模(風電夜強日弱、依產業別負載日型)、Σ逐時＝原月量;接真實 15 分鐘資料後原地替換。CFE% ≤ 帳面 RE%,差距即時間錯配。示範資料。</div>";
+    return kpis + chart + table + note;
+  }
+
+  function cfeChart(gen, con, matched, mode) {
+    var H = (matched || con).length, W = 760, Ht = 232, L = 16, R = 12, T = 16, B = 24;
+    var pw = W - L - R, ph = Ht - T - B;
+    var ymax = 1, all = [con, matched].concat(gen ? [gen] : []);
+    all.forEach(function (a) { a.forEach(function (v) { if (v > ymax) ymax = v; }); });
+    ymax *= 1.08;
+    var X = function (i) { return L + (H <= 1 ? 0 : i / (H - 1) * pw); };
+    var Y = function (v) { return T + ph - v / ymax * ph; };
+    function area(a) {
+      var d = "M" + X(0).toFixed(1) + " " + Y(0).toFixed(1);
+      for (var i = 0; i < H; i++) d += " L" + X(i).toFixed(1) + " " + Y(a[i]).toFixed(1);
+      return d + " L" + X(H - 1).toFixed(1) + " " + Y(0).toFixed(1) + " Z";
+    }
+    function line(a) {
+      var d = "M" + X(0).toFixed(1) + " " + Y(a[0]).toFixed(1);
+      for (var i = 1; i < H; i++) d += " L" + X(i).toFixed(1) + " " + Y(a[i]).toFixed(1);
+      return d;
+    }
+    var grid = "";
+    [0, 6, 12, 18, 23].forEach(function (h) {
+      grid += '<line x1="' + X(h).toFixed(1) + '" y1="' + T + '" x2="' + X(h).toFixed(1) + '" y2="' + (T + ph) + '" class="cfe-grid"/>' +
+        '<text x="' + X(h).toFixed(1) + '" y="' + (Ht - 6) + '" class="cfe-xtick">' + (h < 10 ? "0" + h : h) + ":00</text>";
+    });
+    grid += '<line x1="' + L + '" y1="' + (T + ph) + '" x2="' + (W - R) + '" y2="' + (T + ph) + '" class="cfe-axis"/>';
+    var paths = '<path d="' + area(con) + '" class="cfe-demand"/>' +
+      '<path d="' + area(matched) + '" class="cfe-match"/>' +
+      (gen ? '<path d="' + line(gen) + '" class="cfe-gen"/>' : "");
+    return '<div class="cfe-chart-box"><svg viewBox="0 0 ' + W + " " + Ht + '" role="img" aria-label="24 小時供需匹配圖">' +
+      grid + paths + "</svg></div>";
+  }
+
+  function cfeLegend(withGen) {
+    return '<div class="cfe-lg">' +
+      '<span><i class="sw" style="background:var(--good)"></i>已匹配（重疊才算）</span>' +
+      '<span><i class="sw" style="background:var(--faint);opacity:.35"></i>缺口（需灰電補足）</span>' +
+      (withGen ? '<span><i class="ln"></i>風電發電（超出用電即外溢）</span>' : "") +
+      '<span class="cfe-hint">' + (withGen ? "綠色越貼齊用電輪廓，時間匹配越好" : "此客戶：綠色＝已匹配、上方灰色＝該時段仍需灰電") + "</span></div>";
+  }
+
+  function cfeConcept() {
+    return '<details class="concept"><summary>什麼是逐時（24/7 CFE）匹配？<span>點開說明</span></summary>' +
+      '<div class="concept-body">' +
+      "<b>帳面 RE%</b> 用月／年總量淨額：只要期間買的綠電總量 ≥ 用電就算 100%，不管時間對不對得上。<br>" +
+      "<b>逐時 CFE%</b> 只算「同一小時內發電與用電<b>重疊</b>」的部分——發電時沒人用（外溢）不算、用電時沒風（缺口）也不算。CFE% = Σ 每小時 min(發電, 用電) ÷ Σ 用電。<br>" +
+      "兩者差距就是<b>時間錯配</b>，也正是 24/7 無碳能源（如 Google）追求的真實對時。" +
+      '<span class="concept-note">逐時曲線為典型日型建模（半模擬）：風電夜強日弱、用電依產業別日型，Σ逐時＝原月量。接真實 15 分鐘資料後原地替換。</span>' +
+      "</div></details>";
+  }
+
+  function cfeGapBar(cfe, paper) {
+    var c = Math.max(0, Math.min(100, cfe || 0));
+    var p = Math.max(c, Math.min(100, paper || 0));
+    return '<span class="gapbar" title="逐時 ' + pct(cfe) + "% / 帳面 " + pct(paper) + '%">' +
+      '<i class="p" style="width:' + p.toFixed(0) + '%"></i><i class="c" style="width:' + c.toFixed(0) + '%"></i></span>';
+  }
+
+  function wireCfe(r) {
+    var sel = document.getElementById("cfe-cust");
+    var wrap = document.getElementById("cfe-chart-wrap");
+    var lg = document.getElementById("cfe-legend");
+    function draw() {
+      var v = sel.value;
+      if (v === "__all") {
+        wrap.innerHTML = cfeChart(r.generation_by_hour, r.consumption_by_hour, r.matched_by_hour, "all");
+        lg.innerHTML = cfeLegend(true);
+      } else {
+        var c = null;
+        r.customers.forEach(function (x) { if (String(x.customer_id) === v) c = x; });
+        if (!c) return;
+        var loadArr = c.matched_by_hour.map(function (m, i) { return m + c.shortfall_by_hour[i]; });
+        wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust");
+        lg.innerHTML = cfeLegend(false);
+      }
+    }
+    if (sel) sel.addEventListener("change", draw);
+    view.querySelectorAll("tr[data-cust]").forEach(function (tr) {
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", function () {
+        if (!sel) return;
+        sel.value = tr.getAttribute("data-cust");
+        draw();
+        wrap.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    });
+    draw();
   }
 
   // ---------- flagship: 最佳化評估 ----------
