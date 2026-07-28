@@ -247,7 +247,7 @@
     Promise.all([api.customers(), api.analyticsCustomers(period)])
       .then(function (r) {
         var custs = r[0], an = r[1];
-        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3><span class="aside">點代碼可查看該客戶的電號/廠區</span>' + entityAddBtn("customer", "新增客戶") + "</div><div class=\"tablewrap\"><table>" +
+        var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3><span class="aside">點代碼可查看該客戶的電號/廠區</span>' + entityAddBtn("customer", "新增客戶") + importBtn("customer") + "</div><div class=\"tablewrap\"><table>" +
           "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>電號/廠區</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
@@ -310,7 +310,7 @@
   function renderMeterManage(cid, meters) {
     meters.forEach(function (m) { crudCache.meter[m.id] = m; });
     var sumKwh = meters.reduce(function (s, m) { return s + (m.total_kwh || 0); }, 0);
-    var html = '<section class="card"><div class="hd"><h3>用電負載數據(各電號)</h3><span class="aside">年度用電加總 ' + nfmt(sumKwh / 1000, 0) + " MWh(= 客戶總用電)</span>" + entityAddBtn("meter", "新增電號", cid) + "</div><div class=\"tablewrap\"><table>" +
+    var html = '<section class="card"><div class="hd"><h3>用電負載數據(各電號)</h3><span class="aside">年度用電加總 ' + nfmt(sumKwh / 1000, 0) + " MWh(= 客戶總用電)</span>" + entityAddBtn("meter", "新增電號", cid) + importBtn("meter") + "</div><div class=\"tablewrap\"><table>" +
       "<thead><tr><th>電號</th><th>用電名稱</th><th>契約容量 (kW)</th><th>時間電價</th><th>尖峰 (kWh)</th><th>半尖峰 (kWh)</th><th>周六半尖峰 (kWh)</th><th>離峰 (kWh)</th><th>總量 (kWh)</th><th>數據區間</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
     if (!meters.length) {
       html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">此客戶尚無電號' + (editMode ? ",可按「新增電號」建立。" : "。") + "</td></tr>";
@@ -380,7 +380,7 @@
         r[1].forEach(function (f) { fm[f.id] = f.name || f.code; contractFarmOpts.push([f.id, (f.name || f.code)]); });
         r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; contractCustOpts.push([c.id, (c.company_name || c.code)]); });
         cs.forEach(function (c) { crudCache.contract[c.id] = c; });
-        var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + "</div><div class=\"tablewrap\"><table>" +
+        var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + importBtn("contract") + "</div><div class=\"tablewrap\"><table>" +
           "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         if (!cs.length) {
           html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
@@ -479,7 +479,7 @@
         kpi("總發電量", nfmt(totGen, 0) + "<small>MWh</small>", "資料區間累積") +
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
-      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span>" + entityAddBtn("farm", "新增案場") + "</div><div class=\"tablewrap\"><table>" +
+      html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
         "<thead><tr><th>案場</th><th>營運商</th><th>場址</th><th>裝置容量 (MW)</th><th>商轉日</th><th>躉售價</th><th>狀態</th><th>尖峰 (MWh)</th><th>半尖峰 (MWh)</th><th>離峰 (MWh)</th><th>總發電 (MWh)</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
@@ -1544,6 +1544,54 @@
     return '<button class="btn primary sm entity-add" data-kind="' + kind + '"' +
       (custId != null ? ' data-cust="' + custId + '"' : "") + ">+ " + esc(label) + "</button>";
   }
+  // CSV 匯入:各類實體的欄位提示(第一欄為關鍵欄)
+  var IMPORT_COLS = {
+    farm: "code, name, installed_capacity_mw, operator_name, location, feed_in_price_per_kwh, commercial_operation_date, status",
+    customer: "code, company_name, industry, annual_consumption_mwh, re_target_percent, target_year",
+    contract: "contract_number, wind_farm_code, customer_code, start_date, end_date, contracted_energy_mwh, contracted_percentage, price_per_kwh, priority, status",
+    meter: "customer_code, code, name, location, re_target_percent, annual_consumption_mwh",
+  };
+  var IMPORT_FN = {
+    farm: function (f) { return api.importFarms(f); },
+    customer: function (f) { return api.importCustomers(f); },
+    contract: function (f) { return api.importContracts(f); },
+    meter: function (f) { return api.importMeters(f); },
+  };
+  function importBtn(kind) {
+    if (!editMode) return "";
+    return '<button class="btn ghost sm entity-import" data-kind="' + kind + '">⇪ 匯入 CSV</button>';
+  }
+  function openImportModal(kind) {
+    var ov = document.createElement("div");
+    ov.className = "overlay show formov";
+    ov.innerHTML = '<div class="formmodal"><div class="fm-hd"><h3>匯入' + esc(ENTITY_NAME[kind]) + ' CSV</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
+      '<form class="fm-body"><p class="fm-note">CSV 欄位(首行為標題,關鍵欄:<b>' + esc(IMPORT_COLS[kind].split(",")[0]) + '</b>):<br><code style="font-size:11px">' + esc(IMPORT_COLS[kind]) + '</code><br>已存在(代碼重複)者自動略過。</p>' +
+      '<label class="fm-f"><span>選擇 CSV 檔 <i class="req">*</i></span><input type="file" name="file" accept=".csv,text/csv" required></label>' +
+      '<div class="fm-err"></div><div class="fm-result"></div><div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button><button type="submit" class="btn primary">匯入</button></div></form></div>';
+    document.body.appendChild(ov);
+    function close() { ov.remove(); }
+    ov.querySelector(".fm-x").onclick = close;
+    ov.querySelector(".fm-cancel").onclick = close;
+    ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
+    ov.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var input = ov.querySelector('input[name="file"]');
+      var file = input.files && input.files[0];
+      var errEl = ov.querySelector(".fm-err"), resEl = ov.querySelector(".fm-result");
+      errEl.textContent = ""; resEl.innerHTML = "";
+      if (!file) { errEl.textContent = "請選擇檔案。"; return; }
+      var btn = ov.querySelector('button[type="submit"]'); btn.disabled = true;
+      IMPORT_FN[kind](file).then(function (r) {
+        toast("已匯入 " + r.imported + " 筆" + ENTITY_NAME[kind]);
+        var msg = "匯入 <b>" + r.imported + "</b> 筆,略過 " + (r.skipped || 0) + " 筆" + ((r.errors && r.errors.length) ? "," + r.errors.length + " 筆錯誤" : "") + "。";
+        if (r.errors && r.errors.length) msg += '<div style="margin-top:6px;color:var(--bad);font-size:11.5px">' + r.errors.slice(0, 5).map(esc).join("<br>") + "</div>";
+        resEl.innerHTML = msg;
+        route();
+        setTimeout(close, r.errors && r.errors.length ? 4000 : 1200);
+      }).catch(function (err) { btn.disabled = false; errEl.textContent = writeErr(err); });
+    });
+    ov.querySelector('input[name="file"]').focus();
+  }
   function rowActions(kind, id) {
     if (!editMode) return "";
     return '<td class="rowact"><button class="mini entity-edit" data-kind="' + kind + '" data-id="' + id + '">編輯</button>' +
@@ -1645,8 +1693,9 @@
   }
   // delegated CRUD actions
   view.addEventListener("click", function (e) {
-    var el = e.target.closest(".entity-add,.entity-edit,.entity-del"); if (!el) return;
+    var el = e.target.closest(".entity-add,.entity-edit,.entity-del,.entity-import"); if (!el) return;
     var kind = el.getAttribute("data-kind");
+    if (el.classList.contains("entity-import")) { openImportModal(kind); return; }
     if (el.classList.contains("entity-add")) {
       var preset = kind === "meter" ? { customer_id: parseInt(el.getAttribute("data-cust"), 10) } : null;
       openEntityForm(kind, null, preset); return;

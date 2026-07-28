@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_write_access
+from app.api.deps import get_db, read_upload, require_write_access
+from app.ingestion import csv_importer
+from app.schemas.common import ImportResult
 from app.schemas.customer import CustomerCreate, CustomerRead, CustomerUpdate
 from app.services import customers as svc
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 _write = Depends(require_write_access)
+
+
+@router.post("/import", response_model=ImportResult, dependencies=[_write])
+async def import_customers(
+    file: UploadFile = File(..., description="CSV of customer rows"),
+    db: Session = Depends(get_db),
+) -> ImportResult:
+    rows = csv_importer.parse_csv(await read_upload(file))
+    return csv_importer.import_customers(db, rows)
 
 
 @router.get("", response_model=list[CustomerRead])

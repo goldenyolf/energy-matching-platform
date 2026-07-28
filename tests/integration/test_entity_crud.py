@@ -240,6 +240,31 @@ def test_contract_write_gate(client, monkeypatch):
     assert blocked.status_code == 403
 
 
+def test_import_wind_farms_csv(client):
+    csv = (
+        "code,name,installed_capacity_mw\n"
+        "WF-CSV1,匯入風場一,60\n"
+        "WF-CSV2,匯入風場二,80\n"
+    )
+    r = client.post(
+        "/api/v1/wind-farms/import", files={"file": ("f.csv", csv, "text/csv")}
+    )
+    assert r.status_code == 200
+    assert r.json()["imported"] == 2
+    codes = [f["code"] for f in client.get("/api/v1/wind-farms").json()]
+    assert "WF-CSV1" in codes and "WF-CSV2" in codes
+
+
+def test_entity_import_endpoints_require_token(client, monkeypatch):
+    monkeypatch.setattr(settings, "admin_write_token", "secret")
+    csv = "code,name,installed_capacity_mw\nWF-G,g,1\n"
+    for path in ("wind-farms", "customers", "contracts", "meters"):
+        r = client.post(
+            f"/api/v1/{path}/import", files={"file": ("f.csv", csv, "text/csv")}
+        )
+        assert r.status_code == 403, path
+
+
 def test_import_endpoints_require_token(client, monkeypatch):
     monkeypatch.setattr(settings, "admin_write_token", "secret")
     gcsv = (

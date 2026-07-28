@@ -45,6 +45,27 @@
         throw new ApiError("無法連線到後端 API：" + err.message, 0);
       });
   }
+  function upload(path, file) {
+    var fd = new FormData();
+    fd.append("file", file);
+    var headers = { Accept: "application/json" };
+    if (adminToken) headers["X-Admin-Token"] = adminToken;
+    return fetch(V1 + path, { method: "POST", headers: headers, body: fd })
+      .then(function (resp) {
+        return resp.text().then(function (body) {
+          if (!resp.ok) {
+            var detail = body;
+            try { detail = JSON.parse(body).detail || body; } catch (e) { /* keep */ }
+            throw new ApiError(resp.status + ": " + detail, resp.status);
+          }
+          return body ? JSON.parse(body) : null;
+        });
+      })
+      .catch(function (err) {
+        if (err instanceof ApiError) throw err;
+        throw new ApiError("無法連線到後端 API：" + err.message, 0);
+      });
+  }
   function get(path, params) { return request("GET", path, params); }
   function post(path, params) { return request("POST", path, params); }
   function postJson(path, jsonBody) { return request("POST", path, null, jsonBody); }
@@ -56,6 +77,10 @@
     setToken: function (t) { adminToken = t || null; },
     customers: function () { return get("/customers", { limit: 1000 }); },
     windFarms: function () { return get("/wind-farms", { limit: 1000 }); },
+    importFarms: function (file) { return upload("/wind-farms/import", file); },
+    importCustomers: function (file) { return upload("/customers/import", file); },
+    importContracts: function (file) { return upload("/contracts/import", file); },
+    importMeters: function (file) { return upload("/meters/import", file); },
     createFarm: function (data) { return postJson("/wind-farms", data); },
     updateFarm: function (id, data) { return putJson("/wind-farms/" + id, data); },
     deleteFarm: function (id) { return del("/wind-farms/" + id); },

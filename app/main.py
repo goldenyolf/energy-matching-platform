@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-import logging
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
@@ -22,6 +23,10 @@ from app.core.exceptions import (
     NotFoundError,
     ValidationError,
 )
+from app.core.logging import configure_logging, get_logger
+
+configure_logging()
+logger = get_logger("app")
 
 _HTTP_422 = 422  # Unprocessable content (avoids a renamed-constant deprecation)
 
@@ -37,11 +42,37 @@ app = FastAPI(
 
 # Loudly warn if a public deploy left writes wide open (see app/api/deps.py).
 if settings.environment == "production" and not settings.admin_write_token:
-    logging.getLogger("app").warning(
+    logger.warning(
         "ADMIN_WRITE_TOKEN is unset in production — all create/update/delete/"
         "import endpoints are OPEN to the public. Set ADMIN_WRITE_TOKEN to "
         "require an X-Admin-Token header for writes."
     )
+
+
+@app.middleware("http")
+async def log_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Log each request's method, path, status and duration; log exceptions."""
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        dur = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "%s %s failed after %.0fms", request.method, request.url.path, dur
+        )
+        raise
+    dur = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s -> %d (%.0fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        dur,
+    )
+    return response
+
 
 # Health at root (per spec) and under the versioned prefix.
 app.include_router(health_router)

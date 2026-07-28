@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_write_access
+from app.api.deps import get_db, read_upload, require_write_access
+from app.ingestion import csv_importer
+from app.schemas.common import ImportResult
 from app.schemas.meter import MeterCreate, MeterRead, MeterUpdate
 from app.services import meter_service as svc
 
 router = APIRouter(prefix="/meters", tags=["meters"])
 _write = Depends(require_write_access)
+
+
+@router.post("/import", response_model=ImportResult, dependencies=[_write])
+async def import_meters(
+    file: UploadFile = File(..., description="CSV of meter rows"),
+    db: Session = Depends(get_db),
+) -> ImportResult:
+    rows = csv_importer.parse_csv(await read_upload(file))
+    return csv_importer.import_meters(db, rows)
 
 
 @router.get("", response_model=list[MeterRead])
