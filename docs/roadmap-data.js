@@ -133,6 +133,9 @@ window.RM = (function () {
   const cnt = {}; ITEMS.forEach(it => { cnt[it.a] = (cnt[it.a] || 0) + 1; it.n = cnt[it.a]; });
   ITEMS.forEach(it => it.dependents = []); ITEMS.forEach(it => it.deps.forEach(d => byId[d] && byId[d].dependents.push(it.id)));
 
+  // 逐時（24/7 CFE）匹配：後端建模器 A9 + 匹配引擎/CFE 指標 B7 已上線；前端視圖 C6 待做。
+  byId['A9'].done = true; byId['B7'].done = true;
+
   // 選型決策（顯示於卡片 modal 的「選型建議」區塊）
   byId['H2'].decision =
     '<b class="hi">首選：GCP Cloud Run（asia-east1／彰化）＋ Cloud SQL for PostgreSQL（asia-east1）。</b><br>' +
