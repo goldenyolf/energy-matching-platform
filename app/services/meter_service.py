@@ -25,6 +25,30 @@ def _repo(db: Session) -> BaseRepository[Meter]:
     return BaseRepository(Meter, db)
 
 
+def _tou_split(m: Meter, consumption_mwh: float) -> tuple[float, float, float] | None:
+    """Split a meter's period consumption into (peak, half, off) MWh using its
+    stored TOU load fields as proportions. 周六半尖峰 folds into 半尖峰 (the
+    3-slot view). Returns None when the meter carries no TOU load data."""
+    if (
+        m.peak_kwh is None
+        and m.half_peak_kwh is None
+        and m.saturday_half_peak_kwh is None
+        and m.off_peak_kwh is None
+    ):
+        return None
+    peak = m.peak_kwh or 0.0
+    half = (m.half_peak_kwh or 0.0) + (m.saturday_half_peak_kwh or 0.0)
+    off = m.off_peak_kwh or 0.0
+    total = peak + half + off
+    if total <= 0:
+        return None
+    return (
+        round(consumption_mwh * peak / total, 3),
+        round(consumption_mwh * half / total, 3),
+        round(consumption_mwh * off / total, 3),
+    )
+
+
 def create(db: Session, data: MeterCreate) -> Meter:
     repo = _repo(db)
     if repo.get_by(code=data.code):
@@ -93,18 +117,35 @@ def compute_meter_breakdown(
         )
 
     start, end = period_bounds(period)
+    # Per-電號 consumption. When the meters carry stored load data (total_kwh),
+    # each meter's share of the customer's period consumption follows its
+    # total_kwh — so editing a meter's load fields changes its 用電/RE here.
+    # Otherwise fall back to the measured monthly ConsumptionData rows.
     cons: dict[int, float] = {}
-    for m in meters:
-        cons[m.id] = sum(
-            row.consumed_energy_mwh
-            for row in db.execute(
-                select(ConsumptionData).where(
-                    ConsumptionData.meter_id == m.id,
-                    ConsumptionData.period_start >= start,
-                    ConsumptionData.period_start <= end,
-                )
-            ).scalars()
-        )
+    total_load_kwh = sum((m.total_kwh or 0.0) for m in meters)
+    if total_load_kwh > 0:
+        customer_total = co.buyer.total_consumption_mwh
+        ordered = sorted(meters, key=lambda x: x.id)
+        assigned = 0.0
+        for i, m in enumerate(ordered):
+            if i == len(ordered) - 1:  # last meter absorbs rounding → exact Σ
+                cons[m.id] = round(customer_total - assigned, 6)
+            else:
+                v = round(customer_total * (m.total_kwh or 0.0) / total_load_kwh, 6)
+                cons[m.id] = v
+                assigned += v
+    else:
+        for m in meters:
+            cons[m.id] = sum(
+                row.consumed_energy_mwh
+                for row in db.execute(
+                    select(ConsumptionData).where(
+                        ConsumptionData.meter_id == m.id,
+                        ConsumptionData.period_start >= start,
+                        ConsumptionData.period_start <= end,
+                    )
+                ).scalars()
+            )
 
     give: dict[int, float] = {m.id: 0.0 for m in meters}
     remaining = total_green
@@ -133,6 +174,7 @@ def compute_meter_breakdown(
         is_met = re + 1e-9 >= m.re_target_percent and m.re_target_percent > 0
         if is_met:
             met += 1
+        tou = _tou_split(m, c)
         rows.append(
             MeterRow(
                 meter_id=m.id,
@@ -144,6 +186,9 @@ def compute_meter_breakdown(
                 re_percent=round(re, 4),
                 re_target_percent=m.re_target_percent,
                 target_met=is_met,
+                peak_mwh=tou[0] if tou else None,
+                half_peak_mwh=tou[1] if tou else None,
+                off_peak_mwh=tou[2] if tou else None,
             )
         )
 

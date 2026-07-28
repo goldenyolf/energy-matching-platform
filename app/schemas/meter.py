@@ -66,6 +66,12 @@ class MeterRow(BaseModel):
     re_percent: float
     re_target_percent: float
     target_met: bool
+    # Per-電號 time-of-use split of this meter's period consumption, derived from
+    # the meter's stored load fields (周六半尖峰 folded into 半尖峰 for the 3-slot
+    # view). None when the meter carries no load data.
+    peak_mwh: float | None = None
+    half_peak_mwh: float | None = None
+    off_peak_mwh: float | None = None
 
 
 class MeterBreakdown(BaseModel):

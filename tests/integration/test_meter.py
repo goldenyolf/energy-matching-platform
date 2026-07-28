@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from sqlalchemy import select
 
 from app.models import (
     ConsumptionData,
@@ -92,6 +93,40 @@ def test_target_priority_distribution(db):
     assert tn.allocated_green_mwh >= kh.allocated_green_mwh
     # no meter's RE% exceeds 100
     assert all(m.re_percent <= 100.0 + 1e-6 for m in r.meters)
+
+
+def test_total_kwh_drives_consumption_share_and_tou(db):
+    c = _seed_two_meters(db)
+    # Stored load data in a 20:80 ratio — different from annual_consumption_mwh
+    # (60:40). The breakdown consumption must now follow total_kwh, and the TOU
+    # split must appear for the meter that carries slot fields.
+    meters = list(db.execute(select(Meter).where(Meter.customer_id == c.id)).scalars())
+    for m in meters:
+        if m.code == "TN":
+            m.total_kwh = 20_000_000.0
+            m.peak_kwh, m.half_peak_kwh = 4_000_000.0, 8_000_000.0
+            m.saturday_half_peak_kwh, m.off_peak_kwh = 2_000_000.0, 6_000_000.0
+        else:
+            m.total_kwh = 80_000_000.0  # no slot fields → TOU stays None
+    db.commit()
+
+    r = compute_meter_breakdown(db, c.id, "2024-01")
+    tn = next(m for m in r.meters if m.code == "TN")
+    kh = next(m for m in r.meters if m.code == "KH")
+    total = tn.consumption_mwh + kh.consumption_mwh
+    assert total > 0
+    assert tn.consumption_mwh / total == pytest.approx(
+        0.2, rel=1e-3
+    )  # follows total_kwh
+    # TOU split present, sums back to consumption, Saturday folded into half-peak
+    assert tn.peak_mwh is not None
+    assert tn.peak_mwh + tn.half_peak_mwh + tn.off_peak_mwh == pytest.approx(
+        tn.consumption_mwh, abs=1e-2
+    )
+    assert tn.half_peak_mwh == pytest.approx(
+        tn.consumption_mwh * (8 + 2) / (4 + 8 + 2 + 6), rel=1e-3
+    )
+    assert kh.peak_mwh is None  # no slot fields → no TOU
 
 
 def test_no_meters_customer(db):

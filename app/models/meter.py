@@ -25,8 +25,10 @@ class Meter(Base, TimestampMixin):
     annual_consumption_mwh: Mapped[float | None] = mapped_column(Float, default=None)
 
     # 用電負載數據 (per-電號): capacity, Taipower TOU plan, and the annual
-    # per-time-slot consumption incl. Saturday half-peak. Stored/edited for
-    # record-keeping; the 3-slot matching engine is unchanged.
+    # per-time-slot consumption incl. Saturday half-peak. ``total_kwh`` drives
+    # each meter's share of consumption in the RE-attainment breakdown, and the
+    # slot fields drive its time-of-use split there (周六半尖峰 folds into 半尖峰
+    # for the 3-slot view). See app/services/meter_service.py.
     usage_name: Mapped[str | None] = mapped_column(String(200), default=None)
     contracted_capacity_kw: Mapped[float | None] = mapped_column(Float, default=None)
     tariff_type: Mapped[str | None] = mapped_column(String(40), default=None)

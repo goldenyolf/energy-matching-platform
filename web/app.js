@@ -329,6 +329,16 @@
     return html;
   }
 
+  // 各電號時段用電結構迷你堆疊條 (尖/半/離);無負載資料時顯示 –
+  function touCell(m) {
+    if (m.peak_mwh == null) return '<span class="u">–</span>';
+    var p = m.peak_mwh, h = m.half_peak_mwh, o = m.off_peak_mwh, t = (p + h + o) || 1;
+    var seg = function (v, cls) { return '<i class="' + cls + '" style="width:' + (v / t * 100) + '%"></i>'; };
+    return '<div class="toubar" title="尖峰 ' + nfmt(p, 0) + " · 半尖峰 " + nfmt(h, 0) + " · 離峰 " + nfmt(o, 0) + ' MWh">' +
+      seg(p, "sp") + seg(h, "hp") + seg(o, "op") + "</div>" +
+      '<div class="toutxt">' + nfmt(p, 0) + " / " + nfmt(h, 0) + " / " + nfmt(o, 0) + "</div>";
+  }
+
   function renderMeterBreakdownHtml(r) {
     if (!r.meter_count) return "";
     var html = '<div class="kpis section-gap">' +
@@ -338,18 +348,19 @@
       kpi("達標電號", r.meters_meeting_target + " / " + r.meter_count, "達成各自 RE 目標") +
       "</div>";
     html += '<section class="card"><div class="hd"><h3>各電號/廠區 RE 達成</h3><span class="aside">依 RE 目標排序</span></div><div class="tablewrap"><table>' +
-      "<thead><tr><th>電號</th><th>廠區</th><th>用電 (MWh)</th><th>分配綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>達標</th></tr></thead><tbody>";
+      "<thead><tr><th>電號</th><th>廠區</th><th>用電 (MWh)</th><th>時段用電 尖/半/離 (MWh)</th><th>分配綠電 (MWh)</th><th>RE 達成</th><th>目標</th><th>達標</th></tr></thead><tbody>";
     r.meters.forEach(function (m) {
       html += "<tr><td><span class=\"code\">" + esc(m.code) + "</span></td>" +
         "<td style=\"text-align:left\">" + esc(m.name) + (m.location ? " · " + esc(m.location) : "") + "</td>" +
         "<td class=\"num\">" + nfmt(m.consumption_mwh, 0) + "</td>" +
+        "<td class=\"num\">" + touCell(m) + "</td>" +
         "<td class=\"num\">" + nfmt(m.allocated_green_mwh, 0) + "</td>" +
         "<td class=\"num\">" + reCell(m.re_percent) + "</td>" +
         "<td class=\"num\">" + pct(m.re_target_percent, 0) + "%</td>" +
         "<td>" + metPill(m.target_met) + "</td></tr>";
     });
     html += "</tbody></table></div></section>";
-    html += '<div class="foot-note">' + iconInfo() + "綠電依各電號 RE 目標優先分配(目標較高者優先填至目標,餘量再補),Σ各電號綠電 = 客戶總綠電。示範資料。</div>";
+    html += '<div class="foot-note">' + iconInfo() + "綠電依各電號 RE 目標優先分配(目標較高者優先填至目標,餘量再補),Σ各電號綠電 = 客戶總綠電。用電佔比依各電號總量;時段結構(尖/半/離)取自各電號負載欄位,周六半尖峰併入半尖峰。示範資料。</div>";
     return html;
   }
 

@@ -139,6 +139,11 @@ button{font-family:inherit}
 .pill.neut{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--muted)}
 .pill.info{background:color-mix(in srgb,var(--brand) 15%,transparent);color:var(--brand)}
 .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+/* 電號時段用電結構 (尖/半/離) 迷你堆疊條 */
+.toubar{display:flex;width:120px;height:7px;border-radius:5px;overflow:hidden;background:var(--surface-2);margin-left:auto}
+.toubar i{display:block;height:100%}
+.toubar i.sp{background:var(--bad)} .toubar i.hp{background:var(--warn)} .toubar i.op{background:var(--good)}
+.toutxt{font-size:11px;color:var(--muted);margin-top:3px;text-align:right;font-variant-numeric:tabular-nums}
 /* toast 通知 + 求解中文字 chip */
 #toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast{display:flex;align-items:center;gap:8px;max-width:min(90vw,420px);padding:10px 15px;border-radius:11px;
