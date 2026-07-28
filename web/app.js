@@ -484,7 +484,7 @@
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
       html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電與容量因數" + "</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90</th><th>躉售價</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90" + infoTip("cf") + "</th><th>躉售價</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)" + infoTip("expP50") + "</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
@@ -1493,6 +1493,59 @@
   function iconInfo() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>'; }
   function iconWarn() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>'; }
 
+  // ---------- 名詞說明 popover(點擊 ⓘ 跳出) ----------
+  var INFO = {
+    cf: {
+      title: "容量因數 P50 / P90",
+      html:
+        "<p><b>容量因數（Capacity Factor）</b>＝實際發電量 ÷ 理論滿載發電量（裝置容量 × 8760h）。代表風場「相當於幾成時間在滿載發電」。台灣陸域風電約 28–35%、離岸約 40–50%。</p>" +
+        "<p><b>P50</b>：期望值／中位數預估——長期而言約有 <b>50%</b> 機率達到或超過（半數年份更好、半數更差）。用作基準財務預估。</p>" +
+        "<p><b>P90</b>：保守預估——約有 <b>90%</b> 機率達到或超過（只有一成的壞年份會低於它），數字比 P50 低，代表下行風險；銀行融資常要求以 P90 評估債務覆蓋。</p>" +
+        '<p class="tip-eg">直覺：P50 是「一般年」，P90 是「差一點的年也至少有這麼多」。</p>',
+    },
+    expP50: {
+      title: "預期 P50 發電（MWh）",
+      html:
+        "<p><b>預期年發電（P50）</b>＝ 裝置容量(MW) × 8760 小時 × 容量因數 P50(%)。</p>" +
+        "<p>代表「一般風況年」的預估年發電量；表格右側的「<b>達成</b>」＝ 實際發電 ÷ 這個預期。</p>" +
+        '<p class="tip-eg">若改用 P90 容量因數，得到的是保守年發電（數字較低）。</p>',
+    },
+  };
+  function infoTip(key) {
+    return '<button type="button" class="infotip" data-tip="' + key + '" aria-label="說明">' + iconInfo() + "</button>";
+  }
+  var tipPop = null, tipKey = null;
+  function closeTip() { if (tipPop) { tipPop.remove(); tipPop = null; tipKey = null; } }
+  function openTip(btn) {
+    var key = btn.getAttribute("data-tip"), info = INFO[key];
+    if (!info) return;
+    closeTip();
+    var pop = document.createElement("div");
+    pop.className = "tip-pop";
+    pop.innerHTML = '<div class="tip-hd">' + esc(info.title) + '<button type="button" class="tip-x" aria-label="關閉">&times;</button></div><div class="tip-bd">' + info.html + "</div>";
+    document.body.appendChild(pop);
+    var r = btn.getBoundingClientRect();
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - pw / 2), window.innerWidth - pw - 8);
+    var top = r.bottom + 8;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 8);
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+    pop.querySelector(".tip-x").onclick = closeTip;
+    tipPop = pop; tipKey = key;
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest(".infotip") : null;
+    if (btn) {
+      e.preventDefault(); e.stopPropagation();
+      if (tipKey === btn.getAttribute("data-tip")) closeTip(); else openTip(btn);
+      return;
+    }
+    if (tipPop && !(e.target.closest && e.target.closest(".tip-pop"))) closeTip();
+  });
+  window.addEventListener("resize", closeTip);
+  window.addEventListener("scroll", closeTip, true);
+
   // ---------- theme toggle ----------
   document.getElementById("themeBtn").addEventListener("click", function () {
     var root = document.documentElement;
@@ -1516,7 +1569,7 @@
   document.getElementById("helpClose").addEventListener("click", hideHelp);
   document.getElementById("helpOk").addEventListener("click", hideHelp);
   helpOverlay.addEventListener("click", function (e) { if (e.target === helpOverlay) hideHelp(); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); closeTip(); } });
 
   // ---------- 實體 CRUD(發電案場 / 企業客戶) ----------
   // 這兩個是「管理頁」,一律顯示新增/編輯/刪除。密碼保護暫時隱藏(之後再設計呈現);
