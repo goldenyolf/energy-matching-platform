@@ -1,0 +1,162 @@
+<title>綠電媒合平台 · 任務看板（拖拉）</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--panel:#fff;--panel2:#fbfcfe;--ink:#131c2e;--muted:#5d6b82;--faint:#93a1b8;
+    --line:#e5e9f0;--line2:#d6dde9;--brand:#4c6ef5;
+    --c1:#2fa24d;--c2:#0c9aa0;--c3:#4c6ef5;--c4:#e07a10;--c5:#e1444f;--c6:#8b5cf6;--c7:#0e7c9a;
+    --sTodo:#8494ab;--sDoing:#e07a10;--sTest:#8b5cf6;--sDone:#2fa24d;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  @media(prefers-color-scheme:dark){:root{
+    --bg:#0b1220;--panel:#111b2b;--panel2:#0e1725;--ink:#e7edf6;--muted:#95a4bd;--faint:#66788f;--line:#20304a;--line2:#2b3c57;--brand:#7290ff;
+    --c1:#4fce74;--c2:#2fc0be;--c3:#7290ff;--c4:#f0a63c;--c5:#ff6068;--c6:#a98bff;--c7:#39b6d8;
+    --sTodo:#8fa0b8;--sDoing:#f0a63c;--sTest:#a98bff;--sDone:#4fce74;
+  }}
+  :root[data-theme="light"]{--bg:#f5f7fa;--panel:#fff;--panel2:#fbfcfe;--ink:#131c2e;--muted:#5d6b82;--faint:#93a1b8;--line:#e5e9f0;--line2:#d6dde9;--brand:#4c6ef5;--c1:#2fa24d;--c2:#0c9aa0;--c3:#4c6ef5;--c4:#e07a10;--c5:#e1444f;--c6:#8b5cf6;--c7:#0e7c9a;--sTodo:#8494ab;--sDoing:#e07a10;--sTest:#8b5cf6;--sDone:#2fa24d}
+  :root[data-theme="dark"]{--bg:#0b1220;--panel:#111b2b;--panel2:#0e1725;--ink:#e7edf6;--muted:#95a4bd;--faint:#66788f;--line:#20304a;--line2:#2b3c57;--brand:#7290ff;--c1:#4fce74;--c2:#2fc0be;--c3:#7290ff;--c4:#f0a63c;--c5:#ff6068;--c6:#a98bff;--c7:#39b6d8;--sTodo:#8fa0b8;--sDoing:#f0a63c;--sTest:#a98bff;--sDone:#4fce74}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .top{padding:18px 24px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .t1{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap}
+  .kick{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase}
+  .top h1{font-size:21px;margin:0}
+  .meta{font-size:12.5px;color:var(--muted)} .meta b{color:var(--ink)}
+  .sub{font-size:12.5px;color:var(--faint);margin-top:6px} .sub b{color:var(--muted)}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .chip{cursor:pointer;border:1px solid var(--line2);background:var(--panel2);border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .chip:hover{color:var(--ink)} .chip.on{color:var(--ink);border-width:1.5px;background:var(--ink);border-color:var(--ink)}
+  .chip.on{color:var(--bg)} .chip .dot{width:9px;height:9px;border-radius:50%}
+  .chip.on .cc{color:var(--bg)} .cc{opacity:.65;font-weight:700}
+  .btn{margin-left:auto;cursor:pointer;border:1px solid var(--line2);background:var(--panel);color:var(--muted);border-radius:9px;padding:6px 12px;font-size:12.5px;font-weight:600}
+  .btn:hover{color:var(--ink)}
+  .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:16px 24px 40px;align-items:start}
+  @media(max-width:900px){.cols{grid-template-columns:1fr 1fr}} @media(max-width:560px){.cols{grid-template-columns:1fr}}
+  .col{background:var(--panel2);border:1px solid var(--line);border-radius:14px;min-height:180px;display:flex;flex-direction:column}
+  .colhd{padding:13px 15px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px;position:sticky;top:0;background:var(--panel2);border-radius:14px 14px 0 0;z-index:2}
+  .colhd .sdot{width:11px;height:11px;border-radius:50%;background:var(--sc)}
+  .colhd h2{font-size:14.5px;margin:0;font-weight:750} .colhd .n{margin-left:auto;font-size:13px;font-weight:700;color:var(--muted);background:var(--panel);border:1px solid var(--line2);border-radius:20px;min-width:26px;text-align:center;padding:1px 8px}
+  .drop{padding:11px;flex:1;min-height:120px;transition:background .12s}
+  .drop.over{background:color-mix(in srgb,var(--sc) 12%,transparent);outline:2px dashed var(--sc);outline-offset:-6px;border-radius:12px}
+  .card{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--pc);border-radius:10px;padding:11px 12px;margin-bottom:10px;cursor:grab;transition:.12s;user-select:none}
+  .card:active{cursor:grabbing} .card.dragging{opacity:.45;transform:rotate(1.5deg)}
+  .card:hover{box-shadow:0 6px 18px rgba(10,18,28,.13)}
+  .cardhd{display:flex;align-items:center;gap:8px}
+  .card .num{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;color:#fff;font-size:11px;font-weight:800;background:var(--pc)}
+  .card h4{font-size:13.5px;margin:0;font-weight:700;flex:1;line-height:1.35}
+  .card .foot{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .tg{font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px}
+  .tg.ph{background:var(--pc);color:#fff} .tg.ar{background:var(--panel2);border:1px solid var(--line2);color:var(--muted)}
+  .tg.tk{background:transparent;color:var(--pc);border:1px solid var(--pc)}
+  .colempty{color:var(--faint);font-size:12px;text-align:center;padding:22px 8px;opacity:.7}
+  .themebtn{position:fixed;top:16px;right:20px;z-index:30;width:32px;height:32px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--muted);cursor:pointer;font-size:15px}
+  /* modal */
+  .ov{position:fixed;inset:0;background:rgba(6,12,22,.55);backdrop-filter:blur(3px);display:none;place-items:center;z-index:60;padding:24px}
+  .ov.show{display:grid}
+  .modal{background:var(--panel);border:1px solid var(--line2);border-radius:18px;max-width:600px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.42);position:relative}
+  .mhd{padding:22px 24px 16px;border-bottom:1px solid var(--line);border-top:5px solid var(--pc);border-radius:18px 18px 0 0}
+  .mtags{display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap}
+  .mph{font-size:11.5px;font-weight:700;color:#fff;background:var(--pc);padding:3px 9px;border-radius:6px}
+  .marea{font-size:12px;color:var(--muted);font-weight:600}
+  .mhd h2{font-size:19px;margin:0}
+  .mx{position:absolute;top:15px;right:17px;cursor:pointer;color:var(--faint);font-size:26px;background:none;border:0}
+  .mbody{padding:8px 24px 24px} .fld{margin-top:16px}
+  .fld .fl{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--pc);text-transform:uppercase;margin-bottom:6px}
+  .fld p{font-size:13.5px;margin:0;line-height:1.65} .fld ul{margin:0;padding-left:2px;list-style:none}
+  .fld li{font-size:13px;color:var(--muted);line-height:1.5;padding:3px 0 3px 22px;position:relative}
+  .fld li::before{content:"";position:absolute;left:4px;top:9px;width:6px;height:6px;border-radius:2px;background:var(--pc);opacity:.7}
+  .setrow{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .setbtn{cursor:pointer;border:1px solid var(--line2);background:var(--panel2);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .setbtn.on{color:#fff} .mlink{display:inline-flex;gap:7px;margin-top:18px;color:var(--brand);font-weight:600;font-size:13px;text-decoration:none}
+  .foot{padding:0 24px 40px;color:var(--faint);font-size:12px;line-height:1.7}
+  .navlink{color:var(--brand);text-decoration:none;font-weight:600}
+</style>
+
+<button class="themebtn" id="themebtn" title="切換主題">◐</button>
+<div class="top">
+  <div class="t1"><span class="kick">Task Board · Drag &amp; Drop</span><h1>綠電媒合平台 · 任務看板</h1><span class="meta" id="stat"></span></div>
+  <div class="sub"><b>拖拉卡片</b>在四個狀態間移動：待辦 → 進行中 → 測試中 → 完成。狀態存在你的瀏覽器（localStorage）。點卡片看目標/工項/驗收。<a class="navlink" href="roadmap.html">← Roadmap 規劃看板</a></div>
+  <div class="bar" id="chips"></div>
+</div>
+<div class="cols" id="cols"></div>
+<div class="foot" id="foot"></div>
+<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
+
+<script src="roadmap-data.js"></script>
+<script>
+const {PH,PHS,AREAS,ITEMS,byId}=RM;
+const STATUS=[{id:'todo',n:'待辦',v:'sTodo'},{id:'doing',n:'進行中',v:'sDoing'},{id:'testing',n:'測試中',v:'sTest'},{id:'done',n:'完成',v:'sDone'}];
+const KEY='emp-board-v1';
+const $=s=>document.querySelector(s);
+let state=load(), filter='all';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{};}catch(e){return{};}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function stOf(it){return state[it.id]||(it.done?'done':'todo');}   // 預設：已上線→完成、其餘→待辦
+function setSt(id,s){state[id]=s;save();render();}
+
+function chips(){
+  const cc={all:ITEMS.length};PHS.forEach(p=>cc[p]=ITEMS.filter(i=>i.ph===p).length);
+  let h=`<div class="chip on" data-ph="all">全部 <span class="cc">${cc.all}</span></div>`;
+  PHS.forEach(p=>{h+=`<div class="chip" data-ph="${p}"><span class="dot" style="background:var(--c${PH[p].c})"></span>${PH[p].n} <span class="cc">${cc[p]}</span></div>`;});
+  h+=`<button class="btn" id="rst">↺ 重設狀態</button>`;
+  $('#chips').innerHTML=h;
+  $('#chips').onclick=e=>{const c=e.target.closest('.chip');if(c){filter=c.dataset.ph;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c));render();}
+    if(e.target.id==='rst'){state={};save();render();}};
+}
+function cardHTML(it){
+  const pc=`var(--c${PH[it.ph].c})`;
+  return `<div class="card" draggable="true" data-id="${it.id}" style="--pc:${pc}">
+    <div class="cardhd"><span class="num">${it.done?'✓':it.n}</span><h4>${it.t}</h4></div>
+    <div class="foot"><span class="tg ph">${PH[it.ph].n}</span><span class="tg ar">領域 ${it.a}</span>${it.tasks.length?`<span class="tg tk">${it.tasks.length} 工項</span>`:''}</div>
+  </div>`;
+}
+function render(){
+  const items=ITEMS.filter(it=>filter==='all'||String(it.ph)===filter);
+  const byS={}; STATUS.forEach(s=>byS[s.id]=[]);
+  items.forEach(it=>byS[stOf(it)].push(it));
+  $('#cols').innerHTML=STATUS.map(s=>`<div class="col" style="--sc:var(--${s.v})">
+     <div class="colhd"><span class="sdot"></span><h2>${s.n}</h2><span class="n">${byS[s.id].length}</span></div>
+     <div class="drop" data-st="${s.id}">${byS[s.id].length?byS[s.id].map(cardHTML).join(''):'<div class="colempty">拖卡片到這裡</div>'}</div></div>`).join('');
+  bindDnD();
+  const total=ITEMS.length,done=ITEMS.filter(it=>stOf(it)==='done').length;
+  $('#stat').innerHTML=`<b>${total}</b> 張卡 · 完成 <b>${done}</b> · 進行中 <b>${ITEMS.filter(it=>stOf(it)==='doing').length}</b> · 測試中 <b>${ITEMS.filter(it=>stOf(it)==='testing').length}</b> · 待辦 <b>${ITEMS.filter(it=>stOf(it)==='todo').length}</b>`;
+  $('#foot').innerHTML=`進度 ${Math.round(done/total*100)}%（${done}/${total}）。狀態僅存在此瀏覽器；換裝置或清快取會回預設。若需團隊共用狀態，屬未來「後端」工項（見 Roadmap 領域 H）。`;
+}
+let dragId=null;
+function bindDnD(){
+  document.querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('dragstart',e=>{dragId=c.dataset.id;c.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',c.dataset.id);});
+    c.addEventListener('dragend',()=>{c.classList.remove('dragging');dragId=null;document.querySelectorAll('.drop').forEach(d=>d.classList.remove('over'));});
+    let moved=false;
+    c.addEventListener('mousedown',()=>moved=false);
+    c.addEventListener('mousemove',()=>moved=true);
+    c.addEventListener('click',()=>{if(!moved)openM(c.dataset.id);});
+  });
+  document.querySelectorAll('.drop').forEach(d=>{
+    d.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';d.classList.add('over');});
+    d.addEventListener('dragleave',()=>d.classList.remove('over'));
+    d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');const id=dragId||e.dataTransfer.getData('text/plain');if(id)setSt(id,d.dataset.st);});
+  });
+}
+function openM(id){
+  const it=byId[id],pc=`var(--c${PH[it.ph].c})`,cur=stOf(it);
+  const tasks=it.tasks.map(t=>`<li>${t}</li>`).join('');
+  const set=STATUS.map(s=>`<button class="setbtn ${s.id===cur?'on':''}" style="${s.id===cur?`background:var(--${s.v});border-color:var(--${s.v})`:''}" onclick="setSt('${id}','${s.id}');closeM()">${s.n}</button>`).join('');
+  $('#modal').style.setProperty('--pc',getComputedStyle(document.documentElement).getPropertyValue('--c'+PH[it.ph].c).trim());
+  $('#modal').innerHTML=`<button class="mx" onclick="closeM()">&times;</button>
+   <div class="mhd"><div class="mtags"><span class="mph">${PH[it.ph].n} · ${PH[it.ph].t}</span><span class="marea">領域 ${it.a}·${AREAS.find(a=>a.id===it.a).n} #${it.n}</span></div><h2>${it.t}</h2></div>
+   <div class="mbody">
+    <div class="fld"><div class="fl">設定狀態</div><div class="setrow">${set}</div></div>
+    <div class="fld"><div class="fl">目標</div><p>${it.goal}</p></div>
+    <div class="fld"><div class="fl">好處 / 為何</div><p>${it.benefit}</p></div>
+    <div class="fld"><div class="fl">工項（${it.tasks.length}）</div><ul>${tasks}</ul></div>
+    ${it.link?`<a class="mlink" href="${it.link}" target="_blank" rel="noopener">↗ 打開相關頁面（線上 Demo）</a>`:''}
+   </div>`;
+  $('#ov').classList.add('show');
+}
+function closeM(){$('#ov').classList.remove('show');}
+$('#ov').onclick=e=>{if(e.target.id==='ov')closeM();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();});
+$('#themebtn').onclick=()=>{const r=document.documentElement,c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');r.setAttribute('data-theme',c==='dark'?'light':'dark');};
+chips();render();
+</script>
