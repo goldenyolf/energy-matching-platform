@@ -1,5 +1,6 @@
 """ORM models. Importing this package registers all tables on ``Base``."""
 
+from app.models.battery import Battery
 from app.models.consumption import ConsumptionData
 from app.models.contract import Contract
 from app.models.customer import Customer
@@ -17,6 +18,7 @@ from app.models.trec import TrecBatch
 from app.models.wind_farm import WindFarm
 
 __all__ = [
+    "Battery",
     "ConsumptionData",
     "Contract",
     "ContractStatus",
