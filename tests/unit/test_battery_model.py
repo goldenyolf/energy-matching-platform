@@ -48,3 +48,22 @@ def test_efficiency_and_soc_have_sensible_defaults(db, customer):
     row = db.query(Battery).one()
     assert row.round_trip_efficiency_percent == 88.0  # 往返效率預設
     assert row.initial_soc_percent == 0.0  # 期初空的
+
+
+def test_deleting_a_customer_removes_its_batteries(db, customer):
+    """電池是客戶的子表 → 刪客戶要一起帶走,不能留下指向死 id 的孤兒。"""
+    db.add(
+        Battery(
+            code="BAT-1",
+            customer_id=customer.id,
+            name="示範儲能",
+            energy_capacity_mwh=120.0,
+            power_mw=30.0,
+        )
+    )
+    db.commit()
+
+    db.delete(customer)
+    db.commit()
+
+    assert db.query(Battery).count() == 0

@@ -37,4 +37,4 @@ class Battery(Base, TimestampMixin):
     round_trip_efficiency_percent: Mapped[float] = mapped_column(Float, default=88.0)
     initial_soc_percent: Mapped[float] = mapped_column(Float, default=0.0)
 
-    customer: Mapped[Customer] = relationship()
+    customer: Mapped[Customer] = relationship(back_populates="batteries")
