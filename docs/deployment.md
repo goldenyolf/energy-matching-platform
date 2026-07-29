@@ -55,18 +55,42 @@ SPA 由 API 同源服務(`/app`),所以沒有獨立的前端服務,瀏覽器端�
 
 ## 步驟 3 — 遷移 + 載入示範資料(一次即可)
 
-最快的做法——從**你自己的機器**對著 Neon URL 執行。這同時能在真實 Postgres 上驗證遷移、
-並載入示範資料 + 時段資料:
+`scripts.seed` 是**一鍵到底**的:除了匯入 CSV,還會接著做時段展開、電號拆分與負載模擬、
+發 T-REC、生成 2024-01 的 15 分鐘 interval 資料——不必再另外跑 `generate_slot_profiles`。
+
+> ⚠️ **`--reset` / `SEED_RESET=1` 會 DROP 全部資料表再重建**,現有資料全數消失。
+> 示範資料可完整重建,但正式資料庫請三思。
+
+### 做法 A — 從你自己的機器對著 Neon 跑
+
+同時能在真實 Postgres 上驗證遷移:
 
 ```bash
 export DATABASE_URL="postgresql+psycopg://user:pass@ep-xxx.../neondb?sslmode=require"
-alembic upgrade head                      # create schema (idempotent; Render also runs this on boot)
-python -m scripts.seed --reset            # demo: 3 farms, 5 customers, 8 contracts, 12 months
-python -m scripts.generate_slot_profiles  # split monthly into peak/half/off-peak (needed for the SPA time-slot panel)
+alembic upgrade head           # create schema (idempotent; Render also runs this on boot)
+python -m scripts.seed --reset # 4 案場(含 1 座太陽能)、5 客戶、9 合約、12 個月
 ```
 
-或者用 Render 的 **emp-api → Shell**(schema 啟動時已遷移):
-`python -m scripts.seed --reset && python -m scripts.generate_slot_profiles`。
+### 做法 B — 只用 Render 環境變數(免費方案沒有 Shell 時用這條)
+
+[`scripts/start-api.sh`](../scripts/start-api.sh) 認得兩個旗標,適合已經部署上去、
+只想重新灌示範資料的情況:
+
+| 環境變數 | 行為 | 安全性 |
+|---|---|---|
+| `SEED_ON_START=1` | **只有在資料庫是空的**時候才 seed | 非破壞性,忘了拿掉也不會洗掉資料 |
+| `SEED_RESET=1` | **DROP 全部資料表**後重新 seed | 破壞性,**一次性用完就要立刻移除** |
+
+重灌示範資料的流程:Render → **emp-api → Environment** → 新增 `SEED_RESET=1` → 存檔
+(會自動觸發 redeploy) → 在 **Logs** 看到 `>>> SEED_RESET set — DROPPING all tables…`
+與 `seed complete.` → **回去把 `SEED_RESET` 刪掉**。
+
+> 留著 `SEED_RESET=1` 的話,**之後每次部署都會清庫重建**——這也是為什麼它刻意不是預設值。
+> 首次部署想要「有資料就別動」的語意,請用 `SEED_ON_START=1`,它可以安心長期留著。
+
+### 做法 C — Render Shell(付費方案才有)
+
+`python -m scripts.seed --reset`(schema 在啟動時已經遷移過了)。
 
 ## 步驟 4 — 開始使用
 
