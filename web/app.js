@@ -1287,12 +1287,20 @@
 
   function cfeBody(r) {
     var gap = Math.max(0, r.paper_re_percent - r.cfe_percent);
+    // 有電池時,發電分成三個互斥的桶：直供 + 充進電池 + 外溢（見 app/matching/storage.py）。
+    // 充進去卻沒出來的（往返損耗 + 期末殘留）誰也沒用到 → 單獨報,不藏進外溢。
+    var hasBattery = r.total_charged_mwh != null;
+    var stuck = hasBattery ? Math.max(0, r.total_charged_mwh - r.total_discharged_mwh) : 0;
     var kpis = '<div class="kpis">' +
       kpi("逐時 CFE%", pct(r.cfe_percent) + "<small>%</small>", "真時間匹配率", "hl") +
       kpi("帳面 RE%", pct(r.paper_re_percent) + "<small>%</small>", "月總量淨額") +
       kpi("時間錯配", '<span class="' + (gap > 0.05 ? "neg" : "pos") + '">' + pct(gap) + "</span><small>pt</small>", "帳面 − 逐時") +
-      kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", "發電時沒人用") +
+      kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", hasBattery ? "沒人用,也沒存進電池" : "發電時沒人用") +
       kpi("缺口", nfmt(r.total_shortfall_mwh, 0) + "<small>MWh</small>", "用電時沒風→灰電") +
+      (hasBattery
+        ? kpi("儲能送出", nfmt(r.total_discharged_mwh, 0) + "<small>MWh</small>",
+          "充入 " + nfmt(r.total_charged_mwh, 0) + " · 損耗與期末殘留 " + nfmt(stuck, 0))
+        : "") +
       "</div>";
     // 風光互補（B4）：有光電時才有對照組，直接把增益放在最上面。
     var uplift = (r.uplift_pt != null || r.storage_uplift_pt != null)

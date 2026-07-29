@@ -9,7 +9,12 @@ from app.matching.hourly_matching import (
     HourlyFarmResult,
     HourlyOutcome,
 )
-from app.matching.storage import BatterySpec, apply_storage
+from app.matching.storage import (
+    BatterySpec,
+    apply_storage,
+    charged_by_farm,
+    with_storage,
+)
 
 
 def _outcome(surplus: list[float], shortfall: list[float]) -> HourlyOutcome:
@@ -136,3 +141,64 @@ def test_no_batteries_leaves_everything_untouched():
     assert st.surplus_left_by_hour[1] == pytest.approx([40.0, 0.0])
     assert st.shortfall_left_by_hour[10] == pytest.approx([0.0, 40.0])
     assert st.charged_by_hour == {}
+
+
+def test_a_battery_whose_owner_never_has_a_shortfall_does_not_charge():
+    """主人整段期間都沒有缺口 → 這具電池永遠放不出來。讓它吃外溢只會讓外溢憑空
+    變小,而沒有任何一度電送到任何人手上。"""
+    st = apply_storage(_outcome([40.0, 40.0], [0.0, 0.0]), [_battery()], {1: [10]})
+    assert st.charged_by_hour[1] == pytest.approx([0.0, 0.0])
+    assert st.surplus_left_by_hour[1] == pytest.approx([40.0, 40.0])
+
+
+def test_an_orphan_battery_pointing_at_an_unknown_customer_does_not_charge():
+    st = apply_storage(
+        _outcome([40.0, 0.0], [0.0, 40.0]), [_battery(customer_id=999)], {1: [999]}
+    )
+    assert st.charged_by_hour[1] == pytest.approx([0.0, 0.0])
+    assert st.surplus_left_by_hour[1] == pytest.approx([40.0, 0.0])
+
+
+def _outcome_with_direct_match() -> HourlyOutcome:
+    """h0：發 100、客戶同一小時用掉 60、外溢 40。h1：缺口 40、沒有發電。"""
+    out = HourlyOutcome(hours=2)
+    out.farms.append(
+        HourlyFarmResult(
+            farm_id=1,
+            generated_mwh=100.0,
+            matched_mwh=60.0,
+            surplus_mwh=40.0,
+            surplus_by_hour=[40.0, 0.0],
+        )
+    )
+    out.customers.append(
+        HourlyCustomerResult(
+            customer_id=10,
+            consumption_mwh=100.0,
+            matched_mwh=60.0,
+            cfe_percent=60.0,
+            matched_by_hour=[60.0, 0.0],
+            shortfall_by_hour=[0.0, 40.0],
+        )
+    )
+    out.consumption_by_hour = [60.0, 40.0]
+    out.generation_by_hour = [100.0, 0.0]
+    return out
+
+
+def test_farm_matched_counts_only_what_reached_a_customer():
+    """充進電池的電不算案場的 matched：它可能損耗掉,也可能還躺在電池裡。
+    發電只會落在三個桶之一——直供、充入電池、外溢。"""
+    spec = _battery(efficiency=0.5)
+    st = apply_storage(_outcome_with_direct_match(), [spec], {1: [10]})
+    merged = with_storage(_outcome_with_direct_match(), st, [spec])
+
+    farm = merged.farms[0]
+    charged = charged_by_farm(st)[1]
+    assert charged == pytest.approx(40.0)
+    assert farm.matched_mwh == pytest.approx(60.0)  # 不含充進電池的 40
+    assert farm.surplus_mwh == pytest.approx(0.0)  # 外溢全被充走
+    assert farm.generated_mwh == pytest.approx(farm.matched_mwh + charged + 0.0)
+    # 電池只送得出 SOC × η = 20 → 系統 matched 只多這 20,另外 20 是往返損耗。
+    assert merged.total_matched_mwh == pytest.approx(80.0)
+    assert sum(st.discharged_by_hour[1]) == pytest.approx(20.0)

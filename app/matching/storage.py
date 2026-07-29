@@ -12,10 +12,30 @@
    輪 1 只吃「自家有簽約」的案場外溢（依合約優先序）,輪 2 才開放其他案場。
 3. 每筆充電記錄來自哪座案場（``charged_from_farm``）,跨合約的度數流向留得住
    稽核軌跡。
+4. **主人整段期間都沒有缺口的電池不充電**：它永遠放不出來,讓它吃外溢只會讓
+   外溢憑空變小,而沒有任何一度電送到任何人手上。
 
 能量守恆恆等式（測試會驗）::
 
     Σ送出 = (期初 SOC + Σ充入 − 期末 SOC) × η
+
+**加了儲能之後的能量帳**（``with_storage`` 的模型,前端與 API 都照這個講）：
+每一度發出來的電只會落在三個互斥的桶之一 ::
+
+    generated = matched  （同一小時直接送到客戶——案場的 matched_mwh 只算這個）
+              + charged  （被充進電池,見 charged_by_farm()）
+              + surplus  （外溢：沒人用,也沒存進電池）
+
+充進電池的那一桶再拆一次 ::
+
+    charged = discharged （電池後來真的送出去、確實有人用到）
+            + 往返損耗
+            + 期末仍留在電池裡的電
+
+所以全系統的 ``total_matched = Σ 案場 matched + Σ discharged``。
+**充進去卻沒送出來的電（損耗＋期末殘留）誰也沒用到**：它既不算進案場的
+``matched_mwh``,也不會讓 ``surplus`` 替它消失——它是 ``charged − discharged``,
+由呼叫端當成獨立的量報出來。
 """
 
 from __future__ import annotations
@@ -87,9 +107,19 @@ def apply_storage(
         out.charged_from_farm[b.battery_id] = {}
 
     farm_ids = [f.farm_id for f in outcome.farms]
+    # 主人整段期間都沒有缺口（沒有負載,或負載本來就被同小時的綠電補滿）的電池,
+    # 永遠不會放電 → 整段期間都不讓它充電,否則外溢會被它憑空吃掉。孤兒電池
+    # （customer_id 不在這次 outcome 裡）同樣落在這個判斷之外。
+    chargeable = {
+        b.battery_id
+        for b in ordered
+        if sum(shortfall.get(b.customer_id) or [0.0]) > _EPS
+    }
 
     def charge(b: BatterySpec, farm_id: int, h: int, busy: set[int]) -> None:
-        if b.battery_id in busy or farm_id not in surplus:
+        if b.battery_id in busy or b.battery_id not in chargeable:
+            return
+        if farm_id not in surplus:
             return
         take = min(
             surplus[farm_id][h],
@@ -140,13 +170,27 @@ def apply_storage(
     return out
 
 
+def charged_by_farm(storage: StorageOutcome) -> dict[int, float]:
+    """每座案場被充進電池的總量（跨所有電池加總）——``generated`` 的第二個桶。"""
+    totals: dict[int, float] = {}
+    for src in storage.charged_from_farm.values():
+        for farm_id, mwh in src.items():
+            totals[farm_id] = totals.get(farm_id, 0.0) + mwh
+    return totals
+
+
 def with_storage(
     outcome: HourlyOutcome,
     storage: StorageOutcome,
     batteries: list[BatterySpec],
 ) -> HourlyOutcome:
     """把充放結果併回成一份**新的** outcome：放電計入 matched、缺口與外溢換成
-    剩餘量、彙總欄位重算。原 outcome 不被修改,呼叫端才留得住「無儲」對照組。"""
+    剩餘量、彙總欄位重算。原 outcome 不被修改,呼叫端才留得住「無儲」對照組。
+
+    案場的 ``matched_mwh`` **不動**——它只算同一小時直接送到客戶的量。充進電池
+    的電是另一個桶（``charged_by_farm``）,其中只有真的放出來的那部分才會經由
+    客戶端進入 ``total_matched_mwh``；損耗與期末殘留誰也沒用到,不掛在任何人頭上。
+    見模組 docstring 的能量帳。"""
     hours = outcome.hours
     delivered: dict[int, list[float]] = {}
     for b in batteries:
@@ -187,7 +231,8 @@ def with_storage(
             HourlyFarmResult(
                 farm_id=f.farm_id,
                 generated_mwh=f.generated_mwh,
-                matched_mwh=f.generated_mwh - surplus_mwh,
+                # 只算直供,不含充進電池的量：generated − matched − surplus = charged。
+                matched_mwh=f.matched_mwh,
                 surplus_mwh=surplus_mwh,
                 surplus_by_hour=left,
             )

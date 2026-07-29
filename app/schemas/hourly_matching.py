@@ -25,11 +25,15 @@ class HourlyCustomerOut(BaseModel):
 
 
 class HourlyFarmOut(BaseModel):
+    """發電只會落在三個互斥的桶：``generated = matched + charged + surplus``。"""
+
     wind_farm_id: int
     name: str
     generated_mwh: float
-    matched_mwh: float
-    surplus_mwh: float
+    matched_mwh: float  # 同一小時直接送到客戶（不含充進電池的量）
+    surplus_mwh: float  # 外溢：沒人用,也沒存進電池
+    # 儲能（B5）：被充進電池的量。沒有電池時為 None。
+    charged_mwh: float | None = None
 
 
 class HeatmapOut(BaseModel):
@@ -60,9 +64,16 @@ class HourlyMatchingResult(BaseModel):
     soc_by_hour: list[float] | None = None  # 系統合計 SOC（MWh）
     discharged_by_hour: list[float] | None = None
     charged_by_hour: list[float] | None = None
+    # 加了儲能之後的能量帳（見 app/matching/storage.py 的 docstring）：
+    #   generated = matched（直供）+ charged（充進電池）+ surplus（外溢）
+    #   charged   = discharged（真的送出去）+ 往返損耗 + 期末殘留
+    # 所以 total_charged − total_discharged 就是「進得去、出不來」的那一段——
+    # 它誰也沒用到,既不算 matched,也不會被 total_surplus 吸收掉。
+    total_charged_mwh: float | None = None
+    total_discharged_mwh: float | None = None
     total_consumption_mwh: float
-    total_matched_mwh: float
-    total_surplus_mwh: float
+    total_matched_mwh: float  # 案場直供 + 電池送出
+    total_surplus_mwh: float  # 外溢：沒人用,也沒存進電池
     total_shortfall_mwh: float
     generation_by_hour: list[float]
     consumption_by_hour: list[float]

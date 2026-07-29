@@ -263,3 +263,60 @@ def test_customer_uplift_segments_stay_disjoint_with_wind_solar_and_storage(
     assert c.uplift_pt + c.storage_uplift_pt == pytest.approx(
         round(c.cfe_percent - c.wind_only_cfe_percent, 2)
     )
+
+
+def test_a_battery_whose_owner_has_no_load_cannot_shrink_the_spill(seeded_storage):
+    """幽靈電池：主人這段期間完全沒有用電 → 它永遠放不出電,也就不該吃掉任何外溢。
+    否則 KPI 的「外溢」會憑空變小,而沒有任何一度電送到任何人手上。"""
+    db, _, _ = seeded_storage
+    before = svc.compute_hourly_outcome(db, "2024-01")
+
+    ghost = Customer(code="GHOST", company_name="沒有用電的公司", industry="電子")
+    db.add(ghost)
+    db.flush()
+    db.add(
+        Battery(
+            code="BAT-GHOST",
+            customer_id=ghost.id,
+            name="幽靈電池",
+            energy_capacity_mwh=5000.0,
+            power_mw=5000.0,
+        )
+    )
+    db.commit()
+    after = svc.compute_hourly_outcome(db, "2024-01")
+
+    assert after.total_surplus_mwh == pytest.approx(before.total_surplus_mwh)
+    assert after.total_matched_mwh == pytest.approx(before.total_matched_mwh)
+    assert after.total_charged_mwh == pytest.approx(0.0)
+    assert after.storage_uplift_pt == pytest.approx(0.0)
+
+
+def test_the_post_storage_energy_accounting_identity_holds(seeded_storage):
+    """儲能之後,每一度發出來的電只落在三個桶之一：直供客戶、充進電池、外溢。
+    充進電池的又分成「真的送出去了」與「損耗＋期末殘留」——後者誰也沒用到,
+    既不能算進案場的 matched,也不能讓外溢替它消失。"""
+    db, _, cust = seeded_storage
+    db.add(
+        Battery(
+            code="BAT-1",
+            customer_id=cust.id,
+            name="示範儲能",
+            energy_capacity_mwh=200.0,
+            power_mw=50.0,
+        )
+    )
+    db.commit()
+    r = svc.compute_hourly_outcome(db, "2024-01")
+
+    generated = sum(f.generated_mwh for f in r.farms)
+    direct = sum(f.matched_mwh for f in r.farms)
+    charged = sum(f.charged_mwh or 0.0 for f in r.farms)
+    spilled = sum(f.surplus_mwh for f in r.farms)
+    assert generated == pytest.approx(direct + charged + spilled)
+    assert charged == pytest.approx(r.total_charged_mwh)
+    assert spilled == pytest.approx(r.total_surplus_mwh)
+    # 送到客戶手上的 = 案場當下直供 + 電池後來送出
+    assert r.total_matched_mwh == pytest.approx(direct + r.total_discharged_mwh)
+    # 進得去出不來的那一段（往返損耗 + 期末殘留）確實存在,而且被單獨報出來
+    assert r.total_charged_mwh > r.total_discharged_mwh

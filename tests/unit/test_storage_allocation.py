@@ -73,34 +73,39 @@ def _bat(bid: int, cid: int, **kw) -> BatterySpec:
     return BatterySpec(**base)
 
 
+# 這些優先序測試都在 h0 充電。每位客戶在 h1 留一點缺口,電池才「放得出來」——
+# 主人整段期間都沒缺口的電池不准充電（否則外溢會被它憑空吃掉,見 storage.py）。
+_LATER_GAP = 5.0
+
+
 def test_own_contract_battery_gets_the_surplus_first():
     # 案場 1 只外溢 30；客戶 10 有簽約、客戶 20 沒有 → 10 先吃滿。
-    out = _outcome({1: [30.0]}, {10: [0.0], 20: [0.0]})
+    out = _outcome({1: [30.0, 0.0]}, {10: [0.0, _LATER_GAP], 20: [0.0, _LATER_GAP]})
     st = apply_storage(out, [_bat(1, 10), _bat(2, 20)], {1: [10]})
-    assert st.charged_by_hour[1] == pytest.approx([30.0])
-    assert st.charged_by_hour[2] == pytest.approx([0.0])
+    assert st.charged_by_hour[1] == pytest.approx([30.0, 0.0])
+    assert st.charged_by_hour[2] == pytest.approx([0.0, 0.0])
 
 
 def test_leftover_surplus_opens_up_to_other_batteries():
     # 案場 1 外溢 130；簽約客戶的電池只吃得下 100 → 剩 30 給沒簽約的。
-    out = _outcome({1: [130.0]}, {10: [0.0], 20: [0.0]})
+    out = _outcome({1: [130.0, 0.0]}, {10: [0.0, _LATER_GAP], 20: [0.0, _LATER_GAP]})
     st = apply_storage(out, [_bat(1, 10, capacity_mwh=100.0), _bat(2, 20)], {1: [10]})
-    assert st.charged_by_hour[1] == pytest.approx([100.0])
-    assert st.charged_by_hour[2] == pytest.approx([30.0])
+    assert st.charged_by_hour[1] == pytest.approx([100.0, 0.0])
+    assert st.charged_by_hour[2] == pytest.approx([30.0, 0.0])
 
 
 def test_contract_order_decides_who_charges_first_on_the_same_farm():
     # 兩位客戶都簽了案場 1,合約優先序是 [20, 10] → 20 先吃。
-    out = _outcome({1: [40.0]}, {10: [0.0], 20: [0.0]})
+    out = _outcome({1: [40.0, 0.0]}, {10: [0.0, _LATER_GAP], 20: [0.0, _LATER_GAP]})
     st = apply_storage(
         out, [_bat(1, 10), _bat(2, 20, capacity_mwh=40.0)], {1: [20, 10]}
     )
-    assert st.charged_by_hour[2] == pytest.approx([40.0])
-    assert st.charged_by_hour[1] == pytest.approx([0.0])
+    assert st.charged_by_hour[2] == pytest.approx([40.0, 0.0])
+    assert st.charged_by_hour[1] == pytest.approx([0.0, 0.0])
 
 
 def test_charge_sources_are_recorded_per_farm():
-    out = _outcome({1: [20.0], 2: [50.0]}, {10: [0.0]})
+    out = _outcome({1: [20.0, 0.0], 2: [50.0, 0.0]}, {10: [0.0, _LATER_GAP]})
     st = apply_storage(out, [_bat(1, 10)], {1: [10]})
     assert st.charged_from_farm[1] == pytest.approx({1: 20.0, 2: 50.0})
 

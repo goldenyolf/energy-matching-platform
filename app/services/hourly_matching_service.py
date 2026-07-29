@@ -41,7 +41,12 @@ from app.matching.interval_shape import (
     heatmap_cfe,
     hour_of_day_sums,
 )
-from app.matching.storage import BatterySpec, apply_storage, with_storage
+from app.matching.storage import (
+    BatterySpec,
+    apply_storage,
+    charged_by_farm,
+    with_storage,
+)
 from app.models import (
     Battery,
     ConsumptionData,
@@ -257,6 +262,9 @@ def compute_hourly_outcome(
     discharged_series: list[float] | None = None
     charged_series: list[float] | None = None
     no_storage_by_customer: dict[int, float] = {}
+    farm_charged: dict[int, float] = {}
+    total_charged: float | None = None
+    total_discharged: float | None = None
     if battery_rows:
         specs = [
             BatterySpec(
@@ -283,6 +291,11 @@ def compute_hourly_outcome(
         }
         outcome = with_storage(outcome, storage, specs)
         storage_uplift = round(outcome.cfe_percent - no_storage_cfe, 2)
+        # 能量帳（見 storage.py）：generated = 直供 + 充進電池 + 外溢；
+        # 充進電池的又只有 discharged 真的送出去,差額是往返損耗＋期末殘留。
+        farm_charged = charged_by_farm(storage)
+        total_charged = sum(farm_charged.values())
+        total_discharged = sum(sum(arr) for arr in storage.discharged_by_hour.values())
 
         def _sum_batteries(series: dict[int, list[float]]) -> list[float]:
             total = [0.0] * nb
@@ -361,6 +374,7 @@ def compute_hourly_outcome(
             generated_mwh=f.generated_mwh,
             matched_mwh=f.matched_mwh,
             surplus_mwh=f.surplus_mwh,
+            charged_mwh=(farm_charged.get(f.farm_id, 0.0) if battery_rows else None),
         )
         for f in outcome.farms
     ]
@@ -392,6 +406,8 @@ def compute_hourly_outcome(
         soc_by_hour=soc_series,
         discharged_by_hour=discharged_series,
         charged_by_hour=charged_series,
+        total_charged_mwh=total_charged,
+        total_discharged_mwh=total_discharged,
         total_consumption_mwh=outcome.total_consumption_mwh,
         total_matched_mwh=outcome.total_matched_mwh,
         total_surplus_mwh=sum(outcome.surplus_by_hour),
