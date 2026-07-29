@@ -29,7 +29,7 @@ class DataSource(Protocol):
 
 
 class CsvDataSource:
-    """Reads the five entity CSVs from a directory (default: data/sample)."""
+    """Reads the seven entity CSVs from a directory (default: data/sample)."""
 
     def __init__(self, directory: str | Path) -> None:
         self.dir = Path(directory)
