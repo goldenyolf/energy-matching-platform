@@ -9,7 +9,11 @@ JSON shape::
 
     {"DateTime": "2026-07-16T00:10:00",
      "aaData": [{"機組類型": "風力", "機組名稱": "彰工",
-                 "裝置容量(MW)": "86.2", "淨發電量(MW)": "5.7", ...}, ...]}
+                 "裝置容量(MW)": "86.2", "淨發電量(MW)": "5.7",
+                 "淨發電量/裝置容量比(%)": "6.612%", "備註": "部分檢修"}, ...]}
+
+Every column Taipower publishes per unit is carried through to the API — the two
+extra ones (output ratio, remark) are all the site detail this dataset offers.
 
 Values carry noise (``-``, blanks, trailing ``(6.238%)``); ``_num`` is forgiving.
 """
@@ -25,6 +29,10 @@ from app.ingestion._http import http_get
 from app.schemas.live import LiveRenewables, LiveUnit, RenewableTypeSummary
 
 LIVE_URL = "https://service.taipower.com.tw/data/opendata/apply/file/d006001/001.json"
+# Human-readable landing pages for the same dataset, surfaced in the UI so the
+# number on screen can be traced back to its origin.
+DATASET_PAGE_URL = "https://data.gov.tw/dataset/8931"
+TAIPOWER_PAGE_URL = "https://www.taipower.com.tw/d006/loadGraph/loadGraph/genshx_.html"
 WIND_TYPE = "風力"
 RENEWABLE_TYPES = {"風力", "太陽能", "水力", "地熱", "生質能", "其它再生能源"}
 
@@ -32,6 +40,8 @@ _TYPE_KEY = "機組類型"
 _NAME_KEY = "機組名稱"
 _CAP_KEY = "裝置容量(MW)"
 _NET_KEY = "淨發電量(MW)"
+_RATIO_KEY = "淨發電量/裝置容量比(%)"
+_NOTE_KEY = "備註"
 
 _PAREN_TAIL = re.compile(r"\(.*\)\s*$")
 
@@ -61,6 +71,14 @@ def _num(value: object) -> float | None:
         return None
 
 
+def _text(value: object) -> str | None:
+    """Parse a free-text cell; Taipower writes ``' '`` for 'no remark'."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s or None
+
+
 def parse_live(payload: dict) -> LiveRenewables:
     """Project the raw Taipower JSON into the live renewables view."""
     rows = payload.get("aaData") or []
@@ -85,6 +103,8 @@ def parse_live(payload: dict) -> LiveRenewables:
                     name=name,
                     capacity_mw=_num(row.get(_CAP_KEY)),
                     net_mw=net,
+                    output_ratio_pct=_num(row.get(_RATIO_KEY)),
+                    note=_text(row.get(_NOTE_KEY)),
                 )
             )
 
@@ -134,5 +154,8 @@ class LiveClient:
             return self._cache[1]
         payload = json.loads(self._http_get(self._url).decode("utf-8-sig"))
         snapshot = parse_live(payload)
+        # Report the URL actually fetched, so the UI's source link can never drift
+        # from where the number came from.
+        snapshot.source_url = self._url
         self._cache = (now, snapshot)
         return snapshot

@@ -400,10 +400,18 @@
   }
 
   // ---------- 即時再生能源 ----------
+  // 台電「各機組發電量即時資訊(含外購電力)」— data.gov.tw dataset 8931,約 10 分更新。
+  var LIVE_DATASET_URL = "https://data.gov.tw/dataset/8931";
+  var LIVE_TAIPOWER_PAGE_URL = "https://www.taipower.com.tw/d006/loadGraph/loadGraph/genshx_.html";
+  var LIVE_JSON_URL = "https://service.taipower.com.tw/data/opendata/apply/file/d006001/001.json";
+  function extlink(href, text) {
+    return '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(text) + " ↗</a>";
+  }
   function renderLive() {
     crumb.textContent = "即時再生能源";
     view.innerHTML = '<div class="pagehead"><div><div class="title"><span class="bar"></span><h1>即時再生能源</h1></div>' +
-      '<div class="meta"><span>台電各機組即時發電(約 10 分更新);瞬時 MW,不進媒合。</span></div></div>' +
+      '<div class="meta"><span>台電各機組即時發電(約 10 分更新);瞬時 MW,不進媒合。</span>' +
+      "<span>資料來源:" + extlink(LIVE_DATASET_URL, "台電各機組發電量即時資訊(dataset 8931)") + "</span></div></div>" +
       '<div class="headactions"><button class="btn ghost" id="lv-refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>重新整理</button></div></div>' +
       '<div id="lv-body"><div class="placeholder">載入中…</div></div>';
     document.getElementById("lv-refresh").addEventListener("click", function () { loadLive(true); });
@@ -426,18 +434,27 @@
         });
         html += "</tbody></table></div></section>";
         html += '<section class="card"><div class="hd"><h3>風力各機組</h3><span class="aside">' + (d.wind || []).length + " 機組</span></div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>機組</th><th>裝置容量 (MW)</th><th>淨發電 (MW)</th></tr></thead><tbody>";
+          "<thead><tr><th>機組</th><th>裝置容量 (MW)</th><th>淨發電 (MW)</th><th>即時出力率 (%)</th><th>台電備註</th></tr></thead><tbody>";
         if (!(d.wind || []).length) {
-          html += '<tr><td class="empty" colspan="3">目前無風力機組資料</td></tr>';
+          html += '<tr><td class="empty" colspan="5">目前無風力機組資料</td></tr>';
         } else {
           d.wind.forEach(function (w) {
-            html += "<tr><td>" + esc(w.name) + "</td><td class=\"num\">" + (w.capacity_mw != null ? nfmt(w.capacity_mw, 1) : "–") + "</td><td class=\"num\">" + (w.net_mw != null ? nfmt(w.net_mw, 1) : "–") + "</td></tr>";
+            html += "<tr><td>" + esc(w.name) + "</td><td class=\"num\">" + (w.capacity_mw != null ? nfmt(w.capacity_mw, 1) : "–") +
+              "</td><td class=\"num\">" + (w.net_mw != null ? nfmt(w.net_mw, 1) : "–") +
+              "</td><td class=\"num\">" + (w.output_ratio_pct != null ? nfmt(w.output_ratio_pct, 1) + "%" : "–") +
+              "</td><td>" + (w.note ? '<span class="pill info">' + esc(w.note) + "</span>" : "–") + "</td></tr>";
           });
         }
         html += "</tbody></table></div></section></div>";
-        html += '<div class="foot-note">' + iconInfo() +
-          "資料來源:台電「各機組即時發電」(data.gov.tw dataset 8931,約 10 分更新)。此為<b>瞬時出力(MW)</b>,即這一刻的發電功率——" +
-          "非月度累積發電量(kWh,dataset 29961)。read-through 呈現、不儲存、不進媒合引擎。</div>";
+        // 單一 <span> 包住全文:.foot-note 是 flex,否則每個 <a>/<b> 都會變成獨立 flex item。
+        html += '<div class="foot-note">' + iconInfo() + "<span>" +
+          "資料來源:台電「各機組發電量即時資訊(含外購電力)」" + extlink(LIVE_DATASET_URL, "data.gov.tw dataset 8931") +
+          " · " + extlink(d.source_url || LIVE_JSON_URL, "原始 JSON") +
+          " · " + extlink(LIVE_TAIPOWER_PAGE_URL, "台電各機組發電量頁面") +
+          ",約 10 分更新。表中各欄(裝置容量、淨發電、出力率、備註)皆為台電原始欄位,未加工。" +
+          "<b>即時出力率 = 淨發電量 ÷ 裝置容量</b>,是這一刻的瞬時比值,<b>非</b>本站其他頁面的年度容量因數 P50/P90。" +
+          "裝置容量顯示「–」代表台電該案場未揭露(多為新增/測試中機組),出力率因此無法計算。" +
+          "此為<b>瞬時出力(MW)</b>,非月度累積發電量(kWh,dataset 29961)。read-through 呈現、不儲存、不進媒合引擎。</span></div>";
         body.innerHTML = html;
       })
       .catch(function (err) { body.innerHTML = errbox("載入即時再生能源", err); });
