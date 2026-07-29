@@ -22,7 +22,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.matching.hourly_matching import HourlyOutcome
+from app.matching.hourly_matching import (
+    HourlyCustomerResult,
+    HourlyFarmResult,
+    HourlyOutcome,
+)
 
 _EPS = 1e-9
 
@@ -133,4 +137,78 @@ def apply_storage(
         for b in ordered:
             out.soc_by_hour[b.battery_id][h] = soc[b.battery_id]
 
+    return out
+
+
+def with_storage(
+    outcome: HourlyOutcome,
+    storage: StorageOutcome,
+    batteries: list[BatterySpec],
+) -> HourlyOutcome:
+    """把充放結果併回成一份**新的** outcome：放電計入 matched、缺口與外溢換成
+    剩餘量、彙總欄位重算。原 outcome 不被修改,呼叫端才留得住「無儲」對照組。"""
+    hours = outcome.hours
+    delivered: dict[int, list[float]] = {}
+    for b in batteries:
+        arr = storage.discharged_by_hour.get(b.battery_id)
+        if arr is None:
+            continue
+        tgt = delivered.setdefault(b.customer_id, [0.0] * hours)
+        for h, v in enumerate(arr):
+            tgt[h] += v
+
+    out = HourlyOutcome(hours=hours)
+    for c in outcome.customers:
+        extra = delivered.get(c.customer_id, [0.0] * hours)
+        matched = [m + x for m, x in zip(c.matched_by_hour, extra, strict=True)]
+        matched_mwh = sum(matched)
+        out.customers.append(
+            HourlyCustomerResult(
+                customer_id=c.customer_id,
+                consumption_mwh=c.consumption_mwh,
+                matched_mwh=matched_mwh,
+                cfe_percent=(
+                    matched_mwh / c.consumption_mwh * 100.0
+                    if c.consumption_mwh > _EPS
+                    else 0.0
+                ),
+                matched_by_hour=matched,
+                shortfall_by_hour=list(
+                    storage.shortfall_left_by_hour.get(
+                        c.customer_id, c.shortfall_by_hour
+                    )
+                ),
+            )
+        )
+    for f in outcome.farms:
+        left = list(storage.surplus_left_by_hour.get(f.farm_id, f.surplus_by_hour))
+        surplus_mwh = sum(left)
+        out.farms.append(
+            HourlyFarmResult(
+                farm_id=f.farm_id,
+                generated_mwh=f.generated_mwh,
+                matched_mwh=f.generated_mwh - surplus_mwh,
+                surplus_mwh=surplus_mwh,
+                surplus_by_hour=left,
+            )
+        )
+
+    out.consumption_by_hour = list(outcome.consumption_by_hour)
+    out.generation_by_hour = list(outcome.generation_by_hour)
+    out.matched_by_hour = [
+        sum(c.matched_by_hour[h] for c in out.customers) for h in range(hours)
+    ]
+    out.surplus_by_hour = [
+        sum(f.surplus_by_hour[h] for f in out.farms) for h in range(hours)
+    ]
+    out.shortfall_by_hour = [
+        sum(c.shortfall_by_hour[h] for c in out.customers) for h in range(hours)
+    ]
+    out.total_consumption_mwh = sum(out.consumption_by_hour)
+    out.total_matched_mwh = sum(out.matched_by_hour)
+    out.cfe_percent = (
+        out.total_matched_mwh / out.total_consumption_mwh * 100.0
+        if out.total_consumption_mwh > _EPS
+        else 0.0
+    )
     return out
