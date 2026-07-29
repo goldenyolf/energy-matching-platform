@@ -42,6 +42,22 @@ def test_the_three_segments_are_ordered(seeded_db):
     assert res.wind_only_cfe_percent < res.no_storage_cfe_percent < res.cfe_percent
 
 
+def test_the_battery_owner_alone_has_per_customer_storage_curves(seeded_db):
+    """示範資料只有用電廠 2 掛著那具電池——只有它該有非 None 的逐客戶儲能曲線,
+    其他客戶（沒有電池）兩者皆為 None。"""
+    bat = seeded_db.query(Battery).one()
+    res = svc.compute_hourly_outcome(seeded_db, "2024-01")
+
+    owner = next(x for x in res.customers if x.customer_id == bat.customer_id)
+    assert owner.discharged_by_hour is not None and len(owner.discharged_by_hour) == 24
+    assert owner.soc_by_hour is not None and len(owner.soc_by_hour) == 24
+
+    others = [c for c in res.customers if c.customer_id != bat.customer_id]
+    assert others, "示範投組應該有其他客戶作對照"
+    assert all(c.discharged_by_hour is None for c in others)
+    assert all(c.soc_by_hour is None for c in others)
+
+
 def test_the_battery_owner_s_two_uplifts_decompose_the_total(seeded_db):
     """迴歸測試：用電廠 2（風＋光＋儲能都簽了）的 uplift_pt 曾誤把儲能的增益也算
     進太陽能頭上。正確算法下,兩段各自的貢獻加總要等於總增益,不重疊、不遺漏。"""

@@ -265,6 +265,8 @@ def compute_hourly_outcome(
     farm_charged: dict[int, float] = {}
     total_charged: float | None = None
     total_discharged: float | None = None
+    discharged_by_customer: dict[int, list[float]] = {}
+    soc_by_customer: dict[int, list[float]] = {}
     if battery_rows:
         specs = [
             BatterySpec(
@@ -310,6 +312,26 @@ def compute_hourly_outcome(
         # SOC 是存量,不能加總——interval 模式下 31 天相加會變成 31 倍容量,
         # 標成 MWh 就是錯的。取同一小時的日均，畫出來才是一顆真實電池的容量尺度。
         soc_series = [v / ndays for v in reduce24(_sum_batteries(storage.soc_by_hour))]
+
+        # 逐客戶的儲能曲線：把「自家電池」的原始序列加總,套用跟系統級一模一樣
+        # 的摺算規則——放電是流量直接 reduce24,SOC 是存量 reduce24 之後再除以
+        # 天數,才不會停在系統尺度而不是「一顆電池」的尺度。沒有電池的客戶不進
+        # 這兩個字典,查不到就是 None。
+        battery_ids_by_customer: dict[int, list[int]] = {}
+        for spec in specs:
+            battery_ids_by_customer.setdefault(spec.customer_id, []).append(
+                spec.battery_id
+            )
+        for cid, bids in battery_ids_by_customer.items():
+            dis_total = [0.0] * nb
+            soc_total = [0.0] * nb
+            for bid in bids:
+                for i, v in enumerate(storage.discharged_by_hour[bid]):
+                    dis_total[i] += v
+                for i, v in enumerate(storage.soc_by_hour[bid]):
+                    soc_total[i] += v
+            discharged_by_customer[cid] = reduce24(dis_total)
+            soc_by_customer[cid] = [v / ndays for v in reduce24(soc_total)]
 
     # "帳面" upper bound: match period totals in a single bucket (no timing).
     paper_farms = [HourlyFarm(f.id, (gen_totals.get(f.id, 0.0),)) for f in farm_rows]
@@ -361,6 +383,8 @@ def compute_hourly_outcome(
                 if battery_rows
                 else None
             ),
+            discharged_by_hour=discharged_by_customer.get(c.customer_id),
+            soc_by_hour=soc_by_customer.get(c.customer_id),
         )
         for c in outcome.customers
     ]

@@ -144,6 +144,8 @@ def test_no_battery_means_no_storage_readout(seeded_storage):
     assert res.storage_uplift_pt is None
     assert res.soc_by_hour is None
     assert all(c.storage_uplift_pt is None for c in res.customers)
+    assert all(c.discharged_by_hour is None for c in res.customers)
+    assert all(c.soc_by_hour is None for c in res.customers)
 
 
 def test_a_battery_lifts_cfe_and_cuts_spill(seeded_storage):
@@ -191,6 +193,80 @@ def test_storage_curves_respect_the_battery_limits(seeded_storage):
     assert res.discharged_by_hour is not None
     assert sum(res.discharged_by_hour) > 0.0
     assert sum(res.charged_by_hour) > 0.0
+
+
+def test_customer_battery_curves_present_for_owner_and_absent_otherwise(seeded_storage):
+    """有電池的客戶自己的 discharged_by_hour / soc_by_hour 要非 None、長度 24；
+    沒有電池的客戶兩者皆為 None——電池是表後資產，不是系統平均值。"""
+    db, farm, cust = seeded_storage
+    db.add(
+        Battery(
+            code="BAT-1",
+            customer_id=cust.id,
+            name="示範儲能",
+            energy_capacity_mwh=200.0,
+            power_mw=50.0,
+        )
+    )
+    other = Customer(
+        code="K2", company_name="用電廠二", industry="電子", re_target_percent=100.0
+    )
+    db.add(other)
+    db.flush()
+    db.add(
+        ConsumptionData(
+            customer_id=other.id,
+            period_start=date(2024, 1, 1),
+            period_end=date(2024, 1, 31),
+            consumed_energy_mwh=500.0,
+        )
+    )
+    db.commit()
+    res = svc.compute_hourly_outcome(db, "2024-01")
+
+    owner = next(x for x in res.customers if x.customer_id == cust.id)
+    assert owner.discharged_by_hour is not None
+    assert len(owner.discharged_by_hour) == 24
+    assert owner.soc_by_hour is not None
+    assert len(owner.soc_by_hour) == 24
+    # 這座投組只有一具電池,所以客戶自己的放電加總就等於系統總放電量。
+    assert sum(owner.discharged_by_hour) == pytest.approx(res.total_discharged_mwh)
+    assert max(owner.soc_by_hour) <= 200.0 + 1e-6
+
+    other_out = next(x for x in res.customers if x.customer_id == other.id)
+    assert other_out.discharged_by_hour is None
+    assert other_out.soc_by_hour is None
+
+
+def test_customer_soc_curve_stays_at_one_battery_s_scale_on_interval_path(
+    seeded_storage,
+):
+    """跟系統級一樣：interval 模式跑 744 個小時桶,客戶自己的 SOC 曲線也不能被
+    31 天加總撐爆——必須維持單顆電池的容量尺度（日均,不是月加總）。"""
+    from scripts.generate_interval_data import generate
+
+    db, _, cust = seeded_storage
+    db.add(
+        Battery(
+            code="BAT-1",
+            customer_id=cust.id,
+            name="示範儲能",
+            energy_capacity_mwh=200.0,
+            power_mw=50.0,
+        )
+    )
+    db.commit()
+    generate(db, "2024-01")
+
+    res = svc.compute_hourly_outcome(db, "2024-01")
+    assert res.source == "interval"
+    c = next(x for x in res.customers if x.customer_id == cust.id)
+    assert c.soc_by_hour is not None
+    assert len(c.soc_by_hour) == 24
+    assert max(c.soc_by_hour) <= 200.0 + 1e-6
+    assert c.discharged_by_hour is not None
+    assert len(c.discharged_by_hour) == 24
+    assert sum(c.discharged_by_hour) == pytest.approx(res.total_discharged_mwh)
 
 
 def test_customer_rows_carry_their_own_storage_uplift(seeded_storage):

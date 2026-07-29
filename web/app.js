@@ -1532,8 +1532,8 @@
         r.customers.forEach(function (x) { if (String(x.customer_id) === v) c = x; });
         if (!c) return;
         var loadArr = c.matched_by_hour.map(function (m, i) { return m + c.shortfall_by_hour[i]; });
-        wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust");
-        lg.innerHTML = cfeLegend(false);
+        wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust", null, c.discharged_by_hour) + socStrip(c.soc_by_hour);
+        lg.innerHTML = cfeLegend(false, false, !!c.discharged_by_hour);
         if (upBox) upBox.innerHTML = upliftBar(c.name, c);
       }
     }

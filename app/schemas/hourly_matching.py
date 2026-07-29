@@ -22,6 +22,11 @@ class HourlyCustomerOut(BaseModel):
     # 儲能（B5）：加電池之前的同一位客戶 CFE，與電池帶來的增益。
     no_storage_cfe_percent: float | None = None
     storage_uplift_pt: float | None = None
+    # 儲能（B5）：這位客戶自己的電池（如果有）逐時放電與 SOC。沒有電池時為 None。
+    # 與系統級同一套摺算方式：放電是流量 → reduce24 加總；SOC 是存量 →
+    # reduce24 加總後除以天數,曲線才會停在單一電池的容量尺度。
+    discharged_by_hour: list[float] | None = None
+    soc_by_hour: list[float] | None = None
 
 
 class HourlyFarmOut(BaseModel):
