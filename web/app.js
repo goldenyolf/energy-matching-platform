@@ -1277,7 +1277,10 @@
     var opts = '<option value="__all">全系統</option>' + r.customers.map(function (c) {
       return '<option value="' + c.customer_id + '">' + esc(c.name) + "</option>";
     }).join("");
-    var chart = '<section class="card"><div class="hd"><h3>24 小時供需匹配</h3>' +
+    var srcBadge = r.source === "interval"
+      ? '<span class="src-pill ok">真實 interval · 逐日 15 分鐘（示範模擬）</span>'
+      : '<span class="src-pill">典型日型建模</span>';
+    var chart = '<section class="card"><div class="hd"><h3>24 小時供需匹配</h3>' + srcBadge +
       '<span class="aside" style="display:inline-flex;align-items:center;gap:4px">帳面 vs 逐時' + infoTip("paperVsCfe") + "</span>" +
       '<label class="cfe-selwrap">檢視 <select id="cfe-cust" class="cfe-select">' + opts + "</select></label></div>" +
       '<div id="cfe-chart-wrap"></div><div id="cfe-legend"></div>' +
@@ -1296,9 +1299,35 @@
     var table = '<section class="card"><div class="hd"><h3>各客戶 · 帳面 vs 逐時</h3><span class="aside">按時間錯配排序 · 點列查看該客戶</span></div>' +
       '<div class="tablewrap"><table><thead><tr><th>客戶</th><th>產業</th><th>帳面 RE%</th><th>逐時 CFE%</th><th>時間錯配</th><th>對比</th></tr></thead><tbody>' +
       rows + "</tbody></table></div></section>";
-    var note = '<div class="foot-note">' + iconInfo() +
-      "逐時曲線為典型日型建模(風電夜強日弱、依產業別負載日型)、Σ逐時＝原月量;接真實 15 分鐘資料後原地替換。CFE% ≤ 帳面 RE%,差距即時間錯配。示範資料。</div>";
-    return kpis + chart + table + note;
+    var heat = r.heatmap ? cfeHeatmap(r.heatmap) : "";
+    var note = '<div class="foot-note">' + iconInfo() + esc(r.note) +
+      " CFE% ≤ 帳面 RE%,差距即時間錯配。示範資料。</div>";
+    return kpis + chart + heat + table + note;
+  }
+
+  function cfeHeatmap(hm) {
+    var days = hm.days || [], vals = hm.values || [];
+    // green alpha ∝ CFE%; theme-aware (low = faint over card, high = solid green)
+    function cell(v) {
+      var t = Math.max(0, Math.min(1, (v || 0) / 100));
+      var a = (0.06 + 0.9 * t).toFixed(3);
+      return '<i style="background:rgba(47,162,77,' + a + ')" title="CFE ' + pct(v, 0) + '%"></i>';
+    }
+    function dlab(iso) { var p = (iso || "").split("-"); return p.length === 3 ? (+p[1]) + "/" + (+p[2]) : iso; }
+    var hours = "";
+    for (var h = 0; h < 24; h++) hours += "<span>" + (h % 6 === 0 ? (h < 10 ? "0" + h : h) : "") + "</span>";
+    var rows = "";
+    for (var d = 0; d < vals.length; d++) {
+      var cells = vals[d].map(cell).join("");
+      rows += '<div class="heat-row"><span class="heat-daylab">' + dlab(days[d]) + '</span><div class="heat-cells">' + cells + "</div></div>";
+    }
+    return '<section class="card"><div class="hd"><h3>時×日 CFE 熱力圖</h3>' +
+      '<span class="aside">每格＝該日該小時的逐時 CFE%(綠色越深越高)</span></div>' +
+      '<div class="heatwrap"><div class="heat">' +
+      '<div class="heat-row heat-hdr"><span class="heat-daylab"></span><div class="heat-hours">' + hours + "</div></div>" +
+      rows + "</div></div>" +
+      '<div class="heat-lg"><span>低</span><i class="heat-grad"></i><span>高 CFE%</span>' +
+      '<span class="cfe-hint">哪些日子／時段長期匹配不足,一眼看出(夜間偏綠、白天偏淡)</span></div></section>';
   }
 
   function cfeChart(gen, con, matched, mode) {
