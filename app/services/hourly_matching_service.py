@@ -29,7 +29,12 @@ from app.matching.hourly_matching import (
     HourlyFarm,
     match_hourly,
 )
-from app.matching.hourly_profile import load_shape, to_hourly, wind_shape
+from app.matching.hourly_profile import (
+    generation_shape,
+    load_shape,
+    technology,
+    to_hourly,
+)
 from app.matching.interval_shape import (
     day_labels,
     days_in_period,
@@ -47,8 +52,8 @@ from app.schemas.hourly_matching import (
 from app.services.matching_service import period_bounds
 
 _MODELED_NOTE = (
-    "逐時曲線為典型日型建模（風電夜強日弱、依產業別負載日型），Σ逐時＝原月量；"
-    "接真實 interval 資料（A4）後原地替換。"
+    "逐時曲線為典型日型建模（風電夜強日弱、太陽能正午 bell、依產業別負載日型），"
+    "Σ逐時＝原月量；接真實 interval 資料（A4）後原地替換。"
 )
 _INTERVAL_NOTE = (
     "逐時曲線來自逐日 15 分鐘 interval 資料（示範為模擬、含逐日變異），"
@@ -147,16 +152,19 @@ def compute_hourly_outcome(
         source, modeled, note = "interval", False, _INTERVAL_NOTE
     else:
         ndays, nb = 1, 24
-        wind = wind_shape()
+        # each site is shaped by its own technology: wind night-strong, solar a
+        # midday bell — the two fill each other's gaps (風光互補).
+        shapes = {f.id: generation_shape(technology(f.farm_type)) for f in farm_rows}
+        default_shape = generation_shape("wind")
 
         def farm_arr(f: WindFarm) -> list[float]:
-            return to_hourly(gen_totals.get(f.id, 0.0), wind)
+            return to_hourly(gen_totals.get(f.id, 0.0), shapes[f.id])
 
         def cust_arr(c: Customer) -> list[float]:
             return to_hourly(con_totals.get(c.id, 0.0), load_shape(c.industry))
 
         def cap_arr(farm_id: int, cap: float) -> list[float]:
-            return to_hourly(cap, wind)
+            return to_hourly(cap, shapes.get(farm_id, default_shape))
 
         def reduce24(series: list[float]) -> list[float]:
             return series
@@ -180,9 +188,12 @@ def compute_hourly_outcome(
 
     def build_contracts(
         cap_fn: Callable[[int, float], list[float]],
+        skip_farms: frozenset[int] = frozenset(),
     ) -> list[HourlyContract]:
         out: list[HourlyContract] = []
         for c in eligible:
+            if c.wind_farm_id in skip_farms:
+                continue
             cap = contract_terms.monthly_volume_cap(
                 c.contracted_energy_mwh, c.monthly_shares, month
             )
@@ -204,6 +215,31 @@ def compute_hourly_outcome(
 
     outcome = match_hourly(farms, customers, build_contracts(cap_arr))
 
+    # 風光互補 (B4): same load, wind assets only — the baseline the solar bell is
+    # measured against. Nothing to compare when the portfolio has no solar.
+    solar_ids = frozenset(f.id for f in farm_rows if technology(f.farm_type) == "solar")
+    wind_only_cfe: float | None = None
+    uplift: float | None = None
+    solar_by_hour: list[float] | None = None
+    wind_only_by_customer: dict[int, float] = {}
+    if solar_ids:
+        solar_series = [0.0] * nb
+        for f in farms:
+            if f.farm_id in solar_ids:
+                for i, v in enumerate(f.gen):
+                    solar_series[i] += v
+        solar_by_hour = reduce24(solar_series)
+        wind_only = match_hourly(
+            [f for f in farms if f.farm_id not in solar_ids],
+            customers,
+            build_contracts(cap_arr, skip_farms=solar_ids),
+        )
+        wind_only_cfe = wind_only.cfe_percent
+        uplift = round(outcome.cfe_percent - wind_only_cfe, 2)
+        wind_only_by_customer = {
+            c.customer_id: c.cfe_percent for c in wind_only.customers
+        }
+
     # "帳面" upper bound: match period totals in a single bucket (no timing).
     paper_farms = [HourlyFarm(f.id, (gen_totals.get(f.id, 0.0),)) for f in farm_rows]
     paper_customers = [
@@ -220,6 +256,14 @@ def compute_hourly_outcome(
     cust_name = {c.id: c.company_name for c in cust_rows}
     cust_industry = {c.id: c.industry for c in cust_rows}
 
+    def cust_base(cid: int) -> float | None:
+        """該客戶在「只風電」對照組的 CFE%（投組沒有光電就沒有對照組）。"""
+        return wind_only_by_customer.get(cid, 0.0) if solar_ids else None
+
+    def cust_uplift(cid: int, cfe: float) -> float | None:
+        base = cust_base(cid)
+        return None if base is None else round(cfe - base, 2)
+
     customers_out = [
         HourlyCustomerOut(
             customer_id=c.customer_id,
@@ -231,6 +275,8 @@ def compute_hourly_outcome(
             paper_re_percent=paper_by_customer.get(c.customer_id, 0.0),
             matched_by_hour=reduce24(c.matched_by_hour),
             shortfall_by_hour=reduce24(c.shortfall_by_hour),
+            wind_only_cfe_percent=cust_base(c.customer_id),
+            uplift_pt=cust_uplift(c.customer_id, c.cfe_percent),
         )
         for c in outcome.customers
     ]
@@ -267,6 +313,9 @@ def compute_hourly_outcome(
         heatmap=heatmap,
         cfe_percent=outcome.cfe_percent,
         paper_re_percent=paper.cfe_percent,
+        wind_only_cfe_percent=wind_only_cfe,
+        uplift_pt=uplift,
+        solar_generation_by_hour=solar_by_hour,
         total_consumption_mwh=outcome.total_consumption_mwh,
         total_matched_mwh=outcome.total_matched_mwh,
         total_surplus_mwh=sum(outcome.surplus_by_hour),
