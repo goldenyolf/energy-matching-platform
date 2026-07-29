@@ -596,7 +596,7 @@
       "<thead><tr><th>案場</th><th>裝置容量 (MW)</th><th>年發電 (MWh)</th><th>躉售價</th>" +
       "<th>年收入 (億)</th><th>CAPEX (億)</th><th>年 O&amp;M (億)</th><th>年淨利 (億)</th><th>ROI (%/年)</th><th>回收期</th></tr></thead><tbody>";
     farms.forEach(function (f) {
-      html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + "</td>" +
+      html += "<tr><td><span class=\"code\">" + esc(f.code) + "</span> " + esc(f.name) + farmTypeBadge(f.farm_type) + "</td>" +
         "<td class=\"num\">" + nfmt(f.capacity_mw, 1) + "</td>" +
         "<td class=\"num\">" + nfmt(f.annual_generation_mwh, 0) + "</td>" +
         "<td class=\"num\">" + price(f.selling_price_per_kwh) + "</td>" +
@@ -617,9 +617,12 @@
       "<td class=\"num\"><span class=\"" + rCls + "\">" + pct(t.roi_percent, 1) + "</span></td>" +
       "<td class=\"num\">" + paybackCell(t.payback_years) + "</td></tr>";
     html += "</tbody></table></div></section>";
+    var hasSolar = farms.some(function (f) { return f.farm_type === "solar"; });
     html += '<div class="foot-note">' + iconInfo() +
       "CAPEX = 裝置容量 × 每 MW 成本;年收入 = 年發電 × 躉售價;年淨利 = 年收入 − 年 O&amp;M;" +
-      "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。</div>";
+      "ROI = 年淨利 / CAPEX;回收期 = CAPEX / 年淨利(靜態、未折現)。示範成本參數為預設值,可於上方覆寫。" +
+      (hasSolar ? "太陽能案場目前<b>沿用同一組每 MW CAPEX 假設</b>(實務上明顯低於離岸風電),此頁 solar 的 ROI 僅供結構參考。" : "") +
+      "</div>";
     body.innerHTML = html;
   }
 
@@ -1291,6 +1294,10 @@
       kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", "發電時沒人用") +
       kpi("缺口", nfmt(r.total_shortfall_mwh, 0) + "<small>MWh</small>", "用電時沒風→灰電") +
       "</div>";
+    // 風光互補（B4）：有光電時才有對照組，直接把增益放在最上面。
+    var uplift = r.uplift_pt != null
+      ? '<div id="cfe-uplift">' + upliftBar("全系統", r) + "</div>"
+      : "";
     var opts = '<option value="__all">全系統</option>' + r.customers.map(function (c) {
       return '<option value="' + c.customer_id + '">' + esc(c.name) + "</option>";
     }).join("");
@@ -1302,24 +1309,48 @@
       '<label class="cfe-selwrap">檢視 <select id="cfe-cust" class="cfe-select">' + opts + "</select></label></div>" +
       '<div id="cfe-chart-wrap"></div><div id="cfe-legend"></div>' +
       cfeConcept() + "</section>";
+    // 風光增益欄只在投組有太陽能時出現(系統級增益會被沒簽光電的大客戶稀釋,
+    // 逐客戶才看得出誰真的受惠)。
+    var showUplift = r.uplift_pt != null;
     var rows = r.customers.slice().sort(function (a, b) {
       return (b.paper_re_percent - b.cfe_percent) - (a.paper_re_percent - a.cfe_percent);
     }).map(function (c) {
       var g = Math.max(0, c.paper_re_percent - c.cfe_percent);
+      var upCell = c.uplift_pt > 0.005
+        ? '<span class="pos" title="只風電 ' + pct(c.wind_only_cfe_percent) + '%">+' + pct(c.uplift_pt) + " pt</span>"
+        : '<span class="u">–</span>';
       return '<tr data-cust="' + c.customer_id + '"><td><span class="code">' + esc(c.name) + "</span></td>" +
         "<td>" + esc(c.industry || "–") + "</td>" +
         '<td class="num">' + pct(c.paper_re_percent) + "%</td>" +
         '<td class="num" style="font-weight:700">' + pct(c.cfe_percent) + "%</td>" +
         '<td class="num">' + (g > 0.05 ? '<span class="neg">−' + pct(g) + "</span>" : '<span class="u">–</span>') + "</td>" +
+        (showUplift ? '<td class="num">' + upCell + "</td>" : "") +
         "<td>" + cfeGapBar(c.cfe_percent, c.paper_re_percent) + "</td></tr>";
     }).join("");
     var table = '<section class="card"><div class="hd"><h3>各客戶 · 帳面 vs 逐時</h3><span class="aside">按時間錯配排序 · 點列查看該客戶</span></div>' +
-      '<div class="tablewrap"><table><thead><tr><th>客戶</th><th>產業</th><th>帳面 RE%</th><th>逐時 CFE%</th><th>時間錯配</th><th>對比</th></tr></thead><tbody>' +
+      '<div class="tablewrap"><table><thead><tr><th>客戶</th><th>產業</th><th>帳面 RE%</th><th>逐時 CFE%</th><th>時間錯配</th>' +
+      (showUplift ? "<th>風光增益</th>" : "") + "<th>對比</th></tr></thead><tbody>" +
       rows + "</tbody></table></div></section>";
     var heat = r.heatmap ? cfeHeatmap(r.heatmap) : "";
     var note = '<div class="foot-note">' + iconInfo() + esc(r.note) +
       " CFE% ≤ 帳面 RE%,差距即時間錯配。示範資料。</div>";
-    return kpis + chart + heat + table + note;
+    return kpis + uplift + chart + heat + table + note;
+  }
+
+  // 「只風電 X% → 風光 Y%（+Z pt）」讀數；scope 為「全系統」或某一客戶。
+  // x 需帶 wind_only_cfe_percent / cfe_percent / uplift_pt(可為 null)。
+  function upliftBar(scope, x) {
+    if (x.uplift_pt == null || x.wind_only_cfe_percent == null) {
+      return '<div class="uplift flat">' + iconInfo() +
+        '<span class="up-txt">' + esc(scope) + " 未簽太陽能合約，逐時 CFE 不受風光互補影響</span>" +
+        infoTip("windSolar") + "</div>";
+    }
+    var up = x.uplift_pt > 0;
+    return '<div class="uplift">' + iconInfo() +
+      '<span class="up-scope">' + esc(scope) + "</span>" +
+      '<span class="up-txt">只風電 <b>' + pct(x.wind_only_cfe_percent) + "%</b> → 風光 <b>" + pct(x.cfe_percent) + "%</b></span>" +
+      '<span class="up-pt ' + (up ? "pos" : "") + '">' + (up ? "+" : "") + pct(x.uplift_pt) + " pt</span>" +
+      '<span class="up-why">太陽能正午 bell 補上風電白天的缺口</span>' + infoTip("windSolar") + "</div>";
   }
 
   function cfeHeatmap(hm) {
@@ -1347,7 +1378,7 @@
       '<span class="cfe-hint">哪些日子／時段長期匹配不足,一眼看出(夜間偏綠、白天偏淡)</span></div></section>';
   }
 
-  function cfeChart(gen, con, matched, mode) {
+  function cfeChart(gen, con, matched, mode, solar) {
     var H = (matched || con).length, W = 760, Ht = 232, L = 16, R = 12, T = 16, B = 24;
     var pw = W - L - R, ph = Ht - T - B;
     var ymax = 1, all = [con, matched].concat(gen ? [gen] : []);
@@ -1365,25 +1396,43 @@
       for (var i = 1; i < H; i++) d += " L" + X(i).toFixed(1) + " " + Y(a[i]).toFixed(1);
       return d;
     }
+    // 兩條曲線之間的帶狀區域(上緣往前、下緣往回)——風光堆疊用。
+    function band(lower, upper) {
+      var d = "M" + X(0).toFixed(1) + " " + Y(lower[0]).toFixed(1);
+      for (var i = 0; i < H; i++) d += " L" + X(i).toFixed(1) + " " + Y(upper[i]).toFixed(1);
+      for (var j = H - 1; j >= 0; j--) d += " L" + X(j).toFixed(1) + " " + Y(lower[j]).toFixed(1);
+      return d + " Z";
+    }
     var grid = "";
     [0, 6, 12, 18, 23].forEach(function (h) {
       grid += '<line x1="' + X(h).toFixed(1) + '" y1="' + T + '" x2="' + X(h).toFixed(1) + '" y2="' + (T + ph) + '" class="cfe-grid"/>' +
         '<text x="' + X(h).toFixed(1) + '" y="' + (Ht - 6) + '" class="cfe-xtick">' + (h < 10 ? "0" + h : h) + ":00</text>";
     });
     grid += '<line x1="' + L + '" y1="' + (T + ph) + '" x2="' + (W - R) + '" y2="' + (T + ph) + '" class="cfe-axis"/>';
+    // 有光電時,把太陽能那層疊在最上面:虛線=只風電、實線=風光合計,
+    // 中間那條琥珀色帶就是太陽能補進來的量(壓在綠色匹配區之上才看得見)。
+    var stack = "";
+    if (gen && solar) {
+      var wind = gen.map(function (v, i) { return Math.max(0, v - (solar[i] || 0)); });
+      stack = '<path d="' + band(wind, gen) + '" class="cfe-solar"/>' +
+        '<path d="' + line(wind) + '" class="cfe-wind"/>';
+    }
     var paths = '<path d="' + area(con) + '" class="cfe-demand"/>' +
-      '<path d="' + area(matched) + '" class="cfe-match"/>' +
+      '<path d="' + area(matched) + '" class="cfe-match"/>' + stack +
       (gen ? '<path d="' + line(gen) + '" class="cfe-gen"/>' : "");
     return '<div class="cfe-chart-box"><svg viewBox="0 0 ' + W + " " + Ht + '" role="img" aria-label="24 小時供需匹配圖">' +
       grid + paths + "</svg></div>";
   }
 
-  function cfeLegend(withGen) {
+  function cfeLegend(withGen, withSolar) {
     return '<div class="cfe-lg">' +
       '<span><i class="sw" style="background:var(--good)"></i>已匹配（重疊才算）</span>' +
       '<span><i class="sw" style="background:var(--faint);opacity:.35"></i>缺口（需灰電補足）</span>' +
-      (withGen ? '<span><i class="ln"></i>風電發電（超出用電即外溢）</span>' : "") +
-      '<span class="cfe-hint">' + (withGen ? "綠色越貼齊用電輪廓，時間匹配越好" : "此客戶：綠色＝已匹配、上方灰色＝該時段仍需灰電") + "</span></div>";
+      (withGen ? '<span><i class="ln"></i>' + (withSolar ? "風光合計發電" : "風電發電") + "（超出用電即外溢）</span>" : "") +
+      (withSolar ? '<span><i class="ln ln-wind"></i>只風電</span><span><i class="sw sw-solar"></i>太陽能補上的部分</span>' : "") +
+      '<span class="cfe-hint">' + (withGen
+        ? (withSolar ? "午間那條琥珀色帶就是太陽能填進風電的白天缺口（風光互補）" : "綠色越貼齊用電輪廓，時間匹配越好")
+        : "此客戶：綠色＝已匹配、上方灰色＝該時段仍需灰電") + "</span></div>";
   }
 
   function cfeConcept() {
@@ -1407,11 +1456,13 @@
     var sel = document.getElementById("cfe-cust");
     var wrap = document.getElementById("cfe-chart-wrap");
     var lg = document.getElementById("cfe-legend");
+    var upBox = document.getElementById("cfe-uplift");
     function draw() {
       var v = sel.value;
       if (v === "__all") {
-        wrap.innerHTML = cfeChart(r.generation_by_hour, r.consumption_by_hour, r.matched_by_hour, "all");
-        lg.innerHTML = cfeLegend(true);
+        wrap.innerHTML = cfeChart(r.generation_by_hour, r.consumption_by_hour, r.matched_by_hour, "all", r.solar_generation_by_hour);
+        lg.innerHTML = cfeLegend(true, !!r.solar_generation_by_hour);
+        if (upBox) upBox.innerHTML = upliftBar("全系統", r);
       } else {
         var c = null;
         r.customers.forEach(function (x) { if (String(x.customer_id) === v) c = x; });
@@ -1419,6 +1470,7 @@
         var loadArr = c.matched_by_hour.map(function (m, i) { return m + c.shortfall_by_hour[i]; });
         wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust");
         lg.innerHTML = cfeLegend(false);
+        if (upBox) upBox.innerHTML = upliftBar(c.name, c);
       }
     }
     if (sel) sel.addEventListener("change", draw);
@@ -1735,6 +1787,13 @@
         "<p><b>逐時 CFE%</b>：只有「同一小時內發電與用電<b>重疊</b>」的部分才算（24/7 CFE）；發電時沒人用、用電時沒風都不算。</p>" +
         '<p class="tip-eg">逐時 CFE% 通常低於帳面，差距＝時間錯配。更嚴的國際標準（如 Google 24/7）看的是逐時。</p>',
     },
+    windSolar: {
+      title: "風光互補",
+      html:
+        "<p>風電<b>夜強日弱</b>，但多數工業客戶白天用電最兇——中午因此出現缺口（熱力圖午間偏淡）。</p>" +
+        "<p>太陽能剛好相反：<b>正午 bell 型</b>、夜間歸零。兩者疊在一起，發電輪廓更貼近用電輪廓 → <b>逐時 CFE% 上升、外溢下降</b>。</p>" +
+        '<p class="tip-eg">上方「只風電 X% → 風光 Y%」就是同一批用電、把光電案場與其合約拿掉重算一次的對照；差額（pt）即互補帶來的增益。</p>',
+    },
   };
   function infoTip(key) {
     return '<button type="button" class="infotip" data-tip="' + key + '" aria-label="說明">' + iconInfo() + "</button>";
@@ -1808,7 +1867,7 @@
     { key: "operator_name", label: "營運商" },
     { key: "location", label: "場址" },
     { key: "installed_capacity_mw", label: "裝置容量 (MW)", type: "number", required: true },
-    { key: "farm_type", label: "類型", type: "select", options: [["", "—"], ["offshore", "離岸"], ["onshore", "陸域"]] },
+    { key: "farm_type", label: "類型", type: "select", options: [["", "—"], ["offshore", "離岸"], ["onshore", "陸域"], ["solar", "太陽能"]] },
     { key: "capacity_factor_percent", label: "容量因數 P50 (%)", type: "number", min: 0, max: 100 },
     { key: "p90_capacity_factor_percent", label: "容量因數 P90 (%)", type: "number", min: 0, max: 100 },
     { key: "turbine_count", label: "風機數", type: "number", step: "1" },
@@ -1817,10 +1876,11 @@
     { key: "commercial_operation_date", label: "商轉日", placeholder: "2024-01-01" },
     { key: "status", label: "狀態", type: "select", options: [["operational", "營運中"], ["under_construction", "建置中"], ["planning", "規劃中"], ["decommissioned", "除役"]] },
   ];
-  var FARM_TYPE_LABEL = { offshore: "離岸", onshore: "陸域" };
+  var FARM_TYPE_LABEL = { offshore: "離岸", onshore: "陸域", solar: "太陽能" };
+  var FARM_TYPE_PILL = { offshore: "info", solar: "warnp" };
   function farmTypeBadge(t) {
     if (!t) return "";
-    return ' <span class="pill ' + (t === "offshore" ? "info" : "neut") + '" style="height:19px;font-size:10.5px;padding:0 7px">' + esc(FARM_TYPE_LABEL[t] || t) + "</span>";
+    return ' <span class="pill ' + (FARM_TYPE_PILL[t] || "neut") + '" style="height:19px;font-size:10.5px;padding:0 7px">' + esc(FARM_TYPE_LABEL[t] || t) + "</span>";
   }
   var CUST_FIELDS = [
     { key: "code", label: "客戶代碼", createOnly: true, required: true, placeholder: "CUST-XXX" },
