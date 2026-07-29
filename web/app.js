@@ -1340,10 +1340,21 @@
   // 「只風電 X% → 風光 Y% → 風光＋儲 Z%」讀數；scope 為「全系統」或某一客戶。
   // 每一段各加一件事：太陽能、然後儲能。沒有的那一段自動略過。
   function upliftBar(scope, x) {
+    // 兩段各自的存在與否互不隱含（太陽能看案場、儲能看電池），標籤與說明文案
+    // 必須照這兩個布林值決定，不能用「陣列長度」猜——猜會在只有其中一段時講錯話。
+    var hasSolar = x.wind_only_cfe_percent != null;
+    var hasStorage = x.storage_uplift_pt != null;
     var segs = [];
-    if (x.wind_only_cfe_percent != null) segs.push({ lab: "只風電", v: x.wind_only_cfe_percent });
-    if (x.no_storage_cfe_percent != null) segs.push({ lab: "風光", v: x.no_storage_cfe_percent });
-    segs.push({ lab: segs.length ? "風光＋儲" : "逐時 CFE", v: x.cfe_percent });
+    if (hasSolar) segs.push({ lab: "只風電", v: x.wind_only_cfe_percent });
+    if (hasStorage) {
+      // no_storage_cfe_percent 是「加儲能之前」那一刻的 CFE：投組有光電時它就是
+      // 風光合計、沒有光電時它其實就等於只風電——標籤不能寫死「風光」。
+      segs.push({ lab: hasSolar ? "風光" : "只風電", v: x.no_storage_cfe_percent });
+    }
+    var finalLab = hasStorage
+      ? (hasSolar ? "風光＋儲" : "加上儲能")
+      : (hasSolar ? "風光" : "逐時 CFE");
+    segs.push({ lab: finalLab, v: x.cfe_percent });
     if (segs.length < 2) {
       return '<div class="uplift flat">' + iconInfo() +
         '<span class="up-txt">' + esc(scope) + " 未簽太陽能合約、也沒有儲能，逐時 CFE 不受這兩者影響</span>" +
@@ -1361,11 +1372,14 @@
       pills += '<span class="up-pt ' + (u.pt > 0 ? "pos" : "") + '" title="' + u.why + '帶來的增益">' +
         (u.pt > 0 ? "+" : "") + pct(u.pt) + " pt</span>";
     });
+    var why = hasStorage
+      ? (hasSolar ? "正午 bell 補白天缺口，電池再把多餘的挪到早晚" : "電池把外溢挪到缺口時段，逐時 CFE 因此上升")
+      : "太陽能正午 bell 補上風電白天的缺口";
     return '<div class="uplift">' + iconInfo() +
       '<span class="up-scope">' + esc(scope) + "</span>" +
       '<span class="up-txt">' + txt + "</span>" + pills +
-      '<span class="up-why">正午 bell 補白天缺口，電池再把多餘的挪到早晚</span>' +
-      (x.storage_uplift_pt != null ? infoTip("storage") : infoTip("windSolar")) + "</div>";
+      '<span class="up-why">' + why + "</span>" +
+      (hasStorage ? infoTip("storage") : infoTip("windSolar")) + "</div>";
   }
 
   function cfeHeatmap(hm) {
