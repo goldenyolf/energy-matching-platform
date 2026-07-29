@@ -1287,15 +1287,23 @@
 
   function cfeBody(r) {
     var gap = Math.max(0, r.paper_re_percent - r.cfe_percent);
+    // 有電池時,發電分成三個互斥的桶：直供 + 充進電池 + 外溢（見 app/matching/storage.py）。
+    // 充進去卻沒出來的（往返損耗 + 期末殘留）誰也沒用到 → 單獨報,不藏進外溢。
+    var hasBattery = r.total_charged_mwh != null;
+    var stuck = hasBattery ? Math.max(0, r.total_charged_mwh - r.total_discharged_mwh) : 0;
     var kpis = '<div class="kpis">' +
       kpi("逐時 CFE%", pct(r.cfe_percent) + "<small>%</small>", "真時間匹配率", "hl") +
       kpi("帳面 RE%", pct(r.paper_re_percent) + "<small>%</small>", "月總量淨額") +
       kpi("時間錯配", '<span class="' + (gap > 0.05 ? "neg" : "pos") + '">' + pct(gap) + "</span><small>pt</small>", "帳面 − 逐時") +
-      kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", "發電時沒人用") +
+      kpi("外溢", nfmt(r.total_surplus_mwh, 0) + "<small>MWh</small>", hasBattery ? "沒人用,也沒存進電池" : "發電時沒人用") +
       kpi("缺口", nfmt(r.total_shortfall_mwh, 0) + "<small>MWh</small>", "用電時沒風→灰電") +
+      (hasBattery
+        ? kpi("儲能送出", nfmt(r.total_discharged_mwh, 0) + "<small>MWh</small>",
+          "充入 " + nfmt(r.total_charged_mwh, 0) + " · 損耗與期末殘留 " + nfmt(stuck, 0))
+        : "") +
       "</div>";
     // 風光互補（B4）：有光電時才有對照組，直接把增益放在最上面。
-    var uplift = r.uplift_pt != null
+    var uplift = (r.uplift_pt != null || r.storage_uplift_pt != null)
       ? '<div id="cfe-uplift">' + upliftBar("全系統", r) + "</div>"
       : "";
     var opts = '<option value="__all">全系統</option>' + r.customers.map(function (c) {
@@ -1337,20 +1345,49 @@
     return kpis + uplift + chart + heat + table + note;
   }
 
-  // 「只風電 X% → 風光 Y%（+Z pt）」讀數；scope 為「全系統」或某一客戶。
-  // x 需帶 wind_only_cfe_percent / cfe_percent / uplift_pt(可為 null)。
+  // 「只風電 X% → 風光 Y% → 風光＋儲 Z%」讀數；scope 為「全系統」或某一客戶。
+  // 每一段各加一件事：太陽能、然後儲能。沒有的那一段自動略過。
   function upliftBar(scope, x) {
-    if (x.uplift_pt == null || x.wind_only_cfe_percent == null) {
+    // 兩段各自的存在與否互不隱含（太陽能看案場、儲能看電池），標籤與說明文案
+    // 必須照這兩個布林值決定，不能用「陣列長度」猜——猜會在只有其中一段時講錯話。
+    var hasSolar = x.wind_only_cfe_percent != null;
+    var hasStorage = x.storage_uplift_pt != null;
+    var segs = [];
+    if (hasSolar) segs.push({ lab: "只風電", v: x.wind_only_cfe_percent });
+    if (hasStorage) {
+      // no_storage_cfe_percent 是「加儲能之前」那一刻的 CFE：投組有光電時它就是
+      // 風光合計、沒有光電時它其實就等於只風電——標籤不能寫死「風光」。
+      segs.push({ lab: hasSolar ? "風光" : "只風電", v: x.no_storage_cfe_percent });
+    }
+    var finalLab = hasStorage
+      ? (hasSolar ? "風光＋儲" : "加上儲能")
+      : (hasSolar ? "風光" : "逐時 CFE");
+    segs.push({ lab: finalLab, v: x.cfe_percent });
+    if (segs.length < 2) {
       return '<div class="uplift flat">' + iconInfo() +
-        '<span class="up-txt">' + esc(scope) + " 未簽太陽能合約，逐時 CFE 不受風光互補影響</span>" +
+        '<span class="up-txt">' + esc(scope) + " 未簽太陽能合約、也沒有儲能，逐時 CFE 不受這兩者影響</span>" +
         infoTip("windSolar") + "</div>";
     }
-    var up = x.uplift_pt > 0;
+    var txt = segs.map(function (s, i) {
+      return (i ? " → " : "") + esc(s.lab) + " <b>" + pct(s.v) + "%</b>";
+    }).join("");
+    var pills = "";
+    [
+      { pt: x.uplift_pt, why: "太陽能" },
+      { pt: x.storage_uplift_pt, why: "儲能" },
+    ].forEach(function (u) {
+      if (u.pt == null) return;
+      pills += '<span class="up-pt ' + (u.pt > 0 ? "pos" : "") + '" title="' + u.why + '帶來的增益">' +
+        (u.pt > 0 ? "+" : "") + pct(u.pt) + " pt</span>";
+    });
+    var why = hasStorage
+      ? (hasSolar ? "正午 bell 補白天缺口，電池再把多餘的挪到早晚" : "電池把外溢挪到缺口時段，逐時 CFE 因此上升")
+      : "太陽能正午 bell 補上風電白天的缺口";
     return '<div class="uplift">' + iconInfo() +
       '<span class="up-scope">' + esc(scope) + "</span>" +
-      '<span class="up-txt">只風電 <b>' + pct(x.wind_only_cfe_percent) + "%</b> → 風光 <b>" + pct(x.cfe_percent) + "%</b></span>" +
-      '<span class="up-pt ' + (up ? "pos" : "") + '">' + (up ? "+" : "") + pct(x.uplift_pt) + " pt</span>" +
-      '<span class="up-why">太陽能正午 bell 補上風電白天的缺口</span>' + infoTip("windSolar") + "</div>";
+      '<span class="up-txt">' + txt + "</span>" + pills +
+      '<span class="up-why">' + why + "</span>" +
+      (hasStorage ? infoTip("storage") : infoTip("windSolar")) + "</div>";
   }
 
   function cfeHeatmap(hm) {
@@ -1378,7 +1415,7 @@
       '<span class="cfe-hint">哪些日子／時段長期匹配不足,一眼看出(夜間偏綠、白天偏淡)</span></div></section>';
   }
 
-  function cfeChart(gen, con, matched, mode, solar) {
+  function cfeChart(gen, con, matched, mode, solar, discharge) {
     var H = (matched || con).length, W = 760, Ht = 232, L = 16, R = 12, T = 16, B = 24;
     var pw = W - L - R, ph = Ht - T - B;
     var ymax = 1, all = [con, matched].concat(gen ? [gen] : []);
@@ -1417,21 +1454,48 @@
       stack = '<path d="' + band(wind, gen) + '" class="cfe-solar"/>' +
         '<path d="' + line(wind) + '" class="cfe-wind"/>';
     }
+    // 儲能放電的那一段本來就算在 matched 裡；用斜線帶標出「這一層來自電池」。
+    var batt = "";
+    if (discharge && discharge.some(function (v) { return v > 0; })) {
+      var floor = matched.map(function (m, i) { return Math.max(0, m - (discharge[i] || 0)); });
+      batt = '<path d="' + band(floor, matched) + '" class="cfe-batt"/>';
+    }
     var paths = '<path d="' + area(con) + '" class="cfe-demand"/>' +
-      '<path d="' + area(matched) + '" class="cfe-match"/>' + stack +
+      '<path d="' + area(matched) + '" class="cfe-match"/>' + batt + stack +
       (gen ? '<path d="' + line(gen) + '" class="cfe-gen"/>' : "");
     return '<div class="cfe-chart-box"><svg viewBox="0 0 ' + W + " " + Ht + '" role="img" aria-label="24 小時供需匹配圖">' +
+      '<defs><pattern id="cfeBattHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+      '<line x1="0" y1="0" x2="0" y2="6" class="cfe-batt-line"/></pattern></defs>' +
       grid + paths + "</svg></div>";
   }
 
-  function cfeLegend(withGen, withSolar) {
+  // SOC 走勢條：獨立一條、自己的尺度（與發電/用電量級差很多，不併軸以免誤讀）。
+  function socStrip(soc) {
+    if (!soc || !soc.some(function (v) { return v > 0; })) return "";
+    var H = soc.length, W = 760, Ht = 64, L = 16, R = 12, T = 8, B = 14;
+    var pw = W - L - R, ph = Ht - T - B;
+    var ymax = Math.max.apply(null, soc) * 1.1 || 1;
+    var X = function (i) { return L + (H <= 1 ? 0 : i / (H - 1) * pw); };
+    var Y = function (v) { return T + ph - v / ymax * ph; };
+    var d = "M" + X(0).toFixed(1) + " " + Y(0).toFixed(1);
+    for (var i = 0; i < H; i++) d += " L" + X(i).toFixed(1) + " " + Y(soc[i]).toFixed(1);
+    d += " L" + X(H - 1).toFixed(1) + " " + Y(0).toFixed(1) + " Z";
+    return '<div class="soc-box"><div class="soc-lab">電池 SOC<small>MWh · 日均</small></div>' +
+      '<svg viewBox="0 0 ' + W + " " + Ht + '" role="img" aria-label="電池 SOC 走勢">' +
+      '<path d="' + d + '" class="soc-area"/>' +
+      '<line x1="' + L + '" y1="' + (T + ph) + '" x2="' + (W - R) + '" y2="' + (T + ph) + '" class="cfe-axis"/>' +
+      "</svg></div>";
+  }
+
+  function cfeLegend(withGen, withSolar, withBatt) {
     return '<div class="cfe-lg">' +
       '<span><i class="sw" style="background:var(--good)"></i>已匹配（重疊才算）</span>' +
       '<span><i class="sw" style="background:var(--faint);opacity:.35"></i>缺口（需灰電補足）</span>' +
       (withGen ? '<span><i class="ln"></i>' + (withSolar ? "風光合計發電" : "風電發電") + "（超出用電即外溢）</span>" : "") +
       (withSolar ? '<span><i class="ln ln-wind"></i>只風電</span><span><i class="sw sw-solar"></i>太陽能補上的部分</span>' : "") +
+      (withBatt ? '<span><i class="sw sw-batt"></i>儲能放電</span>' : "") +
       '<span class="cfe-hint">' + (withGen
-        ? (withSolar ? "午間那條琥珀色帶就是太陽能填進風電的白天缺口（風光互補）" : "綠色越貼齊用電輪廓，時間匹配越好")
+        ? (withBatt ? "斜線那層是電池放出來的電——原本會外溢，被挪到缺口時段" : (withSolar ? "午間那條琥珀色帶就是太陽能填進風電的白天缺口（風光互補）" : "綠色越貼齊用電輪廓，時間匹配越好"))
         : "此客戶：綠色＝已匹配、上方灰色＝該時段仍需灰電") + "</span></div>";
   }
 
@@ -1460,16 +1524,16 @@
     function draw() {
       var v = sel.value;
       if (v === "__all") {
-        wrap.innerHTML = cfeChart(r.generation_by_hour, r.consumption_by_hour, r.matched_by_hour, "all", r.solar_generation_by_hour);
-        lg.innerHTML = cfeLegend(true, !!r.solar_generation_by_hour);
+        wrap.innerHTML = cfeChart(r.generation_by_hour, r.consumption_by_hour, r.matched_by_hour, "all", r.solar_generation_by_hour, r.discharged_by_hour) + socStrip(r.soc_by_hour);
+        lg.innerHTML = cfeLegend(true, !!r.solar_generation_by_hour, !!r.discharged_by_hour);
         if (upBox) upBox.innerHTML = upliftBar("全系統", r);
       } else {
         var c = null;
         r.customers.forEach(function (x) { if (String(x.customer_id) === v) c = x; });
         if (!c) return;
         var loadArr = c.matched_by_hour.map(function (m, i) { return m + c.shortfall_by_hour[i]; });
-        wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust");
-        lg.innerHTML = cfeLegend(false);
+        wrap.innerHTML = cfeChart(null, loadArr, c.matched_by_hour, "cust", null, c.discharged_by_hour) + socStrip(c.soc_by_hour);
+        lg.innerHTML = cfeLegend(false, false, !!c.discharged_by_hour);
         if (upBox) upBox.innerHTML = upliftBar(c.name, c);
       }
     }
@@ -1793,6 +1857,13 @@
         "<p>風電<b>夜強日弱</b>，但多數工業客戶白天用電最兇——中午因此出現缺口（熱力圖午間偏淡）。</p>" +
         "<p>太陽能剛好相反：<b>正午 bell 型</b>、夜間歸零。兩者疊在一起，發電輪廓更貼近用電輪廓 → <b>逐時 CFE% 上升、外溢下降</b>。</p>" +
         '<p class="tip-eg">上方「只風電 X% → 風光 Y%」就是同一批用電、把光電案場與其合約拿掉重算一次的對照；差額（pt）即互補帶來的增益。</p>',
+    },
+    storage: {
+      title: "儲能時間位移",
+      html:
+        "<p>逐時匹配的鐵律是<b>嚴格不跨小時</b>：發電時沒人用就是外溢、用電時沒電就是缺口，兩邊不能互抵。</p>" +
+        "<p><b>儲能</b>是唯一能合法打破這條鐵律的東西——把外溢的綠電充進電池，等缺口出現再放出來。放電會有往返效率損耗（示範為 88%）。</p>" +
+        '<p class="tip-eg">示範中電池可收任一案場的外溢（自家合約優先），屬<b>情境模擬</b>——實務上跨案場取電需另簽轉供合約。結算與 T-REC 尚未反映充放。</p>',
     },
   };
   function infoTip(key) {

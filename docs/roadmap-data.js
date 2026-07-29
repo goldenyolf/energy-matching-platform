@@ -146,6 +146,10 @@ window.RM = (function () {
   // + B4 只風電 vs 風光 uplift（系統級＋逐客戶）與 24h 圖上的太陽能帶 已上線。
   byId['A7'].done = true; byId['B4'].done = true;
 
+  // 儲能：A8 電池實體（batteries 表）+ B5 客戶側充放層（貪婪時序、兩輪充電優先序）
+  // 與三段式讀數（只風電 → 風光 → 風光＋儲）已上線。
+  byId['A8'].done = true; byId['B5'].done = true;
+
   // 風光互補決策（見 docs/spec-wind-solar-complementarity.md，使用者已確認）
   byId['B4'].decision =
     '<b class="hi">已定案（見 <code>docs/spec-wind-solar-complementarity.md</code>）：</b><br>' +

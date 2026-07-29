@@ -12,6 +12,7 @@ from app.db.base import Base, TimestampMixin
 from app.models.enums import GreenTargetType
 
 if TYPE_CHECKING:
+    from app.models.battery import Battery
     from app.models.consumption import ConsumptionData
     from app.models.contract import Contract
     from app.models.meter import Meter
@@ -40,5 +41,8 @@ class Customer(Base, TimestampMixin):
         back_populates="customer", cascade="all, delete-orphan"
     )
     meters: Mapped[list[Meter]] = relationship(
+        back_populates="customer", cascade="all, delete-orphan"
+    )
+    batteries: Mapped[list[Battery]] = relationship(
         back_populates="customer", cascade="all, delete-orphan"
     )

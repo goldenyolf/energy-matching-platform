@@ -221,3 +221,6 @@ class TaipowerWindSource:
 
     def meters(self) -> list[dict]:
         return []
+
+    def batteries(self) -> list[dict]:
+        return []  # Taipower publishes no customer-side storage data.

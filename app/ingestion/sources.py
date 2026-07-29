@@ -25,10 +25,11 @@ class DataSource(Protocol):
     def generation(self) -> list[dict]: ...
     def consumption(self) -> list[dict]: ...
     def meters(self) -> list[dict]: ...
+    def batteries(self) -> list[dict]: ...
 
 
 class CsvDataSource:
-    """Reads the five entity CSVs from a directory (default: data/sample)."""
+    """Reads the seven entity CSVs from a directory (default: data/sample)."""
 
     def __init__(self, directory: str | Path) -> None:
         self.dir = Path(directory)
@@ -56,6 +57,9 @@ class CsvDataSource:
 
     def meters(self) -> list[dict]:
         return self._read("meters.csv")
+
+    def batteries(self) -> list[dict]:
+        return self._read("batteries.csv")
 
 
 def _month_periods(year: int) -> list[tuple[str, date, date]]:
