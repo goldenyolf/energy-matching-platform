@@ -25,6 +25,7 @@ class DataSource(Protocol):
     def generation(self) -> list[dict]: ...
     def consumption(self) -> list[dict]: ...
     def meters(self) -> list[dict]: ...
+    def batteries(self) -> list[dict]: ...
 
 
 class CsvDataSource:
@@ -56,6 +57,9 @@ class CsvDataSource:
 
     def meters(self) -> list[dict]:
         return self._read("meters.csv")
+
+    def batteries(self) -> list[dict]:
+        return self._read("batteries.csv")
 
 
 def _month_periods(year: int) -> list[tuple[str, date, date]]:

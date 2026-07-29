@@ -77,4 +77,5 @@ def seeded_db(db):
     csv_importer.import_contracts(db, src.contracts())
     csv_importer.import_generation(db, src.generation())
     csv_importer.import_consumption(db, src.consumption())
+    csv_importer.import_batteries(db, src.batteries())
     return db

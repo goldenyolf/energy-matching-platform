@@ -1,0 +1,2 @@
+code,customer_code,name,energy_capacity_mwh,power_mw,round_trip_efficiency_percent,initial_soc_percent
+BAT-C2,CUST-C2,用電廠 2 廠區儲能,120,30,88,0

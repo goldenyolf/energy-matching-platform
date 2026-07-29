@@ -129,6 +129,7 @@ def seed(
             ("generation", csv_importer.import_generation, source.generation()),
             ("consumption", csv_importer.import_consumption, source.consumption()),
             ("meters", csv_importer.import_meters, source.meters()),
+            ("batteries", csv_importer.import_batteries, source.batteries()),
         ]
         for label, importer, rows in steps:
             result = importer(db, rows)
