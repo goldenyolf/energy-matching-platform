@@ -54,11 +54,19 @@ def test_solar_is_contracted_to_a_daytime_customer(seeded_db):
 
 
 def test_demo_portfolio_beats_its_own_wind_only_baseline(seeded_db):
-    """驗收（§9）：示範資料 2024-01 的風光 CFE 要高於只風電。"""
+    """驗收（§9）：示範資料 2024-01 的風光 CFE 要高於只風電。
+
+    「風光」那一段是 ``no_storage_cfe_percent``——``cfe_percent`` 已經含了電池的
+    增益,拿它來比會把儲能的功勞算到太陽能頭上。"""
     res = svc.compute_hourly_outcome(seeded_db, "2024-01")
     assert res.wind_only_cfe_percent is not None
-    assert res.cfe_percent > res.wind_only_cfe_percent
-    assert res.uplift_pt is not None and res.uplift_pt > 0
+    assert res.no_storage_cfe_percent is not None  # 示範資料有一具電池
+    wind_solar = res.no_storage_cfe_percent
+    assert wind_solar > res.wind_only_cfe_percent
+    assert res.uplift_pt == pytest.approx(
+        round(wind_solar - res.wind_only_cfe_percent, 2)
+    )
+    assert res.uplift_pt > 0
 
 
 def test_solar_contributes_midday_energy_in_the_hourly_view(seeded_db):
@@ -66,4 +74,9 @@ def test_solar_contributes_midday_energy_in_the_hourly_view(seeded_db):
     res = svc.compute_hourly_outcome(seeded_db, "2024-01")
     solar_out = next(f for f in res.farms if f.wind_farm_id == farm.id)
     assert solar_out.generated_mwh > 0
-    assert solar_out.matched_mwh > 0  # 日間客戶真的用到了這些綠電
+    # matched_mwh 只算同一小時直接送到客戶的量,充進電池的另計在 charged_mwh
+    # （見 app/matching/storage.py 的能量帳）→ 這一行真的代表「日間客戶用到了」。
+    assert solar_out.matched_mwh > 0
+    assert solar_out.generated_mwh == pytest.approx(
+        solar_out.matched_mwh + (solar_out.charged_mwh or 0.0) + solar_out.surplus_mwh
+    )
