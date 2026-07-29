@@ -14,15 +14,19 @@ from pathlib import Path
 
 from app.ingestion.csv_importer import parse_csv
 from app.ingestion.sources import MockDataGenerator
+from app.matching.hourly_profile import technology
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 YEAR = 2024
 
-# Annual generation per farm (MWh) — expanded to monthly by the wind profile.
+# Annual generation per site (MWh) — expanded to monthly by that technology's
+# seasonal profile (wind winter-strong, solar summer-strong).
+# SF-YUNLIN: 100 MW × 8760 h × 14% CF ≈ 122,640 MWh.
 FARM_ANNUAL_GENERATION = {
     "WF-FORMOSA2": 1_200_000,
     "WF-CHANGFANG": 2_000_000,
     "WF-ZHONGTUN": 60_000,
+    "SF-YUNLIN": 122_640,
 }
 
 
@@ -40,7 +44,11 @@ def main() -> None:
     generation_rows: list[dict] = []
     for farm in parse_csv((SAMPLE_DIR / "wind_farms.csv").read_text("utf-8")):
         annual = FARM_ANNUAL_GENERATION[farm["code"]]
-        generation_rows.extend(gen.generation_rows(farm["code"], annual))
+        generation_rows.extend(
+            gen.generation_rows(
+                farm["code"], annual, technology=technology(farm.get("farm_type"))
+            )
+        )
     _write(
         SAMPLE_DIR / "generation.csv",
         [
