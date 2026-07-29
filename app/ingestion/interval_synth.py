@@ -54,6 +54,20 @@ def wind_day_factors(ndays: int, rng: random.Random) -> list[float]:
     return factors
 
 
+def solar_day_factors(ndays: int, rng: random.Random) -> list[float]:
+    """Per-day solar multipliers driven by cloud cover (A7).
+
+    Clear/cloudy spells persist a little like wind, but the swing is narrower:
+    the sun shows up every day, clouds only take a bite out of it.
+    """
+    factors: list[float] = []
+    level = 1.0
+    for _ in range(ndays):
+        level = 0.5 * level + 0.5 * rng.uniform(0.7, 1.25)
+        factors.append(max(0.45, min(1.25, level)))
+    return factors
+
+
 def load_day_factors(
     dates: list[date], rng: random.Random, weekend_factor: float
 ) -> list[float]:

@@ -1,10 +1,11 @@
 """Split monthly generation/consumption rows into time-slot rows (deterministic).
 
-Wind-typical slot ratios: generation skews to off-peak (night); consumption
-skews to peak (industrial daytime). Slot rows replace the monthly row so the
-mutual-exclusivity invariant holds (slot rows sum to the monthly total). The
-last slot absorbs rounding so the sum is exact. Idempotent: rows already tagged
-with a time_slot are left alone.
+Slot ratios are technology-aware (A7): wind generation skews to off-peak (night),
+solar generation lands almost entirely in peak/half-peak with ~nothing off-peak
+(it does not generate at night); consumption skews to peak (industrial daytime).
+Slot rows replace the monthly row so the mutual-exclusivity invariant holds (slot
+rows sum to the monthly total). The last slot absorbs rounding so the sum is
+exact. Idempotent: rows already tagged with a time_slot are left alone.
 
 Usage:
     python -m scripts.generate_slot_profiles
@@ -16,10 +17,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import ConsumptionData, GenerationData
+from app.matching.hourly_profile import technology
+from app.models import ConsumptionData, GenerationData, WindFarm
 from app.models.enums import TimeSlot
 
 GEN_RATIOS = {TimeSlot.PEAK: 0.25, TimeSlot.HALF_PEAK: 0.30, TimeSlot.OFF_PEAK: 0.45}
+SOLAR_GEN_RATIOS = {
+    TimeSlot.PEAK: 0.55,
+    TimeSlot.HALF_PEAK: 0.44,
+    TimeSlot.OFF_PEAK: 0.01,
+}
 CON_RATIOS = {TimeSlot.PEAK: 0.40, TimeSlot.HALF_PEAK: 0.35, TimeSlot.OFF_PEAK: 0.25}
 _ORDER = (TimeSlot.PEAK, TimeSlot.HALF_PEAK, TimeSlot.OFF_PEAK)
 
@@ -36,12 +43,18 @@ def _split_total(total: float, ratios: dict[TimeSlot, float]) -> dict[TimeSlot, 
 
 
 def split_profiles(db: Session) -> None:
+    farm_tech = {
+        f.id: technology(f.farm_type) for f in db.execute(select(WindFarm)).scalars()
+    }
     for g in list(
         db.execute(
             select(GenerationData).where(GenerationData.time_slot.is_(None))
         ).scalars()
     ):
-        for slot, mwh in _split_total(g.generated_energy_mwh, GEN_RATIOS).items():
+        ratios = (
+            SOLAR_GEN_RATIOS if farm_tech.get(g.wind_farm_id) == "solar" else GEN_RATIOS
+        )
+        for slot, mwh in _split_total(g.generated_energy_mwh, ratios).items():
             db.add(
                 GenerationData(
                     wind_farm_id=g.wind_farm_id,

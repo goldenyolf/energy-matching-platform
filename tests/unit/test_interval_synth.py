@@ -57,3 +57,40 @@ def test_wind_day_factors_vary_and_are_positive():
     assert len(f) == 10
     assert all(x > 0 for x in f)
     assert max(f) > min(f)  # day-to-day variation exists
+
+
+def test_solar_day_factors_vary_and_are_positive():
+    rng = random.Random(1)
+    f = syn.solar_day_factors(10, rng)
+    assert len(f) == 10
+    assert all(x > 0 for x in f)
+    assert max(f) > min(f)  # 逐日雲量變異
+
+
+def test_solar_day_factors_are_deterministic_for_a_seed():
+    assert syn.solar_day_factors(7, random.Random(3)) == syn.solar_day_factors(
+        7, random.Random(3)
+    )
+
+
+def test_solar_day_factors_swing_less_than_wind():
+    # 雲量讓太陽能逐日起伏，但不像風那樣整天無風／整天強風。
+    solar = syn.solar_day_factors(60, random.Random(5))
+    wind = syn.wind_day_factors(60, random.Random(5))
+    assert max(solar) - min(solar) < max(wind) - min(wind)
+
+
+def test_solar_interval_series_is_zero_at_night():
+    from app.matching.hourly_profile import solar_shape
+
+    out = syn.distribute_to_intervals(
+        480.0,
+        ndays=2,
+        base_hourly_shape=solar_shape(),
+        day_factors=syn.solar_day_factors(2, random.Random(7)),
+    )
+    assert sum(out) == pytest.approx(480.0)
+    for day in range(2):
+        base = day * SLOTS_PER_DAY
+        assert sum(out[base : base + 6 * 4]) == pytest.approx(0.0)  # 00:00–06:00
+        assert sum(out[base + 19 * 4 : base + SLOTS_PER_DAY]) == pytest.approx(0.0)

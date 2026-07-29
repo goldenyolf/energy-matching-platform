@@ -41,6 +41,35 @@ _WIND = [
     1.16,
 ]
 
+# Solar: zero at night, rising after sunrise, bell peak at noon, back to zero by
+# sunset — the shape that fills wind's midday trough (風光互補).
+_SOLAR = [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.05,
+    0.20,
+    0.42,
+    0.63,
+    0.82,
+    0.95,
+    1.00,
+    0.96,
+    0.85,
+    0.68,
+    0.46,
+    0.24,
+    0.08,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+]
+
 # Load daily shapes by kind.
 _LOAD = {
     # 半導體晶圓廠：24h 連續高基載，白天略高
@@ -147,6 +176,25 @@ def _normalize(weights: list[float]) -> list[float]:
 def wind_shape() -> list[float]:
     """24 normalized weights (sum 1.0) for wind generation over a day."""
     return _normalize(_WIND)
+
+
+def solar_shape() -> list[float]:
+    """24 normalized weights (sum 1.0) for solar generation over a day."""
+    return _normalize(_SOLAR)
+
+
+def technology(farm_type: str | None) -> str:
+    """Derive the generating technology from a site's ``farm_type``.
+
+    Solar sites live in the same table as wind ones (``farm_type="solar"``), so
+    technology is derived rather than stored — no new column, no migration.
+    """
+    return "solar" if (farm_type or "").lower() == "solar" else "wind"
+
+
+def generation_shape(tech: str) -> list[float]:
+    """The typical-day generation shape for a technology."""
+    return solar_shape() if tech == "solar" else wind_shape()
 
 
 def load_shape(industry: str | None) -> list[float]:

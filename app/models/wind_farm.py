@@ -31,7 +31,9 @@ class WindFarm(Base, TimestampMixin):
         Enum(WindFarmStatus), default=WindFarmStatus.OPERATIONAL
     )
 
-    # 風電工程屬性. farm_type is plain String ("offshore"/"onshore") to avoid the
+    # 案場工程屬性. farm_type is plain String ("offshore"/"onshore"/"solar") — the
+    # table holds every generating asset, and 太陽能 rides the same pipeline with
+    # farm_type="solar" (see hourly_profile.technology). Plain String avoids the
     # Postgres CREATE TYPE trap on Neon. capacity_factor_percent is the expected
     # (P50) annual CF; p90_capacity_factor_percent is the conservative (P90) one.
     # Expected annual generation = installed_capacity_mw × 8760 × CF/100.

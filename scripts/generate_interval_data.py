@@ -23,9 +23,10 @@ from app.ingestion.interval_synth import (
     SLOTS_PER_DAY,
     distribute_to_intervals,
     load_day_factors,
+    solar_day_factors,
     wind_day_factors,
 )
-from app.matching.hourly_profile import load_shape, wind_shape
+from app.matching.hourly_profile import generation_shape, load_shape, technology
 from app.matching.interval_shape import days_in_period
 from app.models import ConsumptionData, Customer, GenerationData, WindFarm
 from app.models.interval import KIND_CONSUMPTION, KIND_GENERATION, IntervalReading
@@ -98,14 +99,19 @@ def generate(db: Session, period: str, seed: int = 42) -> int:
     )
 
     mappings: list[dict] = []
-    wind = wind_shape()
     for f in db.execute(select(WindFarm).order_by(WindFarm.id)).scalars():
         total = gen_totals.get(f.id, 0.0)
         if total <= 0:
             continue
+        tech = technology(f.farm_type)
         rng = random.Random(seed + f.id * 101)
-        factors = wind_day_factors(ndays, rng)
-        values = distribute_to_intervals(total, ndays, wind, factors)
+        # solar varies with cloud cover, wind with windy/calm spells
+        factors = (
+            solar_day_factors(ndays, rng)
+            if tech == "solar"
+            else wind_day_factors(ndays, rng)
+        )
+        values = distribute_to_intervals(total, ndays, generation_shape(tech), factors)
         mappings += _rows_for(KIND_GENERATION, f.id, start, values)
 
     for c in db.execute(select(Customer).order_by(Customer.id)).scalars():

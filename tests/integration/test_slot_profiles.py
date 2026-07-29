@@ -69,6 +69,51 @@ def test_monthly_engine_still_totals_on_slot_data(db):
     assert farm.generated_mwh == 100.0  # monthly engine sums slot rows back to monthly
 
 
+def _seed_solar_monthly(db):
+    f = WindFarm(
+        code="S1",
+        name="S1",
+        installed_capacity_mw=50,
+        feed_in_price_per_kwh=4.0,
+        farm_type="solar",
+    )
+    db.add(f)
+    db.flush()
+    db.add(
+        GenerationData(
+            wind_farm_id=f.id,
+            period_start=date(2024, 1, 1),
+            period_end=date(2024, 1, 31),
+            generated_energy_mwh=100.0,
+        )
+    )
+    db.commit()
+    return f
+
+
+def test_solar_splits_into_daytime_slots_with_no_off_peak(db):
+    f = _seed_solar_monthly(db)
+    split_profiles(db)
+    by_slot = {
+        g.time_slot.value: g.generated_energy_mwh
+        for g in db.query(GenerationData).filter(GenerationData.wind_farm_id == f.id)
+    }
+    assert round(sum(by_slot.values()), 6) == 100.0
+    # 太陽能夜間不發電：離峰≈0，尖峰＋半尖峰吃下幾乎全部。
+    assert by_slot["off_peak"] <= 2.0
+    assert by_slot["peak"] + by_slot["half_peak"] >= 98.0
+
+
+def test_wind_keeps_its_off_peak_heavy_split(db):
+    f, _cust = _seed_monthly(db)
+    split_profiles(db)
+    by_slot = {
+        g.time_slot.value: g.generated_energy_mwh
+        for g in db.query(GenerationData).filter(GenerationData.wind_farm_id == f.id)
+    }
+    assert by_slot["off_peak"] > by_slot["peak"]
+
+
 def test_deterministic(db):
     f, cust = _seed_monthly(db)
     split_profiles(db)

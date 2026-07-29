@@ -83,23 +83,47 @@ _WIND_PROFILE = [
 ]
 
 
+# Deterministic seasonal solar profile (A7) — summer-strong, the mirror of wind,
+# which is what makes the two complementary across the year as well as the day.
+_SOLAR_PROFILE = [
+    0.80,
+    0.85,
+    1.00,
+    1.05,
+    1.10,
+    1.15,
+    1.25,
+    1.20,
+    1.10,
+    0.95,
+    0.85,
+    0.70,
+]
+
+_GENERATION_PROFILES = {"wind": _WIND_PROFILE, "solar": _SOLAR_PROFILE}
+
+
 class MockDataGenerator:
     """Generate deterministic monthly generation/consumption (no randomness).
 
     Given base annual figures, it spreads them across 12 months using a fixed
-    seasonal profile, so results are stable and reproducible.
+    seasonal profile per technology, so results are stable and reproducible.
     """
 
     def __init__(self, year: int = 2024) -> None:
         self.year = year
 
     def generation_rows(
-        self, farm_code: str, annual_generation_mwh: float
+        self,
+        farm_code: str,
+        annual_generation_mwh: float,
+        technology: str = "wind",
     ) -> list[dict]:
-        weight_sum = sum(_WIND_PROFILE)
+        profile = _GENERATION_PROFILES.get(technology, _WIND_PROFILE)
+        weight_sum = sum(profile)
         rows = []
         for (_period, start, end), w in zip(
-            _month_periods(self.year), _WIND_PROFILE, strict=True
+            _month_periods(self.year), profile, strict=True
         ):
             energy = round(annual_generation_mwh * w / weight_sum, 2)
             rows.append(
