@@ -158,6 +158,18 @@
     background:var(--flow-soft);border-radius:8px;padding:5px 9px;display:inline-block;margin-bottom:12px}
   .tcard h3{font-size:15.5px;margin-bottom:5px}
   .tcard p{font-size:13px;color:var(--muted)}
+  /* real product screenshots */
+  .shot{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);box-shadow:0 12px 34px rgba(0,0,0,.16);margin-top:24px}
+  .shot .cap{height:32px;display:flex;align-items:center;gap:7px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--surface2)}
+  .shot .cap i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
+  .shot .cap span{margin-left:9px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .shot img{display:block;width:100%;height:auto}
+  .shotcap{font-size:12.5px;color:var(--faint);margin-top:11px}
+  .goalcap{font-family:var(--mono);font-size:11px;letter-spacing:.03em;padding:5px 11px;border-radius:8px;margin-bottom:4px;font-weight:600;align-self:flex-start}
+  .goalcap.g{color:var(--flow);background:var(--flow-soft)}
+  .goalcap.d{color:var(--demand);background:var(--demand-soft)}
+  .twoshot{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}
+  @media (max-width:760px){.twoshot{grid-template-columns:1fr}}
 
   /* cta */
   .cta{text-align:center;padding:74px 0 30px;border-top:1px solid var(--line)}
@@ -293,11 +305,20 @@
 
 <section>
   <div class="wrap">
+    <div class="shead reveal"><span class="snum hook">實際畫面</span><h2>不只是示意——平台<span style="color:var(--flow)">真的逐時算出來</span></h2></div>
+    <p class="sub reveal">上面的互動是概念示意；平台實際的<b>逐時匹配視圖</b>吃真實 15 分鐘 interval 資料，算出每小時、每一天的 CFE%，還原成「時×日熱力圖」——夜間偏綠（風強·已匹配）、白天偏淡（風弱·缺口），時間錯配一眼看出。</p>
+    <div class="shot reveal"><div class="cap"><i></i><i></i><i></i><span>逐時匹配 (24/7 CFE) · 時×日熱力圖</span></div><img src="images/cfe-heatmap.png" alt="逐時匹配時×日 CFE 熱力圖" loading="lazy"></div>
+    <p class="shotcap reveal">帳面 RE% 看起來很高，逐時 CFE% 才是真的對上時間的綠電；兩者差距＝時間錯配。示範資料。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <div class="shead reveal"><span class="snum">01</span><h2>問題有多難？</h2></div>
-    <p class="sub reveal">一邊是好幾座發電案場，一邊是好幾家企業用戶。每座案場的電要配<b>多少</b>、給<b>誰</b>？
-      光是「配對」的組合就多到爆炸——而且還要同時顧到成本、達標、公平。</p>
+    <p class="sub reveal">一邊是好幾座<b>發電案場</b>——在意的是<b>提升售電業的總營收利潤、把案場餘電降到最低</b>；一邊是好幾家<b>企業用戶</b>——在意的是<b>實現自己的綠電（RE）目標</b>。每座案場的電要配<b>多少</b>、給<b>誰</b>？光「配對」的組合就多到爆炸，還要同時顧成本、達標、公平。</p>
     <div class="combo reveal" style="margin-top:24px">
       <div class="stack">
+        <div class="goalcap g">目標：售電業營收 ↑ · 案場餘電 ↓</div>
         <div class="chip g"><span class="dotc"></span>發電案場 1 &nbsp;×&nbsp; ?%</div>
         <div class="chip g"><span class="dotc"></span>發電案場 2 &nbsp;×&nbsp; ?%</div>
         <div class="chip g"><span class="dotc"></span>發電案場 N &nbsp;×&nbsp; ?%</div>
@@ -306,6 +327,7 @@
         <div><div class="qbig">?</div><div class="cl">配多少 · 給誰</div></div>
       </div>
       <div class="stack">
+        <div class="goalcap d">目標：實現綠電 RE 目標</div>
         <div class="chip d"><span class="dotc"></span>用電端 1 &nbsp;·&nbsp; RE 目標</div>
         <div class="chip d"><span class="dotc"></span>用電端 2 &nbsp;·&nbsp; RE 目標</div>
         <div class="chip d"><span class="dotc"></span>用電端 N &nbsp;·&nbsp; RE 目標</div>
@@ -360,7 +382,7 @@
 
 <section>
   <div class="wrap">
-    <div class="shead reveal"><span class="snum">04</span><h2>最聰明的地方：<span style="color:var(--flow)">三階段求解</span></h2></div>
+    <div class="shead reveal"><span class="snum">04</span><h2><span style="color:var(--flow)">三階段求解</span></h2></div>
     <p class="sub reveal">三個目標有優先順序，我們不把它們混在一起算，而是<b>分三關、照順序過</b>；
       過了上一關才算下一關，而且會把上一關的成果<b>鎖住</b>，下一關不准破壞。</p>
     <div class="pipe reveal" style="margin-top:26px">
@@ -403,7 +425,7 @@
 <section>
   <div class="wrap">
     <div class="shead reveal"><span class="snum">06</span><h2>技術亮點一覽</h2></div>
-    <p class="sub reveal">給想看門道的人——支撐上面每一步的關鍵技術。</p>
+    <p class="sub reveal">支撐上面每一步的關鍵技術。</p>
     <div class="tgrid reveal" style="margin-top:24px">
       <div class="tcard"><span class="badge">MILP</span><h3>混合整數線性規劃</h3><p>把配置問題建模成連續量 + 0/1 決策，交給 PuLP 描述、CBC 求解。</p></div>
       <div class="tcard"><span class="badge">CBC solver</span><h3>解到數學最佳</h3><p>分支定界 + 單純形反覆迭代，最佳化間隙設為 0，不提早停、有最優保證。</p></div>
@@ -411,6 +433,17 @@
       <div class="tcard"><span class="badge">maximin</span><h3>公平均攤</h3><p>拉高「最低達成率」，讓稀缺綠電按比例分散，而非集中獨厚少數。</p></div>
       <div class="tcard"><span class="badge">RE-cap</span><h3>不超買綠電</h3><p>用戶綠電上限鎖在其 RE 目標，達成率永不超標，多的留成案場餘電。</p></div>
       <div class="tcard"><span class="badge">Deterministic</span><h3>同輸入同輸出</h3><p>案場、用戶皆先排序消除退化解隨機性——結果可重現、可稽核。</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="shead reveal"><span class="snum hook">產品全貌</span><h2>不只是最佳化——<span style="color:var(--flow)">一站到位的產品</span></h2></div>
+    <p class="sub reveal">最佳化是核心，但真正落地還要：發電案場與客戶／電號管理、綠電合約、售電評估、<b>轉供結算單</b>、T-REC 憑證、投資效益、即時台電資料與風險告警——全部串成可操作、可稽核的鏈路。</p>
+    <div class="twoshot">
+      <div class="shot reveal"><div class="cap"><i></i><i></i><i></i><span>總覽儀表板</span></div><img src="images/dashboard-overview.png" alt="總覽儀表板" loading="lazy"></div>
+      <div class="shot reveal"><div class="cap"><i></i><i></i><i></i><span>轉供結算單</span></div><img src="images/settlement-bill.png" alt="轉供結算單" loading="lazy"></div>
     </div>
   </div>
 </section>
