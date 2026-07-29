@@ -154,6 +154,17 @@ window.RM = (function () {
     '· <b class="hi">Seed</b>：1 座地面型光電＋對日間型客戶（電源管理/面板）合約，讓互補在 2024-01 看得到。<br>' +
     '· <b class="hi">互補原理</b>：風電夜強日弱、太陽能正午 bell → 時間互補填白天缺口，逐時 CFE 上升、外溢下降。';
 
+  // 儲能充放決策（見 docs/spec-storage-time-shifting.md，使用者已確認）
+  byId['B5'].decision =
+    '<b class="hi">已定案（見 <code>docs/spec-storage-time-shifting.md</code>）：</b><br>' +
+    '· <b class="hi">歸屬</b>：<b class="hi">客戶側（表後 BTM）</b>電池，掛在 <code>customer_id</code> 下；新增 <code>batteries</code> 表（無 enum 欄位，migration 不踩 Neon 的 CREATE TYPE 陷阱）。<br>' +
+    '· <b class="hi">充電來源</b>：任一案場的外溢綠電（<b class="hi">跨合約</b>），但<b class="hi">自家合約優先</b>——輪 1 先給有簽約的電池、輪 2 才開放，兩輪都依既有 contract priority/order。每筆充電記得住來自哪座案場。<br>' +
+    '· <b class="hi">演算法</b>：<b class="hi">貪婪時序充放</b>（純函式、確定性、逐步可稽核），不進 MILP；有缺口就放電、無缺口才充電，一具電池不同時充放。<br>' +
+    '· <b class="hi">引擎</b>：<code>match_hourly</code> <b class="hi">一行不改</b>——儲能是疊在它輸出之上的獨立一層（<code>app/matching/storage.py</code>），「嚴格不跨小時」的不變量保持完整。<br>' +
+    '· <b class="hi">呈現</b>：讀數擴成三段式「只風電 → 風光 → 風光＋儲」，24h 圖用斜線帶畫放電（沿用破題圖的視覺語彙）＋SOC 曲線。<br>' +
+    '· <b class="hi">範圍外</b>：結算單與 T-REC 不反映充放；跨合約充電在轉供實務需另簽約，UI 標示為<b class="hi">情境模擬</b>（與 B3 多對多同一 register）。';
+  byId['A8'].decision = byId['B5'].decision;
+
   // 選型決策（顯示於卡片 modal 的「選型建議」區塊）
   byId['H2'].decision =
     '<b class="hi">首選：GCP Cloud Run（asia-east1／彰化）＋ Cloud SQL for PostgreSQL（asia-east1）。</b><br>' +
