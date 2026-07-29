@@ -19,6 +19,9 @@ class HourlyCustomerOut(BaseModel):
     # 系統級增益會被沒簽光電的大客戶稀釋，簽了的那一家才看得出效果。
     wind_only_cfe_percent: float | None = None
     uplift_pt: float | None = None
+    # 儲能（B5）：加電池之前的同一位客戶 CFE，與電池帶來的增益。
+    no_storage_cfe_percent: float | None = None
+    storage_uplift_pt: float | None = None
 
 
 class HourlyFarmOut(BaseModel):
@@ -50,6 +53,13 @@ class HourlyMatchingResult(BaseModel):
     uplift_pt: float | None = None  # cfe_percent − wind_only_cfe_percent（百分點）
     # generation_by_hour 之中屬於太陽能的那一層（前端「風 + 光」堆疊用；風＝總 − 光）
     solar_generation_by_hour: list[float] | None = None
+    # 儲能（B5）：cfe_percent 已含儲能；no_storage 是加電池前的對照。
+    # 三段式讀數＝wind_only → no_storage → cfe_percent。
+    no_storage_cfe_percent: float | None = None
+    storage_uplift_pt: float | None = None
+    soc_by_hour: list[float] | None = None  # 系統合計 SOC（MWh）
+    discharged_by_hour: list[float] | None = None
+    charged_by_hour: list[float] | None = None
     total_consumption_mwh: float
     total_matched_mwh: float
     total_surplus_mwh: float

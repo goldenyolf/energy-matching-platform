@@ -41,7 +41,15 @@ from app.matching.interval_shape import (
     heatmap_cfe,
     hour_of_day_sums,
 )
-from app.models import ConsumptionData, Contract, Customer, GenerationData, WindFarm
+from app.matching.storage import BatterySpec, apply_storage, with_storage
+from app.models import (
+    Battery,
+    ConsumptionData,
+    Contract,
+    Customer,
+    GenerationData,
+    WindFarm,
+)
 from app.models.interval import KIND_GENERATION, IntervalReading
 from app.schemas.hourly_matching import (
     HeatmapOut,
@@ -240,6 +248,56 @@ def compute_hourly_outcome(
             c.customer_id: c.cfe_percent for c in wind_only.customers
         }
 
+    # 儲能 (B5): 把外溢挪到缺口時段。跑在風光對照之後,三段式讀數才不重疊——
+    # uplift_pt 是太陽能的貢獻、storage_uplift_pt 是電池的貢獻。
+    battery_rows = list(db.execute(select(Battery).order_by(Battery.id)).scalars())
+    no_storage_cfe: float | None = None
+    storage_uplift: float | None = None
+    soc_series: list[float] | None = None
+    discharged_series: list[float] | None = None
+    charged_series: list[float] | None = None
+    no_storage_by_customer: dict[int, float] = {}
+    if battery_rows:
+        specs = [
+            BatterySpec(
+                battery_id=b.id,
+                customer_id=b.customer_id,
+                capacity_mwh=b.energy_capacity_mwh,
+                power_mw=b.power_mw,
+                efficiency=b.round_trip_efficiency_percent / 100.0,
+                initial_soc_mwh=b.energy_capacity_mwh * b.initial_soc_percent / 100.0,
+            )
+            for b in battery_rows
+        ]
+        # 每座案場的簽約客戶,依引擎排合約的同一把尺 → 決定充電輪 1 的先後。
+        farm_customer_order: dict[int, list[int]] = {}
+        for c in sorted(eligible, key=lambda k: (k.priority, order_rank[k.id], k.id)):
+            seen = farm_customer_order.setdefault(c.wind_farm_id, [])
+            if c.customer_id not in seen:
+                seen.append(c.customer_id)
+
+        storage = apply_storage(outcome, specs, farm_customer_order)
+        no_storage_cfe = outcome.cfe_percent
+        no_storage_by_customer = {
+            c.customer_id: c.cfe_percent for c in outcome.customers
+        }
+        outcome = with_storage(outcome, storage, specs)
+        storage_uplift = round(outcome.cfe_percent - no_storage_cfe, 2)
+
+        def _sum_batteries(series: dict[int, list[float]]) -> list[float]:
+            total = [0.0] * nb
+            for arr in series.values():
+                for i, v in enumerate(arr):
+                    total[i] += v
+            return total
+
+        # 充放是流量 → 跟其他曲線一樣照 reduce24 加總。
+        discharged_series = reduce24(_sum_batteries(storage.discharged_by_hour))
+        charged_series = reduce24(_sum_batteries(storage.charged_by_hour))
+        # SOC 是存量,不能加總——interval 模式下 31 天相加會變成 31 倍容量,
+        # 標成 MWh 就是錯的。取同一小時的日均，畫出來才是一顆真實電池的容量尺度。
+        soc_series = [v / ndays for v in reduce24(_sum_batteries(storage.soc_by_hour))]
+
     # "帳面" upper bound: match period totals in a single bucket (no timing).
     paper_farms = [HourlyFarm(f.id, (gen_totals.get(f.id, 0.0),)) for f in farm_rows]
     paper_customers = [
@@ -277,6 +335,14 @@ def compute_hourly_outcome(
             shortfall_by_hour=reduce24(c.shortfall_by_hour),
             wind_only_cfe_percent=cust_base(c.customer_id),
             uplift_pt=cust_uplift(c.customer_id, c.cfe_percent),
+            no_storage_cfe_percent=(
+                no_storage_by_customer.get(c.customer_id) if battery_rows else None
+            ),
+            storage_uplift_pt=(
+                round(c.cfe_percent - no_storage_by_customer.get(c.customer_id, 0.0), 2)
+                if battery_rows
+                else None
+            ),
         )
         for c in outcome.customers
     ]
@@ -316,6 +382,11 @@ def compute_hourly_outcome(
         wind_only_cfe_percent=wind_only_cfe,
         uplift_pt=uplift,
         solar_generation_by_hour=solar_by_hour,
+        no_storage_cfe_percent=no_storage_cfe,
+        storage_uplift_pt=storage_uplift,
+        soc_by_hour=soc_series,
+        discharged_by_hour=discharged_series,
+        charged_by_hour=charged_series,
         total_consumption_mwh=outcome.total_consumption_mwh,
         total_matched_mwh=outcome.total_matched_mwh,
         total_surplus_mwh=sum(outcome.surplus_by_hour),
