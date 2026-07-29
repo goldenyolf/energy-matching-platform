@@ -168,6 +168,39 @@
   .goalcap{font-family:var(--mono);font-size:11px;letter-spacing:.03em;padding:5px 11px;border-radius:8px;margin-bottom:4px;font-weight:600;align-self:flex-start}
   .goalcap.g{color:var(--flow);background:var(--flow-soft)}
   .goalcap.d{color:var(--demand);background:var(--demand-soft)}
+  /* algo explainer modal */
+  .algo-cta{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:32px;text-align:center}
+  .algo-trigger{font-family:var(--sans);font-size:15px;font-weight:650;color:var(--flow);background:var(--flow-soft);border:1px solid transparent;border-radius:999px;padding:12px 24px;cursor:pointer;transition:.15s}
+  .algo-trigger:hover{filter:brightness(1.04);box-shadow:0 8px 26px rgba(22,167,92,.22)}
+  .algo-hint{font-size:12px;color:var(--faint)}
+  .algo-overlay{position:fixed;inset:0;background:rgba(6,14,11,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow-y:auto}
+  .algo-overlay.on{display:flex}
+  .algo-modal{background:var(--bg);border:1px solid var(--line2);border-radius:20px;max-width:760px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden;animation:algoin .25s cubic-bezier(.2,.7,.2,1)}
+  @keyframes algoin{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.algo-modal{animation:none}}
+  .algo-hd{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line);padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:2}
+  .algo-hd .e{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--flow);display:block;margin-bottom:3px}
+  .algo-hd .t{font-size:17px;font-weight:800;color:var(--ink)}
+  .algo-x{border:1px solid var(--line);background:var(--surface2);color:var(--muted);border-radius:9px;width:34px;height:34px;font-size:18px;line-height:1;cursor:pointer;flex:none}
+  .algo-x:hover{color:var(--ink);border-color:var(--line2)}
+  .algo-bd{padding:20px 26px 30px;font-size:14.5px;line-height:1.78;color:var(--muted)}
+  .algo-bd h3{font-size:16.5px;color:var(--ink);margin:26px 0 9px;display:flex;align-items:center;gap:10px}
+  .algo-bd h3:first-child{margin-top:2px}
+  .algo-bd h3 .n{font-family:var(--mono);font-size:12px;color:var(--flow);background:var(--flow-soft);border-radius:7px;padding:2px 9px;flex:none;font-weight:700}
+  .algo-bd p{margin:0 0 12px}
+  .algo-bd b{color:var(--ink)}
+  .algo-bd .ana{background:var(--surface2);border-left:3px solid var(--amber);border-radius:0 10px 10px 0;padding:11px 15px;margin:10px 0 14px;font-size:14px;color:var(--muted)}
+  .algo-bd .ana .lb{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);font-weight:700;margin-right:9px}
+  .algo-bd ul{margin:6px 0 14px;padding:0;list-style:none}
+  .algo-bd li{position:relative;padding-left:22px;margin-bottom:7px}
+  .algo-bd li::before{content:"";position:absolute;left:3px;top:9px;width:7px;height:7px;border-radius:2px;background:var(--flow)}
+  .algo-bd code{font-family:var(--mono);font-size:12.5px;background:var(--surface2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink)}
+  .algo-gloss{margin-top:26px;background:var(--surface2);border:1px solid var(--line);border-radius:13px;padding:16px 18px}
+  .algo-gloss .gl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--flow);font-weight:700;margin-bottom:11px}
+  .algo-gloss dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 16px}
+  .algo-gloss dt{font-weight:700;color:var(--ink);font-size:13.5px;white-space:nowrap}
+  .algo-gloss dd{margin:0;font-size:13.5px;color:var(--muted)}
+  @media (max-width:560px){.algo-gloss dl{grid-template-columns:1fr;gap:2px 0}.algo-gloss dd{margin-bottom:8px}}
   .twoshot{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}
   @media (max-width:760px){.twoshot{grid-template-columns:1fr}}
 
@@ -434,6 +467,10 @@
       <div class="tcard"><span class="badge">RE-cap</span><h3>不超買綠電</h3><p>用戶綠電上限鎖在其 RE 目標，達成率永不超標，多的留成案場餘電。</p></div>
       <div class="tcard"><span class="badge">Deterministic</span><h3>同輸入同輸出</h3><p>案場、用戶皆先排序消除退化解隨機性——結果可重現、可稽核。</p></div>
     </div>
+    <div class="algo-cta reveal">
+      <button class="algo-trigger" id="algoBtn">🔍 白話詳解：MILP / PuLP / CBC 到底在做什麼？</button>
+      <span class="algo-hint">點開看給「完全外行」也懂的逐步解說</span>
+    </div>
   </div>
 </section>
 
@@ -459,6 +496,88 @@
       站上數字均為<b>模擬示範資料</b>，與台電、TSEC 或任何能源業者無關；僅供技術說明。</p>
   </div>
 </div>
+
+<div class="algo-overlay" id="algoOverlay" role="dialog" aria-modal="true" aria-label="演算法白話詳解">
+  <div class="algo-modal">
+    <div class="algo-hd"><div><span class="e">白話詳解 · 給完全外行的人</span><span class="t">MILP / PuLP / CBC 到底在做什麼？</span></div><button class="algo-x" aria-label="關閉">&times;</button></div>
+    <div class="algo-bd">
+      <h3><span class="n">1</span>先講：這在解什麼問題？</h3>
+      <p>手上有<b>好幾座風／光電場</b>的電，要分給<b>好幾家企業客戶</b>。每家想要的綠電比例不同、每度電成本不同。問題是：「每座場的電，各<b>分多少</b>、<b>給誰</b>，才能讓大家<b>達標</b>、售電業<b>最賺</b>、又<b>公平</b>？」</p>
+      <p>這種「把有限資源分給多個對象、還要最划算」的題目，數學上叫<b>最佳化問題</b>。</p>
+
+      <h3><span class="n">2</span>什麼是「最佳化」？</h3>
+      <p>就是在「<b>所有可行的分法</b>」裡，挑出「<b>最好的那一種</b>」。</p>
+      <div class="ana"><span class="lb">比喻</span>便當店有固定食材，怎麼搭配菜色能<b>賣最多錢</b>？——把規則寫下來，算出最賺的組合，就是最佳化。</div>
+
+      <h3><span class="n">3</span>什麼是「線性規劃（LP）」？</h3>
+      <p><b>線性</b>＝直線關係：多配 1 度電，成本或收入就多<b>固定的一份</b>，不會忽大忽小、也不互相相乘。<b>規劃</b>＝在一堆限制下，求某個目標最好。</p>
+      <div class="ana"><span class="lb">比喻</span>你有<b>預算上限</b>和<b>時間上限</b>，想讓「幸福感」最大——每樣東西花多少錢、帶來多少幸福都是固定比例。這種題目電腦超會解，而且能保證找到最好。</div>
+
+      <h3><span class="n">4</span>為什麼要「整數」→ 混合整數（MILP）？</h3>
+      <p>有些決定<b>不能是小數</b>，只能「<b>要或不要</b>」：要不要跟這座場簽這條約？（<code>1</code>＝簽、<code>0</code>＝不簽）——你不能簽「0.4 個約」。</p>
+      <ul>
+        <li>「配多少度電」→ 可以是<b>連續的小數</b>（連續變數）</li>
+        <li>「要不要啟用這條配對」→ 只能是 <b>0 或 1</b>（整數／二元變數）</li>
+      </ul>
+      <p>兩種混在一起，就是 <b>MILP</b>：<b>M</b>ixed（混合）<b>I</b>nteger（整數）<b>L</b>inear（線性）<b>P</b>rogramming（規劃）。</p>
+
+      <h3><span class="n">5</span>我們怎麼把問題「翻成數學」？</h3>
+      <ul>
+        <li><b>變數（電腦要決定的）</b>：每條「場 → 客戶」配多少 MWh；這條要不要啟用（0/1）。</li>
+        <li><b>限制（不能違反的鐵律）</b>：場配出去的量 ≤ 它發的電；客戶最多拿到自己的 <b>RE 目標</b>為止；不夠就記成「缺口」。</li>
+        <li><b>目標（要最好的）</b>：先讓總缺口最小 → 再讓售電毛利最大 → 再讓最不公平的那家盡量好。</li>
+      </ul>
+
+      <h3><span class="n">6</span>PuLP 是什麼？</h3>
+      <p>一個 Python 的「<b>翻譯官</b>」套件。我們用它把上面的白話規則，寫成電腦看得懂的<b>數學式子</b>（變數、限制、目標）。它自己<b>不解題</b>，只負責「把題目寫好、交出去」。</p>
+
+      <h3><span class="n">7</span>CBC 是什麼？（真正解題的引擎）</h3>
+      <p>CBC 是一個<b>免費開源</b>的「<b>求解器（solver）</b>」——真正動手把 MILP 算出<b>最佳解</b>的引擎。</p>
+      <div class="ana"><span class="lb">它怎麼解？</span>用「<b>分支定界（branch &amp; bound）</b>」：像走一棵「選擇樹」，每走幾步就估「這條路再好也只能到這」；如果比目前已找到的還差，<b>整條路直接砍掉</b>不再試。這樣不用把「無限多種分法」全試一遍，也能<b>保證找到數學上的最佳</b>，而不是差不多就好。</div>
+      <p>我們把「最佳化間隙（gap）」設為 <code>0</code>：不提早停，一定解到最優。</p>
+
+      <h3><span class="n">8</span>為什麼不用「先搶先贏」？</h3>
+      <p><b>先搶先贏（貪婪）</b>＝誰先簽先給，快，但常常不划算：便宜的綠電被前面的人用光，後面只能買貴的，整體變差。<b>全局最佳化</b>＝一次看<b>所有</b>配對與限制，找數學最優——可能重排某些分配，讓總體最好。</p>
+
+      <h3><span class="n">9</span>為什麼分「三關」照順序（字典序）？</h3>
+      <p>三個目標有輕重：<b>達標 &gt; 毛利 &gt; 公平</b>。如果把它們加權相加成一個分數，權重很難調，還可能「為了多賺一點毛利、犧牲達標」。</p>
+      <p>所以<b>分三關</b>：先解「缺口最小」，把答案<b>鎖住</b>；在「不讓缺口變差」的前提下解「毛利最大」，再鎖住；最後在前兩者不變下解「最公平」。這叫<b>字典序最佳化</b>，保證優先序永遠不被打亂。</p>
+
+      <h3><span class="n">10</span>為什麼「同輸入同輸出」很重要？</h3>
+      <p>有時最佳解不只一個（並列）。我們先把場、客戶<b>排好序</b>再解，消除隨機性——同一份資料，結果<b>永遠一樣</b>，可重現、可稽核（對結算、對帳非常重要）。</p>
+
+      <div class="algo-gloss">
+        <div class="gl">名詞小抄</div>
+        <dl>
+          <dt>最佳化</dt><dd>在所有可行方案裡挑最好的。</dd>
+          <dt>線性</dt><dd>加倍投入就加倍效果的直線關係。</dd>
+          <dt>變數</dt><dd>電腦要決定的數字（配幾度、要不要啟用）。</dd>
+          <dt>限制</dt><dd>不能違反的規則。</dd>
+          <dt>目標函數</dt><dd>用來比較「哪個方案比較好」的算式。</dd>
+          <dt>LP / MILP</dt><dd>線性規劃／混合整數線性規劃。</dd>
+          <dt>PuLP</dt><dd>把題目寫成數學、交給求解器的 Python 套件。</dd>
+          <dt>CBC</dt><dd>免費開源的求解器引擎，負責解 MILP。</dd>
+          <dt>分支定界</dt><dd>有系統地試 ＋ 砍掉不可能更好的分支，保證最優。</dd>
+          <dt>字典序最佳化</dt><dd>多目標照優先序逐關求解、逐關鎖定。</dd>
+          <dt>求解間隙 gap</dt><dd>離「保證最優」還差多少；設 0 ＝解到最優。</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var ov=document.getElementById("algoOverlay"), btn=document.getElementById("algoBtn");
+  if(ov&&btn){
+    function open(){ov.classList.add("on");document.body.style.overflow="hidden";}
+    function close(){ov.classList.remove("on");document.body.style.overflow="";}
+    btn.addEventListener("click",open);
+    ov.addEventListener("click",function(e){if(e.target===ov||e.target.classList.contains("algo-x"))close();});
+    document.addEventListener("keydown",function(e){if(e.key==="Escape")close();});
+  }
+})();
+</script>
 
 <script>
 (function(){
