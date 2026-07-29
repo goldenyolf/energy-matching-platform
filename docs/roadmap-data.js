@@ -142,6 +142,10 @@ window.RM = (function () {
   // 逐時（24/7 CFE）匹配：A9 建模器 + B7 引擎/CFE + C6 視圖 + B6 真實 interval 管線＋熱力圖 已上線。
   byId['A9'].done = true; byId['B7'].done = true; byId['C6'].done = true; byId['B6'].done = true;
 
+  // 風光互補：A7 太陽能實體（farm_type=solar、日型/月型/slot/interval 全 technology-aware）
+  // + B4 只風電 vs 風光 uplift（系統級＋逐客戶）與 24h 圖上的太陽能帶 已上線。
+  byId['A7'].done = true; byId['B4'].done = true;
+
   // 風光互補決策（見 docs/spec-wind-solar-complementarity.md，使用者已確認）
   byId['B4'].decision =
     '<b class="hi">已定案（見 <code>docs/spec-wind-solar-complementarity.md</code>）：</b><br>' +
