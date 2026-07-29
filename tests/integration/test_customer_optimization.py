@@ -20,7 +20,7 @@ def seeded(db):
     f = WindFarm(
         code="F1", name="海能", installed_capacity_mw=100, feed_in_price_per_kwh=4.0
     )
-    cust = Customer(code="K1", company_name="TSMC", re_target_percent=100.0)
+    cust = Customer(code="K1", company_name="半導體企業 A", re_target_percent=100.0)
     db.add_all([f, cust])
     db.flush()
     for slot, g, c in [

@@ -15,7 +15,7 @@ def _seed(db, *, period_year: int, min_offtake=None, escalation=None, base_year=
     f = WindFarm(
         code="WF-D", name="風", installed_capacity_mw=100, feed_in_price_per_kwh=4.0
     )
-    cust = Customer(code="CU-D", company_name="Delta", re_target_percent=100.0)
+    cust = Customer(code="CU-D", company_name="電子製造企業 B", re_target_percent=100.0)
     db.add_all([f, cust])
     db.flush()
     # Small generation, large demand → delivered green is supply-limited.
