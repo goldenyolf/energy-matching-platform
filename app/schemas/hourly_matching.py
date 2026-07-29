@@ -25,11 +25,19 @@ class HourlyFarmOut(BaseModel):
     surplus_mwh: float
 
 
+class HeatmapOut(BaseModel):
+    days: list[str]  # ISO date per row
+    values: list[list[float]]  # values[day][hour] = CFE%
+
+
 class HourlyMatchingResult(BaseModel):
     period: str
-    modeled: bool  # 逐時曲線為典型日型建模（半模擬），非實測
+    source: str  # "interval"（真實/模擬逐日 15 分鐘）| "modeled"（典型日型建模）
+    modeled: bool  # True = 典型日型建模（半模擬），非實測
     note: str
     hours: int
+    days: int  # 熱力圖天數（interval 模式），modeled 模式為 1
+    heatmap: HeatmapOut | None
     cfe_percent: float  # 系統逐時 CFE%
     paper_re_percent: float  # 系統帳面 RE%（月淨額上限）
     total_consumption_mwh: float

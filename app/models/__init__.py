@@ -10,6 +10,7 @@ from app.models.enums import (
     WindFarmStatus,
 )
 from app.models.generation import GenerationData
+from app.models.interval import IntervalReading
 from app.models.matching import MatchingResult, MatchingRun
 from app.models.meter import Meter
 from app.models.trec import TrecBatch
@@ -21,6 +22,7 @@ __all__ = [
     "ContractStatus",
     "Customer",
     "GenerationData",
+    "IntervalReading",
     "MatchingResult",
     "MatchingRun",
     "MatchingRunStatus",

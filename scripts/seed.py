@@ -29,6 +29,7 @@ from app.ingestion import csv_importer
 from app.ingestion.sources import CsvDataSource
 from app.ingestion.taipower import DEFAULT_MONTHS, TaipowerWindSource
 from app.services.trec_service import get_ledger, issue_for_period, retire
+from scripts.generate_interval_data import generate as generate_interval_data
 from scripts.generate_meter_profiles import split_consumption_to_meters
 from scripts.generate_slot_profiles import split_profiles
 
@@ -148,6 +149,8 @@ def seed(
             for row in get_ledger(db, period="2024-01").batches[:2]:
                 retire(db, row.id)  # retire a couple to show both statuses
             print("T-REC 憑證    : 已由 2024-01 媒合結果發行")
+            n_iv = generate_interval_data(db, "2024-01")
+            print(f"逐時 interval : 已生成 {n_iv} 筆 15 分鐘資料(2024-01,模擬多日)")
     finally:
         db.close()
     print("seed complete.")
