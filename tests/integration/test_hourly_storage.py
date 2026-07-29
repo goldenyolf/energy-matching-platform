@@ -60,6 +60,83 @@ def seeded_storage(db):
     return db, farm, cust
 
 
+@pytest.fixture()
+def seeded_wind_solar_storage(db):
+    """風 + 光 + 同一客戶儲能:三段式讀數（只風電→風光→風光＋儲）必須互不重疊。"""
+    wind = WindFarm(
+        code="F1", name="風場一", installed_capacity_mw=100, feed_in_price_per_kwh=4.0
+    )
+    solar = WindFarm(
+        code="F2",
+        name="光電場一",
+        installed_capacity_mw=50,
+        feed_in_price_per_kwh=4.2,
+        farm_type="solar",
+    )
+    cust = Customer(
+        code="K1", company_name="用電廠一", industry="電源管理", re_target_percent=100.0
+    )
+    db.add_all([wind, solar, cust])
+    db.flush()
+    db.add(
+        GenerationData(
+            wind_farm_id=wind.id,
+            period_start=date(2024, 1, 1),
+            period_end=date(2024, 1, 31),
+            generated_energy_mwh=1000.0,
+        )
+    )
+    db.add(
+        GenerationData(
+            wind_farm_id=solar.id,
+            period_start=date(2024, 1, 1),
+            period_end=date(2024, 1, 31),
+            generated_energy_mwh=500.0,
+        )
+    )
+    db.add(
+        ConsumptionData(
+            customer_id=cust.id,
+            period_start=date(2024, 1, 1),
+            period_end=date(2024, 1, 31),
+            consumed_energy_mwh=1000.0,
+        )
+    )
+    db.add(
+        Contract(
+            contract_number="CT-1",
+            wind_farm_id=wind.id,
+            customer_id=cust.id,
+            start_date=date(2024, 1, 1),
+            end_date=date(2030, 1, 1),
+            status=ContractStatus.ACTIVE,
+            price_per_kwh=4.5,
+        )
+    )
+    db.add(
+        Contract(
+            contract_number="CT-2",
+            wind_farm_id=solar.id,
+            customer_id=cust.id,
+            start_date=date(2024, 1, 1),
+            end_date=date(2030, 1, 1),
+            status=ContractStatus.ACTIVE,
+            price_per_kwh=4.3,
+        )
+    )
+    db.add(
+        Battery(
+            code="BAT-1",
+            customer_id=cust.id,
+            name="示範儲能",
+            energy_capacity_mwh=200.0,
+            power_mw=50.0,
+        )
+    )
+    db.commit()
+    return db, cust
+
+
 def test_no_battery_means_no_storage_readout(seeded_storage):
     db, _, _ = seeded_storage
     res = svc.compute_hourly_outcome(db, "2024-01")
@@ -161,3 +238,28 @@ def test_storage_also_works_on_the_real_interval_path(seeded_storage):
     # SOC 是日均、不是 31 天的加總 → 不得超過單顆電池的容量。
     assert res.soc_by_hour is not None
     assert max(res.soc_by_hour) <= 200.0 + 1e-6
+
+
+def test_customer_uplift_segments_stay_disjoint_with_wind_solar_and_storage(
+    seeded_wind_solar_storage,
+):
+    """迴歸測試：uplift_pt 曾誤用加了電池之後的 cfe_percent 當基準,把儲能的增益也
+    算進太陽能頭上,兩段重疊。修正後 uplift_pt 只該用「加電池之前」的客戶 CFE。"""
+    db, cust = seeded_wind_solar_storage
+    res = svc.compute_hourly_outcome(db, "2024-01")
+
+    c = next(x for x in res.customers if x.customer_id == cust.id)
+    assert c.wind_only_cfe_percent is not None
+    assert c.no_storage_cfe_percent is not None
+    # uplift_pt = 太陽能單獨的貢獻 = 無儲對照 − 只風電對照
+    assert c.uplift_pt == pytest.approx(
+        round(c.no_storage_cfe_percent - c.wind_only_cfe_percent, 2)
+    )
+    # storage_uplift_pt = 電池單獨的貢獻 = 最終 − 無儲對照
+    assert c.storage_uplift_pt == pytest.approx(
+        round(c.cfe_percent - c.no_storage_cfe_percent, 2)
+    )
+    # 兩段互斥且完整覆蓋:加總等於總增益
+    assert c.uplift_pt + c.storage_uplift_pt == pytest.approx(
+        round(c.cfe_percent - c.wind_only_cfe_percent, 2)
+    )

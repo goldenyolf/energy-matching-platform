@@ -334,7 +334,12 @@ def compute_hourly_outcome(
             matched_by_hour=reduce24(c.matched_by_hour),
             shortfall_by_hour=reduce24(c.shortfall_by_hour),
             wind_only_cfe_percent=cust_base(c.customer_id),
-            uplift_pt=cust_uplift(c.customer_id, c.cfe_percent),
+            # uplift_pt 是太陽能單獨的貢獻,基準要是「加電池之前」的客戶 CFE——
+            # 沒有電池時兩者相同,加了電池就不能用 c.cfe_percent（已含儲能增益）,
+            # 否則儲能的增益會被算兩次（也算進 uplift_pt、也算進 storage_uplift_pt）。
+            uplift_pt=cust_uplift(
+                c.customer_id, no_storage_by_customer.get(c.customer_id, c.cfe_percent)
+            ),
             no_storage_cfe_percent=(
                 no_storage_by_customer.get(c.customer_id) if battery_rows else None
             ),

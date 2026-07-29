@@ -40,3 +40,25 @@ def test_the_three_segments_are_ordered(seeded_db):
     assert res.wind_only_cfe_percent is not None
     assert res.no_storage_cfe_percent is not None
     assert res.wind_only_cfe_percent < res.no_storage_cfe_percent < res.cfe_percent
+
+
+def test_the_battery_owner_s_two_uplifts_decompose_the_total(seeded_db):
+    """迴歸測試：用電廠 2（風＋光＋儲能都簽了）的 uplift_pt 曾誤把儲能的增益也算
+    進太陽能頭上。正確算法下,兩段各自的貢獻加總要等於總增益,不重疊、不遺漏。"""
+    bat = seeded_db.query(Battery).one()
+    owner = seeded_db.get(Customer, bat.customer_id)
+
+    res = svc.compute_hourly_outcome(seeded_db, "2024-01")
+    c = next(x for x in res.customers if x.customer_id == owner.id)
+
+    assert c.wind_only_cfe_percent is not None
+    assert c.no_storage_cfe_percent is not None
+    assert c.uplift_pt == pytest.approx(
+        round(c.no_storage_cfe_percent - c.wind_only_cfe_percent, 2)
+    )
+    assert c.storage_uplift_pt == pytest.approx(
+        round(c.cfe_percent - c.no_storage_cfe_percent, 2)
+    )
+    assert c.uplift_pt + c.storage_uplift_pt == pytest.approx(
+        round(c.cfe_percent - c.wind_only_cfe_percent, 2)
+    )
