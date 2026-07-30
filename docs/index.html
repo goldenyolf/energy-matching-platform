@@ -214,6 +214,19 @@
     transition:transform .15s}
   :root[data-theme="light"] .btn,@media (prefers-color-scheme:light){.btn{color:#fff}}
   .btn:hover{transform:translateY(-2px)}
+  /* 破題區的主要行動點：不捲到底也能直接進平台 */
+  .herocta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:26px}
+  .herocta .btn{margin-top:0}
+  .heroctahint{color:var(--faint);font-size:12.5px}
+  /* 捲動後跟著走的浮動入口；捲到底部 CTA 時自己讓位 */
+  .floatcta{position:fixed;right:18px;bottom:20px;z-index:45;display:inline-flex;align-items:center;gap:8px;
+    background:var(--flow);color:#04140C;font-weight:700;font-size:13.5px;text-decoration:none;
+    padding:12px 18px;border-radius:999px;box-shadow:var(--glow),0 8px 24px rgba(0,0,0,.22);
+    opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .25s,transform .25s}
+  .floatcta.on{opacity:1;transform:none;pointer-events:auto}
+  .floatcta:hover{transform:translateY(-2px)}
+  :root[data-theme="light"] .floatcta,@media (prefers-color-scheme:light){.floatcta{color:#fff}}
+  @media(max-width:560px){.floatcta{right:12px;left:12px;bottom:14px;justify-content:center}}
   .foot{color:var(--faint);font-size:12px;margin-top:34px;line-height:1.7}
   .foot .mono{color:var(--muted)}
 
@@ -227,6 +240,8 @@
 
 <button class="toggle" id="tgl" aria-label="切換主題"><span id="tglic">◐</span> 主題</button>
 
+<a class="floatcta" id="floatcta" href="https://emp-api-bxbe.onrender.com/app/#/matchmap" target="_blank" rel="noopener">⚡ 開啟多對多匹配</a>
+
 <header class="hero">
   <div class="wrap">
     <div class="eyebrow reveal">綠電媒合平台 · 演算法解說</div>
@@ -234,6 +249,10 @@
     <p class="lede reveal">多個發電案場、多個用電端，一次算出最佳的綠電配置組合——
       這頁用最白話的方式，把它背後的邏輯一步步拆給你看。不需要懂數學也能看懂；
       但每一步的「硬技術」也都在。</p>
+    <div class="herocta reveal">
+      <a class="btn" href="https://emp-api-bxbe.onrender.com/app/#/matchmap" target="_blank" rel="noopener">開啟多對多匹配模擬 →</a>
+      <span class="heroctahint">不想看說明？直接進平台自己配一次</span>
+    </div>
     <div class="heroflow reveal"><div id="heroflow" class="flowbox"></div></div>
     <div class="scrollhint reveal"><b></b> 往下捲，看它怎麼運作</div>
   </div>
@@ -494,7 +513,9 @@
     <p class="lede reveal" style="margin:14px auto 0">在平台的「多對多匹配」頁，你可以自選案場與用電端、
       調整各家 RE 目標與每座案場的躉售價，按一下就重算最佳配置。</p>
     <a class="btn reveal" href="https://emp-api-bxbe.onrender.com/app/#/matchmap" target="_blank" rel="noopener">開啟多對多匹配 →</a>
+    <!-- 系統架構與資安入口暫時隱藏（對外分享期間）。要恢復就把下面這行的註解拿掉。
     <div class="reveal" style="margin-top:16px"><a href="architecture.html" style="color:var(--flow);font-weight:600;text-decoration:none;font-family:var(--mono);font-size:13.5px;letter-spacing:.02em">🏗️ 系統架構與資安 →</a></div>
+    -->
     <p class="foot reveal"><span class="mono">綠電媒合平台 · 演算法解說</span><br>
       站上數字均為<b>模擬示範資料</b>，與台電、TSEC 或任何能源業者無關；僅供技術說明。</p>
   </div>
@@ -596,6 +617,20 @@
   /* reveal on scroll */
   var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");if(e.target.__anim){e.target.__anim();}io.unobserve(e.target);}});},{threshold:.14});
   document.querySelectorAll(".reveal").forEach(function(el,i){el.style.transitionDelay=(Math.min(i%4,3)*70)+"ms";io.observe(el);});
+
+  /* 浮動入口：捲過破題區才出現;捲到底部 CTA 時讓位,免得兩顆同時在畫面上 */
+  (function(){
+    var pill=document.getElementById("floatcta");
+    var hero=document.querySelector("header.hero");
+    var bottom=document.querySelector(".cta");
+    if(!pill||!hero) return;
+    var pastHero=false, atBottom=false;
+    function sync(){pill.classList.toggle("on", pastHero && !atBottom);}
+    new IntersectionObserver(function(es){pastHero=!es[0].isIntersecting;sync();},{threshold:0})
+      .observe(hero);
+    if(bottom) new IntersectionObserver(function(es){atBottom=es[0].isIntersecting;sync();},{threshold:0})
+      .observe(bottom);
+  })();
 
   /* ---- flow diagram builder ---- */
   function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}

@@ -12,9 +12,12 @@
 | 📖 **[產品介紹 · 演算法圖解](https://goldenyolf.github.io/energy-matching-platform/)** | 小白也能懂的視覺化解說（GitHub Pages，隨開隨看） |
 | 🗺️ **[產品 Roadmap 看板](https://goldenyolf.github.io/energy-matching-platform/roadmap.html)** | 領域×階段矩陣、45 張功能卡、依賴連線（`docs/PRD.md` 視覺化） |
 | 🧲 **[任務看板（拖拉）](https://goldenyolf.github.io/energy-matching-platform/board.html)** | 待辦／進行中／測試中／完成，可拖拉卡片（狀態存瀏覽器 localStorage） |
-| 🏗️ **[系統架構與資安](https://goldenyolf.github.io/energy-matching-platform/architecture.html)** | 現況 vs 企業正式部署（GCP·資料落地台灣）的 icon 關係圖、分層資安、遷移路徑 |
 | 🚀 **[線上 Demo](https://emp-api-bxbe.onrender.com/app/)** | 完整平台（Render 免費方案，首次開啟可能要等冷啟動） |
 | 📑 API 文件 | 上方 Demo 網域的 `/docs`（Swagger UI） |
+
+<!-- 系統架構與資安入口暫時隱藏（對外分享期間）。要恢復就把這一列搬回上面的表格：
+| 🏗️ **[系統架構與資安](https://goldenyolf.github.io/energy-matching-platform/architecture.html)** | 現況 vs 企業正式部署（GCP·資料落地台灣）的 icon 關係圖、分層資安、遷移路徑 |
+-->
 
 > **聲明**：站上所有數字都是**模擬示範資料**，與台電、TSEC 或任何能源業者無關；
 > 只有「即時再生能源」頁抓的是台電公開的即時資料。這是技術作品集，不是正式的結算、
