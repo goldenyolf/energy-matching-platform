@@ -382,12 +382,26 @@
     // 掛在合約編號底下（不另闢一欄——表格已經 10 欄,再加就會把優先序/狀態擠出畫面）
     return t.length ? '<div class="terms">' + t.join("") + "</div>" : "";
   }
-  // 合約還剩幾年（已到期/未生效就不顯示，狀態徽章已經講了）
+  // 合約還剩多久（已到期/未生效就不顯示，狀態徽章已經講了）。
+  // 不足一年用天數講——「剩 0.0 年」等於沒講,而快到期正是最該看見的時候。
   function contractRemaining(c) {
     if (c.status !== "active" || !c.end_date) return "";
-    var days = (new Date(c.end_date) - new Date()) / 86400000;
+    var days = Math.floor((new Date(c.end_date) - new Date()) / 86400000);
     if (!isFinite(days) || days <= 0) return "";
-    return '<small class="remain">剩 ' + (days / 365.25).toFixed(1) + " 年</small>";
+    var txt = days < 365 ? "剩 " + days + " 天" : "剩 " + (days / 365.25).toFixed(1) + " 年";
+    return '<small class="remain' + (days <= 90 ? " soon" : "") + '">' + txt + "</small>";
+  }
+  // 合約上限：年電量與佔發電比例二擇一(或並用,引擎取較緊的那個)。
+  // 過去拆成兩欄,於是每列必有一欄是「–」,看起來像資料沒填完;合併後每列都有值。
+  function contractCap(c) {
+    var out = [];
+    if (c.contracted_energy_mwh != null) {
+      out.push(nfmt(c.contracted_energy_mwh, 0) + '<small class="capu">MWh/年</small>');
+    }
+    if (c.contracted_percentage != null) {
+      out.push(pct(c.contracted_percentage, 0) + '%<small class="capu">發電量</small>');
+    }
+    return out.length ? out.join('<span class="capsep">·</span>') : '<span class="u">未設上限</span>';
   }
 
   function renderContracts() {
@@ -406,17 +420,16 @@
         r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; contractCustOpts.push([c.id, (c.company_name || c.code)]); });
         cs.forEach(function (c) { crudCache.contract[c.id] = c; });
         var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + importBtn("contract") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>合約編號</th><th>案場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>合約編號</th><th>案場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約上限" + infoTip("contractCap") + "</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         if (!cs.length) {
-          html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
+          html += '<tr><td class="empty" colspan="' + (editMode ? 10 : 9) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
         }
         cs.forEach(function (c) {
           var fname = String(fm[c.wind_farm_id] || c.wind_farm_id);
           html += "<tr><td class=\"code\">" + esc(c.contract_number) + contractTerms(c) +
-            "</td><td class=\"ell\" title=\"" + esc(fname) + "\">" + esc(fname) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
+            "</td><td class=\"wrapname\">" + esc(fname) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
             "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) + contractRemaining(c) +
-            "</td><td class=\"num\">" + (c.contracted_energy_mwh != null ? nfmt(c.contracted_energy_mwh, 0) : "–") +
-            "</td><td class=\"num\">" + (c.contracted_percentage != null ? pct(c.contracted_percentage, 0) + "%" : "–") +
+            "</td><td class=\"num cap\">" + contractCap(c) +
             "</td><td class=\"num\">" + (c.price_per_kwh != null ? price(c.price_per_kwh) : "–") +
             "</td><td class=\"num\">" + c.priority + "</td><td>" + contractStatusPill(c.status) + "</td>" + rowActions("contract", c.id) + "</tr>";
         });
@@ -1884,6 +1897,14 @@
         "<p>風電<b>夜強日弱</b>，但多數工業客戶白天用電最兇——中午因此出現缺口（熱力圖午間偏淡）。</p>" +
         "<p>太陽能剛好相反：<b>正午 bell 型</b>、夜間歸零。兩者疊在一起，發電輪廓更貼近用電輪廓 → <b>逐時 CFE% 上升、外溢下降</b>。</p>" +
         '<p class="tip-eg">上方「只風電 X% → 風光 Y%」就是同一批用電、把光電案場與其合約拿掉重算一次的對照；差額（pt）即互補帶來的增益。</p>',
+    },
+    contractCap: {
+      title: "合約上限（年電量 vs 佔發電比例）",
+      html:
+        "<p>一紙 PPA 可以用兩種方式限制它最多能拿多少電：</p>" +
+        "<p><b>年電量</b>（MWh/年）——談定的年度總量，再依<b>月別配比</b>攤到各月（沒設就平均 1/12）。<br>" +
+        "<b>佔發電比例</b>（%）——拿該案場當期發電的固定比例，發多少就按比例分多少。</p>" +
+        '<p class="tip-eg">兩者可以只設一種，也可以同時設；同時設時引擎取<b>較緊</b>的那個當上限。所以這一欄顯示的是這紙合約實際用的那一種，不是缺漏。</p>',
     },
     storage: {
       title: "儲能時間位移",
