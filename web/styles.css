@@ -565,6 +565,16 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 .soc-box .soc-lab small{margin-left:4px;color:var(--faint)}
 .soc-box svg{width:100%;height:auto;display:block}
 .soc-area{fill:var(--buyer);fill-opacity:.22;stroke:var(--buyer);stroke-width:1.4}
+/* 合約深化條款徽章（月別配比／take-or-pay／CPI） */
+/* 長案場名截斷（滑過看完整名）——否則編輯模式下整列會被撐到蓋掉狀態欄 */
+.ell{text-align:left;max-width:164px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.terms{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;max-width:150px}
+.term{display:inline-block;padding:2px 8px;border-radius:20px;
+  font-size:10.5px;font-weight:650;letter-spacing:.02em;white-space:nowrap;cursor:help;
+  background:var(--seller-soft);color:var(--seller);border:1px solid transparent}
+.term.top{background:var(--warn-soft);color:var(--warn)}
+.term.cpi{background:var(--buyer-soft);color:var(--buyer)}
+.remain{display:block;color:var(--faint);font-size:10.5px;font-weight:600;margin-top:1px}
 .gapbar{position:relative;display:inline-block;width:120px;height:9px;border-radius:5px;background:var(--surface-2);overflow:hidden;vertical-align:middle}
 .gapbar i{position:absolute;left:0;top:0;height:100%;border-radius:5px}
 .gapbar .p{background:var(--faint);opacity:.35}

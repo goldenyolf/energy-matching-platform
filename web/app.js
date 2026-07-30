@@ -365,10 +365,35 @@
   }
 
   // ---------- 綠電合約 ----------
+  // 合約深化條款的徽章：月別配比／take-or-pay 保證量／CPI 年漲幅。
+  // 這些欄位引擎真的在用（月上限、結算的保證量差額、逐年價格），
+  // 但過去只在編輯表單裡看得到，清單上完全不露臉。
+  function contractTerms(c) {
+    var t = [];
+    if (c.monthly_shares && c.monthly_shares.length === 12) {
+      t.push('<span class="term" title="年電量依 12 個月權重分攤，而非平均 1/12">月別配比</span>');
+    }
+    if (c.min_offtake_percent != null) {
+      t.push('<span class="term top" title="take-or-pay：未達月上限的這個比例仍須付費">保證量 ' + pct(c.min_offtake_percent, 0) + "%</span>");
+    }
+    if (c.price_escalation_percent != null) {
+      t.push('<span class="term cpi" title="價格逐年複利調漲' + (c.price_base_year ? "，基準年 " + c.price_base_year : "") + '">CPI ' + pct(c.price_escalation_percent, 1) + "%/年</span>");
+    }
+    // 掛在合約編號底下（不另闢一欄——表格已經 10 欄,再加就會把優先序/狀態擠出畫面）
+    return t.length ? '<div class="terms">' + t.join("") + "</div>" : "";
+  }
+  // 合約還剩幾年（已到期/未生效就不顯示，狀態徽章已經講了）
+  function contractRemaining(c) {
+    if (c.status !== "active" || !c.end_date) return "";
+    var days = (new Date(c.end_date) - new Date()) / 86400000;
+    if (!isFinite(days) || days <= 0) return "";
+    return '<small class="remain">剩 ' + (days / 365.25).toFixed(1) + " 年</small>";
+  }
+
   function renderContracts() {
     crumb.textContent = "綠電合約";
     view.innerHTML = '<div class="pagehead"><div class="title"><span class="bar"></span><h1>綠電合約</h1></div>' +
-      '<div class="meta"><span>PPA 合約清單:風場、客戶、費率、比例、優先序、狀態。</span></div></div>' +
+      '<div class="meta"><span>PPA 合約清單:案場、客戶、費率、比例、優先序、狀態,以及月別配比／保證量／CPI 等合約條款。</span></div></div>' +
       '<div id="ct-body"><div class="placeholder">載入中…</div></div>';
     var body = document.getElementById("ct-body");
     Promise.all([api.contracts(), api.windFarms(), api.customers()])
@@ -381,13 +406,15 @@
         r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; contractCustOpts.push([c.id, (c.company_name || c.code)]); });
         cs.forEach(function (c) { crudCache.contract[c.id] = c; });
         var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + importBtn("contract") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>合約編號</th><th>風場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>合約編號</th><th>案場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約電量 (MWh)</th><th>合約比例</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
         if (!cs.length) {
           html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
         }
         cs.forEach(function (c) {
-          html += "<tr><td class=\"code\">" + esc(c.contract_number) + "</td><td style=\"text-align:left\">" + esc(fm[c.wind_farm_id] || c.wind_farm_id) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
-            "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) +
+          var fname = String(fm[c.wind_farm_id] || c.wind_farm_id);
+          html += "<tr><td class=\"code\">" + esc(c.contract_number) + contractTerms(c) +
+            "</td><td class=\"ell\" title=\"" + esc(fname) + "\">" + esc(fname) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
+            "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) + contractRemaining(c) +
             "</td><td class=\"num\">" + (c.contracted_energy_mwh != null ? nfmt(c.contracted_energy_mwh, 0) : "–") +
             "</td><td class=\"num\">" + (c.contracted_percentage != null ? pct(c.contracted_percentage, 0) + "%" : "–") +
             "</td><td class=\"num\">" + (c.price_per_kwh != null ? price(c.price_per_kwh) : "–") +

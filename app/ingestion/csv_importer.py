@@ -169,6 +169,17 @@ def import_batteries(db: Session, rows: Iterable[dict]) -> ImportResult:
     return ImportResult(imported=imported, skipped=skipped, errors=errors)
 
 
+def _parse_shares(raw: str | None) -> list[float] | None:
+    """CSV 的月別配比：12 個以分號隔開的權重（如 ``1.35;1.25;…``），空白＝平均分攤。
+
+    權重不必加總為 1——引擎會自行正規化；寫成相對權重比較好讀，也好對照風電季節曲線。
+    """
+    text = p.s(raw)
+    if not text:
+        return None
+    return [float(x) for x in text.split(";")]
+
+
 def import_contracts(db: Session, rows: Iterable[dict]) -> ImportResult:
     """Contracts reference wind farms and customers by *code* in the CSV."""
     from app.models import Customer, WindFarm
@@ -191,6 +202,11 @@ def import_contracts(db: Session, rows: Iterable[dict]) -> ImportResult:
                 contracted_percentage=p.f(row.get("contracted_percentage")),
                 price_per_kwh=p.f(row.get("price_per_kwh")),
                 priority=p.i(row.get("priority")) or 100,
+                # 合約深化欄位（皆選填，空白＝沒有這項條款）
+                monthly_shares=_parse_shares(row.get("monthly_shares")),
+                min_offtake_percent=p.f(row.get("min_offtake_percent")),
+                price_escalation_percent=p.f(row.get("price_escalation_percent")),
+                price_base_year=p.i(row.get("price_base_year")),
                 status=ContractStatus(
                     p.s(row.get("status")) or ContractStatus.ACTIVE.value
                 ),
