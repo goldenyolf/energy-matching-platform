@@ -599,3 +599,32 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 .heat-lg{display:flex;align-items:center;gap:9px;padding:8px 12px 2px;font-size:11.5px;color:var(--muted)}
 .heat-lg .heat-grad{width:120px;height:11px;border-radius:6px;display:inline-block;background:linear-gradient(90deg,rgba(47,162,77,.08),rgba(47,162,77,1))}
 .heat-lg .cfe-hint{margin-left:auto;color:var(--faint)}
+
+/* ---- 合約詳情：綁定約束分佈條 ---- */
+.bstrip{display:flex;gap:4px}
+.bcell{flex:1;height:34px;border-radius:6px;display:grid;place-items:center;
+  font:600 11px/1 var(--font-mono);color:#fff;border:1px solid transparent}
+.b-cap{background:var(--brand)}
+.b-sup{background:var(--warn)}
+.b-dem{background:var(--buyer)}
+.b-non{background:transparent;border:1px dashed var(--line-strong);color:var(--faint)}
+.b-nif{background:var(--line-strong);color:var(--muted)}
+.blg{display:flex;flex-wrap:wrap;gap:14px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.blg .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px}
+.verdict{margin:11px 0 2px;font-size:13.5px;line-height:1.65;color:var(--ink)}
+
+/* ---- 合約詳情：月別配比與逐年單價 ---- */
+.shbar{display:flex;gap:4px;align-items:flex-end;height:62px}
+.shcell{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  height:100%;gap:3px}
+.shcell i{display:block;width:100%;background:var(--seller-soft);border-top:2px solid var(--seller);
+  border-radius:3px 3px 0 0}
+.shcell b{font:600 10px/1 var(--font-mono);color:var(--faint)}
+.pladder{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 16px}
+.pl{display:flex;flex-direction:column;gap:2px;padding:7px 11px;border:1px solid var(--line);
+  border-radius:8px;font:600 13px/1.3 var(--font-mono);background:var(--surface-2)}
+.pl b{font:600 10.5px/1 var(--font-ui);color:var(--faint)}
+
+/* 清單列可點進詳情頁 */
+.clickrow{cursor:pointer}
