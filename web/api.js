@@ -167,5 +167,8 @@
         transfer_price_per_kwh: transferPrice,
       });
     },
+    contractDetail: function (contractId, year) {
+      return get("/analytics/contract-detail", { contract_id: contractId, year: year });
+    },
   };
 })(window);
