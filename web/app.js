@@ -598,6 +598,83 @@
     });
   }
 
+  function alertsBlock(alerts, year) {
+    var rows = "";
+    if (!alerts.length) {
+      rows = '<tr><td class="empty" colspan="4">目前無風險告警 ✓</td></tr>';
+    } else {
+      alerts.forEach(function (a) {
+        rows += "<tr><td>" + sevPill(a.severity) + "</td><td>" +
+          (RISK_CAT[a.category] || esc(a.category)) +
+          '</td><td style="text-align:left">' + esc(a.detail) +
+          '</td><td style="text-align:left">' + esc(a.suggested_action) + "</td></tr>";
+      });
+    }
+    return '<section class="card"><div class="hd"><h3>風險告警</h3>' +
+      '<span class="aside">評估期間 ' + year + "-01 · 到期預警 12 個月</span></div>" +
+      '<div class="tablewrap"><table><thead><tr><th>嚴重度</th><th>類型</th>' +
+      "<th>說明</th><th>建議動作</th></tr></thead><tbody>" + rows +
+      "</tbody></table></div></section>";
+  }
+
+  // 雙面帳:買方帳、賣方帳、售電業毛利同框,並標明每一欄是給誰看的。
+  function billBlock(d) {
+    if (!d.has_price) {
+      return '<section class="card"><div class="hd"><h3>雙面帳</h3></div>' +
+        '<div style="padding:16px 18px"><p class="u">本合約未設售電價,無法計算金額。' +
+        "填入售電價後即可產生買方應付、案場應收與售電業毛利。</p></div></section>";
+    }
+    var t = d.totals;
+    var rows = "";
+    d.months.forEach(function (m) {
+      rows += "<tr" + (m.in_force ? "" : ' class="dim"') + '><td class="num">' +
+        esc(m.period) + '</td><td class="num">' + nfmt(m.allocated_mwh, 0) +
+        '</td><td class="num">' + money(m.energy_cost) +
+        '</td><td class="num">' + money(m.wheeling_fee) +
+        '</td><td class="num">' + (m.take_or_pay_charge > 0
+          ? '<span class="prem">' + money(m.take_or_pay_charge) + "</span>" : "0") +
+        '</td><td class="num">' + money(m.buyer_payable) +
+        '</td><td class="num">' + money(m.seller_receivable) +
+        '</td><td class="num ' + (m.retailer_margin >= 0 ? "pos" : "neg") + '">' +
+        money(m.retailer_margin) + "</td></tr>";
+    });
+    return '<section class="card"><div class="hd"><h3>雙面帳</h3>' +
+      '<span class="aside">' + d.year + " 年度合計 · 履約基準</span></div>" +
+      '<div class="billcols">' +
+      '<div class="billcol"><div class="bctag buyer">買方（用電戶應付）</div><div class="rows">' +
+      erow("綠電費", money(t.energy_cost), "NTD") +
+      erow("輪供費", "+" + money(t.wheeling_fee), "NTD") +
+      (t.take_or_pay_charge > 0
+        ? erow("保證量費", "+" + money(t.take_or_pay_charge), "NTD", "prem") : "") +
+      erowTotal("應付合計", money(t.buyer_payable), "NTD", "pos") +
+      "</div></div>" +
+      '<div class="billcol"><div class="bctag seller">賣方（案場應收）</div><div class="rows">' +
+      erow("躉售單價", price(d.feed_in_price_per_kwh), "NTD/kWh") +
+      erow("綠電量", nfmt(t.allocated_mwh, 0), "MWh") +
+      erowTotal("應收合計", money(t.seller_receivable), "NTD") +
+      "</div></div>" +
+      '<div class="billcol"><div class="bctag">售電業毛利</div><div class="rows">' +
+      erow("轉供單價", price(d.months[0].price_per_kwh), "NTD/kWh") +
+      erow("毛利率", t.margin_percent == null
+        ? '<span class="u">–</span>' : pct(t.margin_percent, 1) + "%") +
+      erowTotal("毛利", money(t.retailer_margin), "NTD",
+        t.retailer_margin >= 0 ? "pos" : "neg") +
+      "</div></div></div>" +
+      '<div class="subhd"><span>月別明細</span><small>灰列為未生效月份</small></div>' +
+      '<div class="tablewrap"><table><thead><tr><th>期間</th><th>分配 (MWh)</th>' +
+      "<th>綠電費</th><th>輪供費</th><th>保證量費</th><th>買方應付</th>" +
+      "<th>案場應收</th><th>毛利</th></tr></thead><tbody>" + rows +
+      "</tbody></table></div>" +
+      '<div class="foot-note">' + iconInfo() +
+      "本頁金額以<b>合約優先序引擎</b>的分配為基準(履約基準);轉供結算單頁採 MILP 最佳化配置," +
+      "兩者數字會有落差。" +
+      (d.used_default_feed_in
+        ? "此案場未設躉售價,採預設 " + price(d.feed_in_price_per_kwh) + " 元/度 試算。" : "") +
+      "輪供費 " + price(d.wheeling_fee_per_kwh) + " 元/度。減碳量 " +
+      nfmt(t.carbon_avoided_tco2e, 0) + " tCO₂e。</div>" +
+      "</section>";
+  }
+
   function contractTermsCard(d) {
     var top = d.min_offtake_percent == null
       ? '<span class="u">無此條款</span>'
@@ -688,6 +765,8 @@
       '<div style="padding:12px 18px 14px">' + monthChart(d.months) + "</div>" +
       '<div id="cd-mdetail"></div></section>';
 
+    html += alertsBlock(alerts, d.year);
+    html += billBlock(d);
     html += contractTermsCard(d);
     body.innerHTML = html;
     wireContractChart(body, d);

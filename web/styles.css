@@ -652,3 +652,17 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 .mdetail{border-top:1px solid var(--line);padding:12px 18px 16px}
 .mdhd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;font-size:14px}
 .mdhd .aside{margin-left:auto;font:500 11px var(--font-mono);color:var(--faint)}
+
+/* ---- 合約詳情：雙面帳 ---- */
+.billcols{display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  border-bottom:1px solid var(--line)}
+.billcol{padding:14px 18px 16px;border-right:1px solid var(--line)}
+.billcol:last-child{border-right:0}
+.billcol .rows{margin-top:6px}
+.bctag{display:inline-block;font-size:11px;font-weight:650;padding:3px 9px;border-radius:20px;
+  background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.bctag.buyer{background:var(--buyer-soft);color:var(--buyer);border-color:transparent}
+.bctag.seller{background:var(--seller-soft);color:var(--seller);border-color:transparent}
+tbody tr.dim td{opacity:.45}
+@media (max-width:900px){.billcols{grid-template-columns:1fr}
+  .billcol{border-right:0;border-bottom:1px solid var(--line)}}
