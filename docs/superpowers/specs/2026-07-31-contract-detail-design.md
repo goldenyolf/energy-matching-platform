@@ -92,9 +92,11 @@ binding_primary: str      # 單一值，供上色與統計
 
 `binding_primary` 的優先序**固定為 `farm_supply` > `customer_demand` > `contract_cap`**。理由：若案場供給已用盡，那才是真正的限制——調高合約上限也拿不到更多電，合約上限同時綁定只是巧合。
 
+分配為 0 的月份**仍要分類**：引擎的 `_reason()` 會寫出原因（`no allocation: wind farm has no remaining generation` 等），照樣對應到 `farm_supply` / `customer_demand` / `contract_cap`。「案場當月無電可分」就是被案場供給卡住，退回 `none` 等於丟掉已知資訊。
+
 其餘取值：
 
-- `none`——本月生效但分配為 0（例如案場當月零發電）；`binding` 為空陣列
+- `none`——引擎回報無分配且無可辨識約束（僅 `no allocation` 一種）；`binding` 為空陣列
 - `not_in_force`——合約該月未生效／已到期／狀態非 active（來自 `outcome.skipped`）；`binding` 為空陣列
 
 ### 商務結論句
@@ -106,7 +108,7 @@ binding_primary: str      # 單一值，供上色與統計
 | `contract_cap` | 「被合約上限卡住」，**若同時符合加購空間判定**再加「客戶的需求高於合約允許量，有加購空間」 |
 | `farm_supply` | 「被案場供給卡住——此案場已無餘電可分配」，**兩個可選子句各有前提**（見下） |
 | `customer_demand` | 「被客戶用電卡住——合約允許量高於客戶實際用得掉的量」 |
-| `none` | 「該年度未取得任何分配」 |
+| `none` | 「該年度未取得任何分配，引擎未指出單一約束」 |
 | `not_in_force` | 「本合約於該年度未生效／已到期」 |
 
 `farm_supply` 的兩個子句都必須有資料撐腰，否則略過：
@@ -286,7 +288,7 @@ def compute_contract_detail(db: Session, contract_id: int, year: int) -> Contrac
 | `contract_cap` | 藍 | 客戶要得比合約多 → 有加購空間（須通過 headroom 判定才這樣寫） |
 | `farm_supply` | 橘 | 案場無餘電，或本合約優先序排在後面 |
 | `customer_demand` | 灰綠 | 合約簽得比客戶用得掉的多 |
-| `none` | 白（空心） | 生效但零分配（案場當月無發電） |
+| `none` | 白（空心） | 生效、零分配，且引擎未指出約束 |
 | `not_in_force` | 淺灰 | 未生效／已到期 |
 
 下方一行由多數類別產生的結論句（見 §5）。次要數字：年度分配量、上限使用率、保證量差額、到期倒數、告警則數。
