@@ -19,7 +19,17 @@
 - **不計算「履約健康度分數」。** 只呈現可查證的事實。
 - 前端零依賴、無 build step：`var`、字串串接、`function` 宣告，禁止 `const`/`let`/箭頭函式/樣板字串（其餘檔案皆為此風格，`node --check` 不會擋但要一致）。
 - 金額格式一律用既有 `money()`；電量用 `nfmt(v, 0|1)`；百分比用 `pct()`；單價用 `price()`。
-- 閘門（每個 task 結束前必跑）：`ruff check .` · `black --check .` · `mypy app` · `pytest -q` · `node --check web/app.js web/api.js`
+- **閘門（每個 task 結束前必跑，與 CI 同一組指令）：**
+
+  ```bash
+  .venv/bin/ruff check app tests
+  .venv/bin/black --check app tests
+  .venv/bin/mypy app
+  .venv/bin/pytest -q --cov=app --cov-report=term-missing --cov-fail-under=90
+  node --check web/app.js && node --check web/api.js
+  ```
+
+  注意範圍是 `app tests` 而**不是** `.`——`alembic/` 底下有既有的排版差異，不在閘門內，也不要順手去改。
 - **本計畫內的 Python 程式碼片段未經 black 排版，部分行超過 `line-length = 88`。** 貼進檔案後先跑一次 `.venv/bin/black <該檔案>`，再手動把 black 不會拆的長字串以隱式串接折行。**字串內容一個字元都不能改**——那些是引擎實際輸出的 `reason`，改了測試就是在對一個不存在的字串斷言。不得用 `# noqa`，不得改 `pyproject.toml`。
 - **絕不 `git add -A`**，只加該 task 明確列出的路徑。
 - Commit 訊息結尾固定加 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`。
@@ -203,7 +213,7 @@ Expected: PASS（14 passed）
 - [ ] **Step 5: 跑閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q
 ```
 Expected: 全綠
 
@@ -831,7 +841,7 @@ Expected: PASS
 - [ ] **Step 6: 跑閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q
 ```
 Expected: 全綠
 
@@ -1112,7 +1122,7 @@ Expected: PASS
 - [ ] **Step 5: 跑閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q
 ```
 Expected: 全綠
 
@@ -1266,7 +1276,7 @@ Expected: PASS
 - [ ] **Step 6: 跑閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/api.js
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/api.js
 ```
 Expected: 全綠
 
@@ -1584,7 +1594,7 @@ node --check web/app.js && node --check web/api.js
 - [ ] **Step 6: 跑閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/app.js && node --check web/api.js
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/app.js && node --check web/api.js
 ```
 Expected: 全綠（`tests/integration/test_spa.py` 若有檢查路由清單需一併更新）
 
@@ -2100,7 +2110,7 @@ const { chromium } = require("playwright");
 - [ ] **Step 4: 跑完整閘門**
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/black --check . && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/app.js && node --check web/api.js
+.venv/bin/ruff check app tests && .venv/bin/black --check app tests && .venv/bin/mypy app && .venv/bin/pytest -q && node --check web/app.js && node --check web/api.js
 ```
 Expected: 全綠
 
