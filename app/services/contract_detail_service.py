@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date
 
 from sqlalchemy import func, select
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.matching import MatchingOutcome
 from app.matching.contract_terms import (
+    effective_price,
     min_offtake_mwh,
     monthly_share,
     monthly_volume_cap,
@@ -29,6 +31,17 @@ from app.services import contracts as contract_svc
 from app.services.matching_service import compute_outcome
 
 EPS = 1e-9
+_KWH = 1000.0
+
+
+@dataclass(frozen=True)
+class _Pricing:
+    """一年份的計價前提。售電價經 CPI 調整後全年同一個值。"""
+
+    price_per_kwh: float | None  # None = 合約未設售電價
+    feed_in_per_kwh: float
+    wheeling_per_kwh: float
+
 
 # 引擎 reason 字串裡的用語 → 本模組的約束代碼。
 # 前三個來自有分配的情況,後三個來自 ``no allocation: …``——零分配時引擎也講了
@@ -152,6 +165,7 @@ def _not_in_force_month(
     cap_source: str,
     farm_left: float,
     cust_unmet: float,
+    pricing: _Pricing,
 ) -> ContractMonth:
     """未生效／已到期的月份。分配是 None 語意,不是 0——這格講錯整頁就毀了。"""
     return ContractMonth(
@@ -171,18 +185,46 @@ def _not_in_force_month(
         headroom=False,
         farm_unallocated_mwh=round(farm_left, 6),
         customer_unmet_mwh=round(cust_unmet, 6),
-        price_per_kwh=None,
-        energy_cost=None,
-        wheeling_fee=None,
-        take_or_pay_charge=None,
-        buyer_payable=None,
-        seller_receivable=None,
-        retailer_margin=None,
+        **_money(pricing, 0.0, 0.0),
     )
 
 
+def _money(
+    pricing: _Pricing, allocated_mwh: float, shortfall_mwh: float
+) -> dict[str, float | None]:
+    """單月三方金額。公式沿用 ``settlement_service``,只是把範圍縮到這紙合約。
+
+    所有費率都是 per-kWh,保證量門檻也是合約層級的——因此不需要任何
+    「這紙合約該分攤客戶多少費用」之類的分攤假設。
+    """
+    if pricing.price_per_kwh is None:
+        return {
+            "price_per_kwh": None,
+            "energy_cost": None,
+            "wheeling_fee": None,
+            "take_or_pay_charge": None,
+            "buyer_payable": None,
+            "seller_receivable": None,
+            "retailer_margin": None,
+        }
+    kwh = allocated_mwh * _KWH
+    energy_cost = kwh * pricing.price_per_kwh
+    wheeling_fee = kwh * pricing.wheeling_per_kwh
+    top_charge = shortfall_mwh * _KWH * pricing.price_per_kwh
+    seller = kwh * pricing.feed_in_per_kwh
+    return {
+        "price_per_kwh": round(pricing.price_per_kwh, 6),
+        "energy_cost": round(energy_cost, 2),
+        "wheeling_fee": round(wheeling_fee, 2),
+        "take_or_pay_charge": round(top_charge, 2),
+        "buyer_payable": round(energy_cost + wheeling_fee + top_charge, 2),
+        "seller_receivable": round(seller, 2),
+        "retailer_margin": round(energy_cost - seller - wheeling_fee + top_charge, 2),
+    }
+
+
 def _build_months(
-    db: Session, contract: Contract, year: int, cap_source: str
+    db: Session, contract: Contract, year: int, cap_source: str, pricing: _Pricing
 ) -> list[ContractMonth]:
     months: list[ContractMonth] = []
     for m in range(1, 13):
@@ -204,6 +246,7 @@ def _build_months(
                     cap_source,
                     farm_left,
                     cust_unmet,
+                    pricing,
                 )
             )
             continue
@@ -236,19 +279,17 @@ def _build_months(
                 headroom=has_headroom(primary, farm_left, cust_unmet),
                 farm_unallocated_mwh=round(farm_left, 6),
                 customer_unmet_mwh=round(cust_unmet, 6),
-                price_per_kwh=None,
-                energy_cost=None,
-                wheeling_fee=None,
-                take_or_pay_charge=None,
-                buyer_payable=None,
-                seller_receivable=None,
-                retailer_margin=None,
+                **_money(
+                    pricing, alloc.allocated_mwh, max(0.0, floor - alloc.allocated_mwh)
+                ),
             )
         )
     return months
 
 
-def _build_totals(months: list[ContractMonth], factor: float) -> ContractYearTotals:
+def _build_totals(
+    months: list[ContractMonth], factor: float, has_price: bool
+) -> ContractYearTotals:
     in_force = [m for m in months if m.in_force]
     allocated = sum(m.allocated_mwh for m in in_force)
     caps = [m.cap_mwh for m in in_force]
@@ -257,6 +298,14 @@ def _build_totals(months: list[ContractMonth], factor: float) -> ContractYearTot
         if caps and all(c is not None for c in caps)
         else None
     )
+
+    def total(field: str) -> float | None:
+        if not has_price:
+            return None
+        return round(sum(getattr(m, field) or 0.0 for m in months), 2)
+
+    buyer = total("buyer_payable")
+    margin = total("retailer_margin")
     return ContractYearTotals(
         months_in_force=len(in_force),
         allocated_mwh=round(allocated, 6),
@@ -269,13 +318,15 @@ def _build_totals(months: list[ContractMonth], factor: float) -> ContractYearTot
         shortfall_months=sum(1 for m in in_force if m.shortfall_mwh > EPS),
         binding_counts=dict(Counter(m.binding_primary for m in months)),
         headroom_months=sum(1 for m in months if m.headroom),
-        energy_cost=None,
-        wheeling_fee=None,
-        take_or_pay_charge=None,
-        buyer_payable=None,
-        seller_receivable=None,
-        retailer_margin=None,
-        margin_percent=None,
+        energy_cost=total("energy_cost"),
+        wheeling_fee=total("wheeling_fee"),
+        take_or_pay_charge=total("take_or_pay_charge"),
+        buyer_payable=buyer,
+        seller_receivable=total("seller_receivable"),
+        retailer_margin=margin,
+        margin_percent=(
+            round(margin / buyer * 100.0, 6) if buyer and margin is not None else None
+        ),
         carbon_avoided_tco2e=round(allocated * factor, 6),
     )
 
@@ -297,8 +348,26 @@ def compute_contract_detail(db: Session, contract_id: int, year: int) -> Contrac
     if feed_in is None:
         feed_in = settings.default_feed_in_price_per_kwh
 
-    months = _build_months(db, contract, year, cap_source)
-    totals = _build_totals(months, settings.grid_emission_factor_kg_per_kwh)
+    pricing = _Pricing(
+        price_per_kwh=(
+            effective_price(
+                contract.price_per_kwh,
+                contract.price_escalation_percent,
+                contract.price_base_year,
+                year,
+            )
+            if contract.price_per_kwh is not None
+            else None
+        ),
+        feed_in_per_kwh=feed_in,
+        wheeling_per_kwh=settings.wheeling_fee_per_kwh,
+    )
+    months = _build_months(db, contract, year, cap_source, pricing)
+    totals = _build_totals(
+        months,
+        settings.grid_emission_factor_kg_per_kwh,
+        contract.price_per_kwh is not None,
+    )
 
     shares = contract.monthly_shares
     return ContractDetail(

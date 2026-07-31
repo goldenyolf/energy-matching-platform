@@ -294,3 +294,87 @@ def test_unknown_contract_raises_not_found(db):
 
     with pytest.raises(NotFoundError):
         compute_contract_detail(db, 9999, 2024)
+
+
+def test_money_identities_hold_every_month(db):
+    """兩條恆等式。公式跟結算單同一套,差異只該來自引擎不同。"""
+    contract, _, _ = _build(db, contracted_energy_mwh=60000.0, min_offtake_percent=90.0)
+    d = compute_contract_detail(db, contract.id, 2024)
+    for m in d.months:
+        assert m.buyer_payable == pytest.approx(
+            m.energy_cost + m.wheeling_fee + m.take_or_pay_charge
+        )
+        assert m.retailer_margin == pytest.approx(
+            m.energy_cost - m.seller_receivable - m.wheeling_fee + m.take_or_pay_charge
+        )
+
+
+def test_money_uses_contract_price_and_farm_feed_in(db):
+    """月 3000 MWh × 5.0 元 = 1500 萬綠電費；應收 3000 MWh × 4.0 元 = 1200 萬。"""
+    contract, _, _ = _build(db, contracted_energy_mwh=36000.0)
+    d = compute_contract_detail(db, contract.id, 2024)
+    jan = d.months[0]
+    assert jan.allocated_mwh == pytest.approx(3000.0)
+    assert jan.price_per_kwh == pytest.approx(5.0)
+    assert jan.energy_cost == pytest.approx(3000.0 * 1000 * 5.0)
+    assert jan.seller_receivable == pytest.approx(3000.0 * 1000 * 4.0)
+    assert jan.wheeling_fee == pytest.approx(3000.0 * 1000 * d.wheeling_fee_per_kwh)
+
+
+def test_cpi_escalates_the_price_by_year(db):
+    contract, _, _ = _build(
+        db,
+        price_escalation_percent=2.5,
+        price_base_year=2022,
+    )
+    d = compute_contract_detail(db, contract.id, 2024)
+    assert d.months[0].price_per_kwh == pytest.approx(5.0 * 1.025**2)
+
+
+def test_price_before_the_base_year_is_not_discounted(db):
+    contract, _, _ = _build(db, price_escalation_percent=2.5, price_base_year=2030)
+    d = compute_contract_detail(db, contract.id, 2024)
+    assert d.months[0].price_per_kwh == pytest.approx(5.0)
+
+
+def test_contract_without_a_price_reports_no_money_at_all(db):
+    """不拿躉售價代入讓毛利變成 0——那是個看起來合理但不真實的數字。"""
+    contract, _, _ = _build(db, price_per_kwh=None)
+    d = compute_contract_detail(db, contract.id, 2024)
+    assert d.has_price is False
+    for m in d.months:
+        assert m.price_per_kwh is None
+        assert m.energy_cost is None
+        assert m.buyer_payable is None
+        assert m.retailer_margin is None
+    assert d.totals.buyer_payable is None
+    assert d.totals.margin_percent is None
+
+
+def test_farm_without_a_feed_in_price_is_flagged(db):
+    contract, farm, _ = _build(db)
+    farm.feed_in_price_per_kwh = None
+    db.commit()
+    d = compute_contract_detail(db, contract.id, 2024)
+    assert d.used_default_feed_in is True
+    assert d.feed_in_price_per_kwh > 0
+
+
+def test_annual_money_equals_the_sum_of_months(db):
+    contract, _, _ = _build(db, contracted_energy_mwh=60000.0, min_offtake_percent=90.0)
+    d = compute_contract_detail(db, contract.id, 2024)
+    t = d.totals
+    assert t.buyer_payable == pytest.approx(sum(m.buyer_payable for m in d.months))
+    assert t.seller_receivable == pytest.approx(
+        sum(m.seller_receivable for m in d.months)
+    )
+    assert t.retailer_margin == pytest.approx(sum(m.retailer_margin for m in d.months))
+    assert t.margin_percent == pytest.approx(t.retailer_margin / t.buyer_payable * 100)
+
+
+def test_out_of_force_months_cost_nothing_but_are_not_null(db):
+    """有售電價的合約,未生效月份金額是 0（可加總）,不是 None。"""
+    contract, _, _ = _build(db, start_date=date(2025, 1, 1))
+    d = compute_contract_detail(db, contract.id, 2024)
+    assert all(m.buyer_payable == 0.0 for m in d.months)
+    assert d.totals.margin_percent is None  # 應付為 0 → 毛利率無意義
