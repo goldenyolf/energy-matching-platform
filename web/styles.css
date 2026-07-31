@@ -628,3 +628,27 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 
 /* 清單列可點進詳情頁 */
 .clickrow{cursor:pointer}
+
+/* ---- 合約詳情：月別履約圖 ----
+   柱子的 class 取名 .mchbar 而不是照抄任務書的 .mbar——「求解中」燈箱裡
+   已經有一個同名的進度條 .mbar（見上方 .mbar{height:8px;...}）,SVG2 的
+   geometry-property 映射會讓那條規則的 height/border-radius 蓋掉這裡
+   rect 的 height 屬性,12 根柱子全被壓成同一個 8px 高的小方塊,量測不出
+   任何差異。故意撞名嘛意義不大,加前綴或設 auto 也救不回來,乾脆換一個
+   不會撞的 class 名稱。 */
+.mchart svg{width:100%;height:auto;display:block}
+.mchbar{cursor:pointer;transition:opacity .12s}
+.mchbar:hover{opacity:.82}
+.mchbar.on{stroke:var(--ink);stroke-width:1.5}
+.mchbar.b-cap{fill:var(--brand)} .mchbar.b-sup{fill:var(--warn)}
+.mchbar.b-dem{fill:var(--buyer)} .mchbar.b-nif{fill:var(--line-strong)}
+.mchbar.b-non{fill:none;stroke:var(--line-strong);stroke-dasharray:3 3}
+.mcap{stroke:var(--ink);stroke-width:2}
+.mfloor{stroke:var(--warn);stroke-width:1.6;stroke-dasharray:4 3}
+.mtick{font:500 10px var(--font-mono);fill:var(--faint)}
+.blg .ln{display:inline-block;width:14px;height:0;border-top:2px solid var(--ink);
+  margin-right:5px;vertical-align:3px}
+.blg .mfloorln{border-top:2px dashed var(--warn)}
+.mdetail{border-top:1px solid var(--line);padding:12px 18px 16px}
+.mdhd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;font-size:14px}
+.mdhd .aside{margin-left:auto;font:500 11px var(--font-mono);color:var(--faint)}

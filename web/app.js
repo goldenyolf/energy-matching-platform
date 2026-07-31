@@ -493,6 +493,111 @@
       '<div class="pladder">' + out.join("") + "</div>";
   }
 
+  // 月別履約圖：柱 = 實際分配（依綁定約束上色）,短橫 = 月上限,虛線短橫 = 保證量門檻。
+  // 上限用「每月一段短橫」而不是一條連續折線——未設上限的月份沒有值,連起來會憑空
+  // 補出一段不存在的線。
+  function monthChart(months) {
+    var W = 760, Ht = 210, L = 46, R = 12, T = 14, B = 26;
+    var pw = W - L - R, ph = Ht - T - B;
+    var vals = [1];
+    months.forEach(function (m) {
+      vals.push(m.allocated_mwh);
+      if (m.cap_mwh != null) vals.push(m.cap_mwh);
+      if (m.min_offtake_mwh) vals.push(m.min_offtake_mwh);
+    });
+    var ymax = Math.max.apply(null, vals) * 1.12;
+    var bw = pw / 12 * 0.6;
+    var X = function (i) { return L + pw * (i + 0.5) / 12; };
+    var Y = function (v) { return T + ph - v / ymax * ph; };
+    var grid = "", g;
+    for (g = 0; g <= 2; g++) {
+      var gy = T + ph - ph * g / 2;
+      grid += '<line class="cfe-axis" x1="' + L + '" y1="' + gy.toFixed(1) +
+        '" x2="' + (W - R) + '" y2="' + gy.toFixed(1) + '"/>' +
+        '<text class="mtick" x="' + (L - 6) + '" y="' + (gy + 3.5).toFixed(1) +
+        '" text-anchor="end">' + abbr(ymax * g / 2) + "</text>";
+    }
+    var body = months.map(function (m, i) {
+      var meta = bindMeta(m.binding_primary);
+      var y = Y(m.allocated_mwh);
+      var h = Math.max(0, T + ph - y);
+      // 分配量 0（例如未生效的月份）畫出來的柱高會是 0——貼著底線的一條線,
+      // 滑鼠點不到。用 2px 的最小高度墊底,柱頂跟著往上移、底線不動,
+      // 讓「未生效」的灰色柱仍點得到,同時不影響正常柱子的真實高度。
+      if (h < 2) { h = 2; y = T + ph - h; }
+      var s = '<rect class="mchbar ' + meta.cls + '" data-m="' + m.month + '" x="' +
+        (X(i) - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) +
+        '" height="' + h.toFixed(1) + '" rx="2"><title>' +
+        esc(m.period + " · " + meta.name + " · " + nfmt(m.allocated_mwh, 0) + " MWh") +
+        "</title></rect>";
+      if (m.cap_mwh != null) {
+        s += '<line class="mcap" x1="' + (X(i) - bw / 2 - 3).toFixed(1) + '" y1="' +
+          Y(m.cap_mwh).toFixed(1) + '" x2="' + (X(i) + bw / 2 + 3).toFixed(1) +
+          '" y2="' + Y(m.cap_mwh).toFixed(1) + '"/>';
+      }
+      if (m.min_offtake_mwh) {
+        s += '<line class="mfloor" x1="' + (X(i) - bw / 2 - 3).toFixed(1) + '" y1="' +
+          Y(m.min_offtake_mwh).toFixed(1) + '" x2="' + (X(i) + bw / 2 + 3).toFixed(1) +
+          '" y2="' + Y(m.min_offtake_mwh).toFixed(1) + '"/>';
+      }
+      s += '<text class="mtick" x="' + X(i).toFixed(1) + '" y="' + (T + ph + 15) +
+        '" text-anchor="middle">' + m.month + "</text>";
+      return s;
+    }).join("");
+    return '<div class="mchart"><svg viewBox="0 0 ' + W + " " + Ht +
+      '" role="img" aria-label="月別履約圖">' + grid + body + "</svg></div>" +
+      '<div class="blg"><span><i class="ln mcapln"></i>月上限</span>' +
+      '<span><i class="ln mfloorln"></i>保證量門檻</span>' +
+      '<span class="cfe-hint">點任一柱看該月明細</span></div>';
+  }
+
+  // 單月明細。金額只在合約有售電價時才出現。
+  function monthDetailPanel(m, d) {
+    var rows = erow("狀態", m.in_force ? "生效"
+      : '<span class="u">' + esc(m.skip_reason || "未生效") + "</span>");
+    rows += erow("分配量", nfmt(m.allocated_mwh, 1), "MWh");
+    rows += erow("月上限", m.cap_mwh == null
+      ? '<span class="u">未設上限</span>' : nfmt(m.cap_mwh, 1), m.cap_mwh == null ? "" : "MWh");
+    rows += erow("使用率", m.utilization_percent == null
+      ? '<span class="u">–</span>' : pct(m.utilization_percent, 1) + "%");
+    rows += erow("綁定約束", esc(bindMeta(m.binding_primary).name) +
+      (m.headroom ? '<span class="u">有加購空間</span>' : ""));
+    if (m.min_offtake_mwh) {
+      rows += erow("保證量門檻", nfmt(m.min_offtake_mwh, 1), "MWh");
+      rows += erow("保證量差額", nfmt(m.shortfall_mwh, 1), "MWh",
+        m.shortfall_mwh > 0 ? "neg" : "");
+    }
+    if (d.has_price) {
+      rows += erow("綠電費", money(m.energy_cost), "NTD");
+      rows += erow("輪供費", "+" + money(m.wheeling_fee), "NTD");
+      if (m.take_or_pay_charge > 0) {
+        rows += erow("保證量費", "+" + money(m.take_or_pay_charge), "NTD", "prem");
+      }
+      rows += erowTotal("買方應付", money(m.buyer_payable), "NTD", "pos");
+      rows += erow("案場應收", money(m.seller_receivable), "NTD");
+      rows += erow("售電業毛利", money(m.retailer_margin), "NTD",
+        m.retailer_margin >= 0 ? "pos" : "neg");
+    }
+    return '<div class="mdetail"><div class="mdhd"><b>' + esc(m.period) + "</b>" +
+      '<span class="aside">' + esc(m.reason || m.skip_reason || "") + "</span></div>" +
+      '<div class="rows">' + rows + "</div></div>";
+  }
+
+  function wireContractChart(root, d) {
+    var panel = root.querySelector("#cd-mdetail");
+    if (!panel) return;
+    root.addEventListener("click", function (e) {
+      var bar = e.target.closest ? e.target.closest(".mchbar") : null;
+      if (!bar) return;
+      var mo = parseInt(bar.getAttribute("data-m"), 10);
+      Array.prototype.forEach.call(root.querySelectorAll(".mchbar"), function (b) {
+        b.classList.toggle("on", b === bar);
+      });
+      var m = d.months.filter(function (x) { return x.month === mo; })[0];
+      if (m) panel.innerHTML = monthDetailPanel(m, d);
+    });
+  }
+
   function contractTermsCard(d) {
     var top = d.min_offtake_percent == null
       ? '<span class="u">無此條款</span>'
@@ -578,8 +683,14 @@
         alerts.length ? "見下方清單" : "目前無告警", alerts.length ? "prem" : "") +
       "</div></section>";
 
+    html += '<section class="card"><div class="hd"><h3>月別履約</h3>' +
+      '<span class="aside">柱＝實際分配 · 短橫＝月上限</span></div>' +
+      '<div style="padding:12px 18px 14px">' + monthChart(d.months) + "</div>" +
+      '<div id="cd-mdetail"></div></section>';
+
     html += contractTermsCard(d);
     body.innerHTML = html;
+    wireContractChart(body, d);
   }
 
   function renderContracts() {
