@@ -20,6 +20,7 @@
 - 前端零依賴、無 build step：`var`、字串串接、`function` 宣告，禁止 `const`/`let`/箭頭函式/樣板字串（其餘檔案皆為此風格，`node --check` 不會擋但要一致）。
 - 金額格式一律用既有 `money()`；電量用 `nfmt(v, 0|1)`；百分比用 `pct()`；單價用 `price()`。
 - 閘門（每個 task 結束前必跑）：`ruff check .` · `black --check .` · `mypy app` · `pytest -q` · `node --check web/app.js web/api.js`
+- **本計畫內的 Python 程式碼片段未經 black 排版，部分行超過 `line-length = 88`。** 貼進檔案後先跑一次 `.venv/bin/black <該檔案>`，再手動把 black 不會拆的長字串以隱式串接折行。**字串內容一個字元都不能改**——那些是引擎實際輸出的 `reason`，改了測試就是在對一個不存在的字串斷言。不得用 `# noqa`，不得改 `pyproject.toml`。
 - **絕不 `git add -A`**，只加該 task 明確列出的路徑。
 - Commit 訊息結尾固定加 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`。
 - 執行測試請用專案 venv：`.venv/bin/pytest`、`.venv/bin/ruff`、`.venv/bin/black`、`.venv/bin/mypy`。
