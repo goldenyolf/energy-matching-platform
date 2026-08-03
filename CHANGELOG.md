@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **合約詳情頁（商務視角）** — 合約清單每一列可點入 `#/contract?id=&year=`，看該紙合約整年的逐月履約與雙面帳。
+  - **全年被什麼卡住**：12 格分佈條標出每個月的綁定約束（合約上限／案場供給／客戶用電／未生效），並產生一句有成立條件的結論——「有加購空間」只在案場尚有餘電且客戶仍有未滿足用電時才會出現。
+  - **月別履約圖**：柱為實際分配、短橫為月上限、虛線短橫為 take-or-pay 門檻；點任一月展開明細，含引擎原文的分配理由。
+  - **雙面帳**：買方應付、案場應收、售電業毛利同頁分欄，公式沿用轉供結算單，並註明本頁為履約基準（合約優先序引擎）、與結算單的最佳化基準會有落差。
+  - 新增唯讀端點 `GET /api/v1/analytics/contract-detail?contract_id=&year=`。
+  - 未設售電價的合約不顯示金額而非以躉售價代入；未設上限的合約使用率顯示「未設上限」而非 0%。
+
 ## [0.3.0] — 2026-07-30
 
 Everything between the MVP and today, backfilled in one entry: no releases were
