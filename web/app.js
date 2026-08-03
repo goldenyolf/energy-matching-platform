@@ -85,7 +85,7 @@
     matchmap: TABS_MM, recommend: TABS_MM,
   };
   // sub-route → the nav item that should stay highlighted (電號 drills in from 企業客戶)
-  var NAV_PARENT = { meters: "customers", settlement: "evaluate", recommend: "matchmap" };
+  var NAV_PARENT = { meters: "customers", settlement: "evaluate", recommend: "matchmap", contract: "contracts" };
 
   function subtabs(items, active) {
     return '<div class="subtabs">' + items.map(function (t) {
@@ -131,6 +131,7 @@
       matchmap: renderMatchmap, cfe: renderCfe,
       settlement: renderSettlement, trecs: renderTrecs, risks: renderRisks,
       live: renderLive,
+      contract: renderContractDetail,
     };
     if (r.route === "soon") { renderSoon(r.params.page); setActive("soon"); setDataBadge("soon"); return; }
     var known = views[r.route];
@@ -404,6 +405,483 @@
     return out.length ? out.join('<span class="capsep">·</span>') : '<span class="u">未設上限</span>';
   }
 
+  // ---------- 合約詳情（商務視角） ----------
+  // 綁定約束 → 顏色與說法。① 分佈條與 ② 月別圖共用同一套,免得兩處各講一套。
+  var BIND_META = {
+    contract_cap: { cls: "b-cap", name: "合約上限" },
+    farm_supply: { cls: "b-sup", name: "案場供給" },
+    customer_demand: { cls: "b-dem", name: "客戶用電" },
+    none: { cls: "b-non", name: "無分配" },
+    not_in_force: { cls: "b-nif", name: "未生效" },
+  };
+  function bindMeta(k) { return BIND_META[k] || BIND_META.none; }
+
+  // contractRemaining() 只對生效中的合約給得出天數。給不出來時說明為什麼——
+  // 「–」在到期倒數這一格會被讀成資料缺漏,而狀態本身就是答案。
+  var CONTRACT_END_STATE = {
+    expired: "已到期", pending: "未生效", terminated: "已終止",
+    active: "已過期(狀態未更新)",
+  };
+
+  // 12 格分佈條 + 圖例。一格一個月,顏色就是那個月的主綁定約束。
+  // 各類別的月數一律讀 API 的 totals.binding_counts——同一張卡片裡結論句也讀它,
+  // 前端不該為同一個統計量再算一套。顯示順序仍照 12 個月裡首次出現的先後。
+  function bindStrip(d) {
+    var months = d.months, counts = d.totals.binding_counts || {};
+    var cells = months.map(function (m) {
+      var meta = bindMeta(m.binding_primary);
+      return '<span class="bcell ' + meta.cls + '" title="' +
+        esc(m.period + " · " + meta.name) + '">' + m.month + "</span>";
+    }).join("");
+    var order = [];
+    months.forEach(function (m) {
+      if (order.indexOf(m.binding_primary) < 0) order.push(m.binding_primary);
+    });
+    var lg = order.map(function (k) {
+      return '<span><i class="sw ' + bindMeta(k).cls + '"></i>' + esc(bindMeta(k).name) +
+        " " + (counts[k] || 0) + " 個月</span>";
+    }).join("");
+    return '<div class="bstrip">' + cells + "</div>" + '<div class="blg">' + lg + "</div>";
+  }
+
+  // 全年結論句。每個子句都有成立條件——條件不成立就不寫,不靠形容詞硬補。
+  function bindVerdict(d) {
+    var t = d.totals, counts = t.binding_counts || {};
+    var nif = counts.not_in_force || 0;
+    // 「未生效」只有在整年一個月都沒生效時才是這一年的結論。過去這裡取的是
+    // 全 12 個月的眾數,而 not_in_force 也在裡面數——年中才起始的合約（生效
+    // 月數不到 6）於是被判成未生效,印在一個寫著實際分配量的 KPI 旁邊。
+    // 眾數只在生效月份裡取,未生效的月數改成句尾的附註。
+    if (!t.months_in_force) {
+      return "本合約於 " + d.year + " 年度未生效或已到期,無實際分配。";
+    }
+    var top = null, n = -1;
+    Object.keys(counts).forEach(function (k) {
+      if (k !== "not_in_force" && counts[k] > n) { n = counts[k]; top = k; }
+    });
+    var s;
+    if (top === "contract_cap") {
+      s = n + " 個月被合約上限卡住";
+      if (t.headroom_months > 0) {
+        s += "——客戶的需求高於合約允許量,其中 " + t.headroom_months +
+          " 個月案場仍有餘電,有加購空間";
+      }
+    } else if (top === "farm_supply") {
+      s = n + " 個月被案場供給卡住——此案場已無餘電可分配";
+      if (t.utilization_percent != null) {
+        s += ",全年只拿到上限的 " + pct(t.utilization_percent, 0) + "%";
+      }
+      if (d.higher_priority_sibling_count > 0) {
+        s += ";同案場另有 " + d.higher_priority_sibling_count + " 紙優先序更高的合約先分";
+      }
+    } else if (top === "customer_demand") {
+      s = n + " 個月被客戶用電卡住——合約允許量高於客戶實際用得掉的量";
+    } else {
+      s = "生效月份未取得任何分配,引擎未指出單一約束";
+    }
+    return s + (nif ? ";另 " + nif + " 個月未生效" : "") + "。";
+  }
+
+  // 月別配比小條圖。條款本身就是資料——未生效的年度也照畫。
+  // 沒設月別配比時要講清楚「那月上限怎麼來的」,而這取決於合約設的是哪一種上限:
+  // 只有設了年電量的合約才會走 1/12 平均分攤。比例型合約根本沒有年電量可攤,
+  // 上限是「當月發電量 × 比例」,逐月跟著風況跳（004 一到三月 104,741 → 81,466 MWh）。
+  function sharesBar(d) {
+    var fr = d.monthly_share_fractions;
+    if (!fr) {
+      if (d.contracted_energy_mwh == null) {
+        return d.contracted_percentage == null
+          ? '<span class="u">未設;本合約未設上限,無年電量可分攤</span>'
+          : '<span class="u">未設;本合約上限依當月發電量的 ' +
+            pct(d.contracted_percentage, 0) + "% 計算,不走年電量分攤</span>";
+      }
+      return '<span class="u">未設,年電量平均 1/12 分攤</span>';
+    }
+    var mx = Math.max.apply(null, fr) || 1;
+    return '<div class="shbar">' + fr.map(function (v, i) {
+      return '<span class="shcell" title="' + (i + 1) + " 月 " + (v * 100).toFixed(1) +
+        '%"><i style="height:' + (v / mx * 100).toFixed(1) + '%"></i><b>' + (i + 1) + "</b></span>";
+    }).join("") + "</div>";
+  }
+
+  // CPI 逐年單價。沒設漲幅就不畫——空表格比沒有更糟。
+  function priceLadder(d) {
+    if (d.price_escalation_percent == null || d.price_base_year == null ||
+        d.base_price_per_kwh == null) return "";
+    var y0 = parseInt(String(d.start_date).slice(0, 4), 10);
+    var y1 = parseInt(String(d.end_date).slice(0, 4), 10);
+    var out = [];
+    for (var y = y0; y <= y1 && out.length < 12; y++) {
+      var n = Math.max(0, y - d.price_base_year);
+      out.push('<span class="pl"><b>' + y + "</b>" +
+        price(d.base_price_per_kwh * Math.pow(1 + d.price_escalation_percent / 100, n)) + "</span>");
+    }
+    // 15 年的 PPA 只列 12 年就停,尾巴不能無聲消失——補一格「…」把截斷說出來。
+    if (y1 > y0 + 11) {
+      out.push('<span class="pl more" title="' + esc("另有 " + (y1 - y0 - 11) + " 年未列出") +
+        '">…</span>');
+    }
+    return '<div class="subhd"><span>逐年單價</span><small>基準年 ' + d.price_base_year +
+      " · 每年 +" + pct(d.price_escalation_percent, 1) + "%</small></div>" +
+      '<div class="pladder">' + out.join("") + "</div>";
+  }
+
+  // 月別履約圖：柱 = 實際分配（依綁定約束上色）,短橫 = 月上限,虛線短橫 = 保證量門檻。
+  // 上限用「每月一段短橫」而不是一條連續折線——未設上限的月份沒有值,連起來會憑空
+  // 補出一段不存在的線。
+  function monthChart(months) {
+    var W = 760, Ht = 210, L = 46, R = 12, T = 14, B = 26;
+    var pw = W - L - R, ph = Ht - T - B;
+    var vals = [];
+    months.forEach(function (m) {
+      vals.push(m.allocated_mwh);
+      if (m.cap_mwh != null) vals.push(m.cap_mwh);
+      if (m.min_offtake_mwh) vals.push(m.min_offtake_mwh);
+    });
+    // 整年沒有分配、沒有上限也沒有門檻時,以前用一個 [1] 的種子撐起座標軸,
+    // 於是刻度印出「0 / 1 / 1」——兩個一樣的標籤,配一條沒有意義的軸。
+    // 這種情況不畫刻度,改在圖面正中寫明本年度無分配。
+    var dataMax = vals.length ? Math.max.apply(null, vals) : 0;
+    var blank = !(dataMax > 0);
+    var ymax = (blank ? 1 : dataMax) * 1.12;
+    var bw = pw / 12 * 0.6;
+    var X = function (i) { return L + pw * (i + 0.5) / 12; };
+    var Y = function (v) { return T + ph - v / ymax * ph; };
+    var grid = "", g;
+    for (g = 0; g <= 2; g++) {
+      var gy = T + ph - ph * g / 2;
+      grid += '<line class="cfe-axis" x1="' + L + '" y1="' + gy.toFixed(1) +
+        '" x2="' + (W - R) + '" y2="' + gy.toFixed(1) + '"/>' +
+        (blank ? "" : '<text class="mtick" x="' + (L - 6) + '" y="' + (gy + 3.5).toFixed(1) +
+          '" text-anchor="end">' + abbr(ymax * g / 2) + "</text>");
+    }
+    var body = months.map(function (m, i) {
+      var meta = bindMeta(m.binding_primary);
+      var x0 = X(i) - bw / 2;
+      var y = Y(m.allocated_mwh);
+      var h = Math.max(0, T + ph - y);
+      // 每個月先鋪一塊整欄高的透明命中區,再畫看得見的柱子。
+      // 這一塊同時解掉三件事:(1) 0 MWh 的月份不必再靠 2px 的最小高度墊出一個
+      // 「點得到的柱子」——那個墊高在 1,400 MWh 的尺度下,把所有低於約 16 MWh 的
+      // 月份畫成跟真正的 0 一模一樣的記號;(2) binding_primary 為 none 的柱子是
+      // fill:none,預設的 visiblePainted 讓它的內部完全接不到點擊;(3) 順便把每個
+      // 月的點擊目標從一根細柱放大成 bw 寬（欄寬的 60%）的命中區。tooltip 也掛在
+      // 命中區上,同樣只在這塊寬度內查得到——兩側各 20% 的間距仍是點不到的。
+      var s = '<g class="mcol" data-m="' + m.month + '">' +
+        '<rect class="mchit" x="' + x0.toFixed(1) + '" y="' + T + '" width="' +
+        bw.toFixed(1) + '" height="' + ph + '" fill="transparent"><title>' +
+        esc(m.period + " · " + meta.name + " · " +
+          (m.in_force ? nfmt(m.allocated_mwh, 0) + " MWh" : "–")) +
+        "</title></rect>";
+      // 高度 0 就不畫——「沒有分配」與「分配是 0」畫成同一個記號,正是這一頁要避免的事。
+      if (h > 0) {
+        s += '<rect class="mchbar ' + meta.cls + '" x="' + x0.toFixed(1) + '" y="' +
+          y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) +
+          '" rx="2"/>';
+      }
+      if (m.cap_mwh != null) {
+        s += '<line class="mcap" x1="' + (X(i) - bw / 2 - 3).toFixed(1) + '" y1="' +
+          Y(m.cap_mwh).toFixed(1) + '" x2="' + (X(i) + bw / 2 + 3).toFixed(1) +
+          '" y2="' + Y(m.cap_mwh).toFixed(1) + '"/>';
+      }
+      if (m.min_offtake_mwh) {
+        s += '<line class="mfloor" x1="' + (X(i) - bw / 2 - 3).toFixed(1) + '" y1="' +
+          Y(m.min_offtake_mwh).toFixed(1) + '" x2="' + (X(i) + bw / 2 + 3).toFixed(1) +
+          '" y2="' + Y(m.min_offtake_mwh).toFixed(1) + '"/>';
+      }
+      s += '<text class="mtick" x="' + X(i).toFixed(1) + '" y="' + (T + ph + 15) +
+        '" text-anchor="middle">' + m.month + "</text>";
+      return s + "</g>";
+    }).join("");
+    if (blank) {
+      body += '<text class="mchblank" x="' + (L + pw / 2).toFixed(1) + '" y="' +
+        (T + ph / 2).toFixed(1) + '" text-anchor="middle">本年度無分配</text>';
+    }
+    return '<div class="mchart"><svg viewBox="0 0 ' + W + " " + Ht +
+      '" role="img" aria-label="月別履約圖">' + grid + body + "</svg></div>" +
+      '<div class="blg"><span><i class="ln mcapln"></i>月上限</span>' +
+      '<span><i class="ln mfloorln"></i>保證量門檻</span>' +
+      '<span class="cfe-hint">點任一月看該月明細</span></div>';
+  }
+
+  // 單月明細。金額只在合約有售電價時才出現。
+  function monthDetailPanel(m, d) {
+    var rows = erow("狀態", m.in_force ? "生效"
+      : '<span class="u">' + esc(m.skip_reason || "未生效") + "</span>");
+    // 未生效的月份沒有分配量可言,不是拿了 0——0 分配與「不該有分配」是兩件事。
+    rows += m.in_force
+      ? erow("分配量", nfmt(m.allocated_mwh, 1), "MWh")
+      : erow("分配量", '<span class="u">–</span>');
+    rows += erow("月上限", m.cap_mwh == null
+      ? '<span class="u">未設上限</span>' : nfmt(m.cap_mwh, 1), m.cap_mwh == null ? "" : "MWh");
+    rows += erow("使用率", m.utilization_percent == null
+      ? '<span class="u">–</span>' : pct(m.utilization_percent, 1) + "%");
+    rows += erow("綁定約束", esc(bindMeta(m.binding_primary).name) +
+      (m.headroom ? '<span class="u">有加購空間</span>' : ""));
+    if (m.min_offtake_mwh) {
+      rows += erow("保證量門檻", nfmt(m.min_offtake_mwh, 1), "MWh");
+      rows += erow("保證量差額", nfmt(m.shortfall_mwh, 1), "MWh",
+        m.shortfall_mwh > 0 ? "neg" : "");
+    }
+    if (d.has_price) {
+      rows += erow("綠電費", money(m.energy_cost), "NTD");
+      rows += erow("輪供費", "+" + money(m.wheeling_fee), "NTD");
+      if (m.take_or_pay_charge > 0) {
+        rows += erow("保證量費", "+" + money(m.take_or_pay_charge), "NTD", "prem");
+      }
+      rows += erowTotal("買方應付", money(m.buyer_payable), "NTD", "pos");
+      rows += erow("案場應收", money(m.seller_receivable), "NTD");
+      rows += erow("售電業毛利", money(m.retailer_margin), "NTD",
+        m.retailer_margin >= 0 ? "pos" : "neg");
+    }
+    return '<div class="mdetail"><div class="mdhd"><b>' + esc(m.period) + "</b>" +
+      '<span class="aside">' + esc(m.reason || m.skip_reason || "") + "</span></div>" +
+      '<div class="rows">' + rows + "</div></div>";
+  }
+
+  function wireContractChart(root, d) {
+    var panel = root.querySelector("#cd-mdetail");
+    if (!panel) return;
+    root.addEventListener("click", function (e) {
+      // 命中的是整欄的 <g data-m>,不是柱子——0 MWh 的月份根本沒有柱子。
+      var col = e.target.closest ? e.target.closest(".mcol") : null;
+      if (!col) return;
+      var mo = parseInt(col.getAttribute("data-m"), 10);
+      Array.prototype.forEach.call(root.querySelectorAll(".mcol"), function (b) {
+        b.classList.toggle("on", b === col);
+      });
+      var m = d.months.filter(function (x) { return x.month === mo; })[0];
+      if (m) panel.innerHTML = monthDetailPanel(m, d);
+    });
+  }
+
+  // 年度選單：改 hash 讓路由自己重畫,不另外抓一次資料。
+  function wireYearPicker(root, d) {
+    var inp = root.querySelector("#cd-year");
+    if (!inp) return;
+    var go = function () {
+      var y = parseInt(inp.value, 10);
+      if (!y || y < 2000 || y > 2100) { inp.value = d.year; return; }
+      if (y === d.year) return;
+      location.hash = "#/contract?id=" + d.contract_id + "&year=" + y;
+    };
+    inp.addEventListener("change", go);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+  }
+
+  function alertsBlock(alerts, year) {
+    var rows = "";
+    if (!alerts.length) {
+      rows = '<tr><td class="empty" colspan="4">目前無風險告警 ✓</td></tr>';
+    } else {
+      alerts.forEach(function (a) {
+        rows += "<tr><td>" + sevPill(a.severity) + "</td><td>" +
+          (RISK_CAT[a.category] || esc(a.category)) +
+          '</td><td style="text-align:left">' + esc(a.detail) +
+          '</td><td style="text-align:left">' + esc(a.suggested_action) + "</td></tr>";
+      });
+    }
+    return '<section class="card"><div class="hd"><h3>風險告警</h3>' +
+      '<span class="aside">評估期間 ' + year + "-01 · 到期預警 12 個月</span></div>" +
+      '<div class="tablewrap"><table><thead><tr><th>嚴重度</th><th>類型</th>' +
+      "<th>說明</th><th>建議動作</th></tr></thead><tbody>" + rows +
+      "</tbody></table></div></section>";
+  }
+
+  // 雙面帳:買方帳、賣方帳、售電業毛利同框,並標明每一欄是給誰看的。
+  function billBlock(d) {
+    if (!d.has_price) {
+      return '<section class="card"><div class="hd"><h3>雙面帳</h3></div>' +
+        '<div style="padding:16px 18px"><p class="u">本合約未設售電價,無法計算金額。' +
+        "填入售電價後即可產生買方應付、案場應收與售電業毛利。</p></div></section>";
+    }
+    var t = d.totals;
+    var rows = "";
+    // 未生效的月份整列給「–」。金額欄的 0 是真的 0（可加總）,但分配量欄的 0
+    // 會被讀成「這個月一度都沒拿到」,而事實是這個月根本不在合約期間內。
+    var dash = "";
+    for (var dc = 0; dc < 7; dc++) dash += '<td class="num"><span class="u">–</span></td>';
+    d.months.forEach(function (m) {
+      if (!m.in_force) {
+        rows += '<tr class="dim"><td class="num">' + esc(m.period) + "</td>" + dash + "</tr>";
+        return;
+      }
+      rows += '<tr><td class="num">' +
+        esc(m.period) + '</td><td class="num">' + nfmt(m.allocated_mwh, 0) +
+        '</td><td class="num">' + money(m.energy_cost) +
+        '</td><td class="num">' + money(m.wheeling_fee) +
+        '</td><td class="num">' + (m.take_or_pay_charge > 0
+          ? '<span class="prem">' + money(m.take_or_pay_charge) + "</span>" : "0") +
+        '</td><td class="num">' + money(m.buyer_payable) +
+        '</td><td class="num">' + money(m.seller_receivable) +
+        '</td><td class="num ' + (m.retailer_margin >= 0 ? "pos" : "neg") + '">' +
+        money(m.retailer_margin) + "</td></tr>";
+    });
+    return '<section class="card"><div class="hd"><h3>雙面帳</h3>' +
+      '<span class="aside">' + d.year + " 年度合計 · 履約基準</span></div>" +
+      '<div class="billcols">' +
+      '<div class="billcol"><div class="bctag buyer">買方（用電戶應付）</div><div class="rows">' +
+      erow("綠電費", money(t.energy_cost), "NTD") +
+      erow("輪供費", "+" + money(t.wheeling_fee), "NTD") +
+      (t.take_or_pay_charge > 0
+        ? erow("保證量費", "+" + money(t.take_or_pay_charge), "NTD", "prem") : "") +
+      erowTotal("應付合計", money(t.buyer_payable), "NTD", "pos") +
+      "</div></div>" +
+      '<div class="billcol"><div class="bctag seller">賣方（案場應收）</div><div class="rows">' +
+      erow("躉售單價", price(d.feed_in_price_per_kwh), "NTD/kWh") +
+      erow("綠電量", nfmt(t.allocated_mwh, 0), "MWh") +
+      erowTotal("應收合計", money(t.seller_receivable), "NTD") +
+      "</div></div>" +
+      '<div class="billcol"><div class="bctag">售電業毛利</div><div class="rows">' +
+      erow("轉供單價", price(d.months[0].price_per_kwh), "NTD/kWh") +
+      erow("毛利率", t.margin_percent == null
+        ? '<span class="u">–</span>' : pct(t.margin_percent, 1) + "%") +
+      erowTotal("毛利", money(t.retailer_margin), "NTD",
+        t.retailer_margin >= 0 ? "pos" : "neg") +
+      "</div></div></div>" +
+      '<div class="subhd"><span>月別明細</span><small>灰列為未生效月份</small></div>' +
+      '<div class="tablewrap"><table><thead><tr><th>期間</th><th>分配 (MWh)</th>' +
+      "<th>綠電費</th><th>輪供費</th><th>保證量費</th><th>買方應付</th>" +
+      "<th>案場應收</th><th>毛利</th></tr></thead><tbody>" + rows +
+      "</tbody></table></div>" +
+      '<div class="foot-note">' + iconInfo() +
+      "本頁金額以<b>合約優先序引擎</b>的分配為基準(履約基準);轉供結算單頁採 MILP 最佳化配置," +
+      "兩者數字會有落差。" +
+      (d.used_default_feed_in
+        ? "此案場未設躉售價,採預設 " + price(d.feed_in_price_per_kwh) + " 元/度 試算。" : "") +
+      "輪供費 " + price(d.wheeling_fee_per_kwh) + " 元/度。減碳量 " +
+      nfmt(t.carbon_avoided_tco2e, 0) + " tCO₂e。</div>" +
+      "</section>";
+  }
+
+  function contractTermsCard(d) {
+    var top = d.min_offtake_percent == null
+      ? '<span class="u">無此條款</span>'
+      : pct(d.min_offtake_percent, 0) + "%" +
+        (d.totals.min_offtake_mwh > 0 && d.totals.shortfall_mwh === 0
+          ? '<span class="u">全年皆達標,未觸發差額</span>' : "");
+    return '<section class="card"><div class="hd"><h3>合約條款</h3>' +
+      '<span class="aside">紙上寫的規則</span></div>' +
+      '<div class="rows" style="padding:4px 18px 14px">' +
+      erow("合約期間", esc(d.start_date) + " ～ " + esc(d.end_date)) +
+      erow("優先序", String(d.priority)) +
+      erow("合約上限", contractCap(d), "", "", null, "contractCap") +
+      erow("售電價", d.base_price_per_kwh == null
+        ? '<span class="u">未設</span>' : price(d.base_price_per_kwh), "NTD/kWh") +
+      erow("保證量 (take-or-pay)", top) +
+      "</div>" +
+      '<div class="subhd"><span>月別配比</span><small>年電量如何攤到各月</small></div>' +
+      '<div style="padding:0 18px 16px">' + sharesBar(d) + "</div>" +
+      priceLadder(d) +
+      "</section>";
+  }
+
+  function renderContractDetail() {
+    var p = parseHash().params;
+    var id = parseInt(p.id, 10);
+    var year = parseInt(p.year, 10) || parseInt(getPeriod().slice(0, 4), 10);
+    crumb.textContent = "合約詳情";
+    if (!id) {
+      view.innerHTML = errbox("合約詳情", new Error("網址缺少合約 id"));
+      return;
+    }
+    view.innerHTML = '<div id="cd-body"><div class="placeholder">載入中…</div></div>';
+    var body = document.getElementById("cd-body");
+    Promise.all([
+      api.contractDetail(id, year),
+      // 告警是既有端點,單獨失敗不該讓整頁掛掉
+      api.contractRisks(year + "-01", 12).catch(function () { return null; }),
+    ]).then(function (r) {
+      renderContractDetailBody(body, r[0], r[1]);
+    }).catch(function (err) { body.innerHTML = errbox("合約詳情", err); });
+  }
+
+  function renderContractDetailBody(body, d, risks) {
+    crumb.textContent = "綠電合約 › " + d.contract_number;
+    var t = d.totals;
+    // 「有沒有上限」是條款問題:年電量與佔發電比例二擇一或並用,兩個都沒有才是真的沒設。
+    var noCap = d.contracted_energy_mwh == null && d.contracted_percentage == null;
+    var alerts = risks && risks.alerts
+      ? risks.alerts.filter(function (a) { return a.contract_number === d.contract_number; })
+      : [];
+    var html = '<div class="pagehead"><div><div class="title"><span class="bar"></span>' +
+      "<h1>" + esc(d.contract_number) + "</h1>" + contractStatusPill(d.status) + "</div>" +
+      '<div class="meta"><span>' + esc(d.wind_farm_name || d.wind_farm_code) + " → " +
+      esc(d.company_name) + "</span><span>" + esc(d.start_date) + " ～ " + esc(d.end_date) +
+      "</span><span>優先序 " + d.priority + "</span></div>" +
+      (contractTerms(d) || "") + "</div>" +
+      // 年度選單。?year= 一直都能用,只是沒有 UI 可改;沿用其他頁的 period-input
+      // 樣式,但這裡只收年份（合約詳情一次就是整年,YYYY-MM 沒有意義）。
+      '<div class="headactions">' +
+      '<input id="cd-year" class="period-input num yr-input" value="' + esc(String(d.year)) +
+      '" placeholder="2024" inputmode="numeric" maxlength="4" aria-label="年度" title="切換年度">' +
+      '<a class="btn" href="#/contracts">← 回合約清單</a></div></div>';
+
+    if (!d.has_period_data) {
+      html += '<div class="placeholder"><div class="big">📄</div>' +
+        "<h2>" + d.year + " 年度尚無發電與用電資料</h2>" +
+        "<p>此年度沒有任何量測資料,無法計算履約與金額。以下僅顯示合約條款。</p></div>" +
+        contractTermsCard(d);
+      body.innerHTML = html;
+      // 「這一年沒資料」正是最需要換一年看的時候,選單在這條路徑上也要接起來
+      wireYearPicker(body, d);
+      return;
+    }
+
+    html += '<section class="card"><div class="hd"><h3>全年被什麼卡住' +
+      infoTip("bindingConstraint") + "</h3>" +
+      '<span class="aside">' + d.year + " 年 · 依合約優先序引擎</span></div>" +
+      '<div style="padding:14px 18px 4px">' + bindStrip(d) +
+      '<p class="verdict">' + esc(bindVerdict(d)) + "</p></div>" +
+      '<div class="kpis">' +
+      kpi("年度分配量", nfmt(t.allocated_mwh, 0) + "<small>MWh</small>",
+        "生效 " + t.months_in_force + " 個月", "hl") +
+      // 同一個毛病的第四處(清單沒點名,瀏覽器實測時撞見):「這紙合約有沒有設
+      // 上限」問的還是條款,而 totals.cap_mwh 只加總生效月份的上限。PPA-2025-008
+      // 於是在這裡寫「此合約未設上限」,同一頁的條款卡卻寫「合約上限 20,000
+      // MWh/年」——跟保證量差額那格是一模一樣的矛盾。有沒有上限改看條款欄位
+      // (與清單頁的 contractCap() 同源),年度上限算不出來的情形另給說明。
+      kpi("上限使用率", t.utilization_percent == null
+        ? '<span class="u">' + (noCap ? "未設上限" : "–") + "</span>"
+        : pct(t.utilization_percent, 1) + "%",
+        noCap ? "此合約未設上限"
+          : t.cap_mwh == null ? "該年度無生效月份,無年度上限可比"
+            : "年度上限 " + nfmt(t.cap_mwh, 0) + " MWh") +
+      // 「有沒有這個條款」問的是條款,不是履約數量。以前這裡看 totals.min_offtake_mwh,
+      // 而那個量在未生效的月份是 0——於是 PPA-2025-008 一邊寫「未約定 take-or-pay」,
+      // 同一頁的合約條款卡一邊寫「保證量 90%」。比例型合約也一樣中招（沒有年電量,
+      // 月門檻算不出來）。改看 min_offtake_percent,就是條款卡自己用的那個欄位。
+      kpi("保證量差額",
+        d.min_offtake_percent == null ? '<span class="u">無此條款</span>'
+          : t.months_in_force === 0 ? '<span class="u">–</span>'
+            : nfmt(t.shortfall_mwh, 0) + "<small>MWh</small>",
+        d.min_offtake_percent == null ? "未約定 take-or-pay"
+          : t.months_in_force === 0 ? "該年度無生效月份,無從評估"
+            : (t.shortfall_months ? t.shortfall_months + " 個月未達標" : "全年皆達標,未觸發"),
+        t.shortfall_mwh > 0 ? "neg" : "") +
+      // 到期倒數。清單頁的 contractRemaining() 就是這個數字,兩頁講同一句話。
+      kpi("到期倒數", contractRemaining(d) ||
+        '<span class="u">' + esc(CONTRACT_END_STATE[d.status] || "–") + "</span>",
+        "至 " + d.end_date) +
+      // 到期告警是對「今天」算的,供電不足／保證量差額只算一月——KPI 掛在一張
+      // 整年的頁面上,不講評估基準就會被讀成「這一年共 N 則」。
+      kpi("風險告警", alerts.length + "<small>則</small>",
+        "以 " + d.year + "-01 為評估期間", alerts.length ? "prem" : "") +
+      "</div></section>";
+
+    html += '<section class="card"><div class="hd"><h3>月別履約</h3>' +
+      '<span class="aside">柱＝實際分配 · 短橫＝月上限</span></div>' +
+      '<div style="padding:12px 18px 14px">' + monthChart(d.months) + "</div>" +
+      '<div id="cd-mdetail"></div></section>';
+
+    html += alertsBlock(alerts, d.year);
+    html += billBlock(d);
+    html += contractTermsCard(d);
+    body.innerHTML = html;
+    wireContractChart(body, d);
+    wireYearPicker(body, d);
+  }
+
   function renderContracts() {
     crumb.textContent = "綠電合約";
     view.innerHTML = '<div class="pagehead"><div class="title"><span class="bar"></span><h1>綠電合約</h1></div>' +
@@ -426,7 +904,7 @@
         }
         cs.forEach(function (c) {
           var fname = String(fm[c.wind_farm_id] || c.wind_farm_id);
-          html += "<tr><td class=\"code\">" + esc(c.contract_number) + contractTerms(c) +
+          html += '<tr class="clickrow" data-cid="' + c.id + '"><td class="code">' + esc(c.contract_number) + contractTerms(c) +
             "</td><td class=\"wrapname\">" + esc(fname) + "</td><td style=\"text-align:left\">" + esc(cm[c.customer_id] || c.customer_id) +
             "</td><td class=\"num\">" + esc(c.start_date) + "</td><td class=\"num\">" + esc(c.end_date) + contractRemaining(c) +
             "</td><td class=\"num cap\">" + contractCap(c) +
@@ -435,6 +913,14 @@
         });
         html += "</tbody></table></div></section>";
         body.innerHTML = html;
+        // 整列可點進詳情頁；編輯模式的操作鈕不算（點刪除不該跳頁）
+        body.addEventListener("click", function (e) {
+          if (e.target.closest("button") || e.target.closest("a")) return;
+          var tr = e.target.closest(".clickrow");
+          if (!tr) return;
+          location.hash = "#/contract?id=" + tr.getAttribute("data-cid") +
+            "&year=" + getPeriod().slice(0, 4);
+        });
       })
       .catch(function (err) { body.innerHTML = errbox("載入合約", err); });
   }
@@ -745,7 +1231,9 @@
 
   // ---------- 合約風險告警 ----------
   var SEV = { high: ["高", "bad"], medium: ["中", "warnp"], low: ["低", "ok"] };
-  var RISK_CAT = { expiry: "即將到期", under_delivery: "供電不足", over_commitment: "超額承諾", status_mismatch: "狀態不一致" };
+  // risk_service 會發 take_or_pay 這一類,但這張對照表漏了它,類型欄就把原始
+  // 代碼直接印進中文欄位——而保證量差額正是合約詳情頁最該講清楚的那一則告警。
+  var RISK_CAT = { expiry: "即將到期", under_delivery: "供電不足", over_commitment: "超額承諾", status_mismatch: "狀態不一致", take_or_pay: "保證量差額" };
   function sevPill(s) { var x = SEV[s] || [s, "warnp"]; return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + x[0] + "</span>"; }
 
   function renderRisks() {
@@ -1912,6 +2400,15 @@
         "<p>逐時匹配的鐵律是<b>嚴格不跨小時</b>：發電時沒人用就是外溢、用電時沒電就是缺口，兩邊不能互抵。</p>" +
         "<p><b>儲能</b>是唯一能合法打破這條鐵律的東西——把外溢的綠電充進電池，等缺口出現再放出來。放電會有往返效率損耗（示範為 88%）。</p>" +
         '<p class="tip-eg">示範中電池可收任一案場的外溢（自家合約優先），屬<b>情境模擬</b>——實務上跨案場取電需另簽轉供合約。結算與 T-REC 尚未反映充放。</p>',
+    },
+    bindingConstraint: {
+      title: "綁定約束（這個月被什麼卡住）",
+      html:
+        "<p>每個月的分配量都是三個上限取最小：<b>案場當月還剩多少電</b>、<b>客戶還有多少沒被綠電覆蓋的用電</b>、<b>合約自己的上限</b>。實際卡住的那一個,就是這個月的綁定約束。</p>" +
+        "<p><b>合約上限</b>——客戶要得比合約允許的多。若案場同時還有餘電,就代表<b>有加購空間</b>。<br>" +
+        "<b>案場供給</b>——案場的電被分光了。這時調高合約上限也拿不到更多,要看的是案場是否超賣、或本合約優先序是否排在後面。<br>" +
+        "<b>客戶用電</b>——合約允許量高於客戶用得掉的量,多簽的部分是浪費;若合約帶 take-or-pay,還會產生保證量費。</p>" +
+        '<p class="tip-eg">同時卡在兩個約束時,顯示較硬的那一個（案場供給 &gt; 客戶用電 &gt; 合約上限）。</p>',
     },
   };
   function infoTip(key) {

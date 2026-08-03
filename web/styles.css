@@ -206,6 +206,10 @@ button{font-family:inherit}
 .kpi .sub{font-size:11px;color:var(--kpi-muted)}
 .kpi .sub.up{color:#59D07F}
 .kpi .sub.down{color:#FF8088}
+/* 到期倒數 KPI 重用清單頁的 contractRemaining()——那裡是表格裡的小字附註,
+   放到 KPI 主數字的位置就得跟其他 KPI 一樣大。90 天內仍走 --warn。 */
+.kpi .v .remain{display:inline;font:inherit;color:inherit;margin:0}
+.kpi .v .remain.soon{color:var(--warn)}
 
 /* grid + cards */
 .grid{display:grid;grid-template-columns:minmax(340px,0.86fr) 1.14fr;gap:18px;align-items:start}
@@ -291,6 +295,8 @@ td.empty{text-align:center;color:var(--faint);padding:22px}
 .period-input{height:36px;padding:0 11px;border-radius:9px;border:1px solid var(--line-strong);
   background:var(--surface);color:var(--ink);font-family:var(--font-mono);width:120px}
 .period-input:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--seller-soft)}
+/* 合約詳情的年度選單只收 4 碼年份,不必留 YYYY-MM 的寬度 */
+.yr-input{width:78px;text-align:center}
 .section-gap{margin-top:18px}
 .foot-note{margin-top:22px;font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:8px}
 .foot-note svg{width:14px;height:14px;flex:none}
@@ -599,3 +605,87 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 .heat-lg{display:flex;align-items:center;gap:9px;padding:8px 12px 2px;font-size:11.5px;color:var(--muted)}
 .heat-lg .heat-grad{width:120px;height:11px;border-radius:6px;display:inline-block;background:linear-gradient(90deg,rgba(47,162,77,.08),rgba(47,162,77,1))}
 .heat-lg .cfe-hint{margin-left:auto;color:var(--faint)}
+
+/* ---- 合約詳情：綁定約束分佈條 ---- */
+.bstrip{display:flex;gap:4px}
+.bcell{flex:1;height:34px;border-radius:6px;display:grid;place-items:center;
+  font:700 12px/1 var(--font-mono);border:1px solid transparent}
+/* 白字量到 2.02:1（暗色 --warn）～4.32:1（亮色 --brand）,六種主題/色組合全都
+   低於 WCAG AA 的 4.5:1,而 12px/700 遠不到大字門檻（粗體要 18.7px 才算大字）。
+   改成固定純黑——#000000 是本檔唯一刻意寫死的色值:它必須不隨主題翻轉,
+   否則暗色主題下墨色會跟著變亮、對比又掉回去。
+   量測（WCAG 2.x 相對亮度）:
+     亮色 --brand 4.86 / --buyer 6.15 / --warn 6.32
+     暗色 --brand 7.15 / --buyer 9.40 / --warn 10.41
+   六格全過 AA。 */
+.b-cap,.b-sup,.b-dem{color:#000000}
+.b-cap{background:var(--brand)}
+.b-sup{background:var(--warn)}
+.b-dem{background:var(--buyer)}
+.b-non{background:transparent;border:1px dashed var(--line-strong);color:var(--faint)}
+.b-nif{background:var(--line-strong);color:var(--muted)}
+.blg{display:flex;flex-wrap:wrap;gap:14px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.blg .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px}
+.verdict{margin:11px 0 2px;font-size:13.5px;line-height:1.65;color:var(--ink)}
+
+/* ---- 合約詳情：月別配比與逐年單價 ---- */
+.shbar{display:flex;gap:4px;align-items:flex-end;height:62px}
+.shcell{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  height:100%;gap:3px}
+.shcell i{display:block;width:100%;background:var(--seller-soft);border-top:2px solid var(--seller);
+  border-radius:3px 3px 0 0}
+.shcell b{font:600 10px/1 var(--font-mono);color:var(--faint)}
+.pladder{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 16px}
+.pl{display:flex;flex-direction:column;gap:2px;padding:7px 11px;border:1px solid var(--line);
+  border-radius:8px;font:600 13px/1.3 var(--font-mono);background:var(--surface-2)}
+.pl b{font:600 10.5px/1 var(--font-ui);color:var(--faint)}
+/* 逐年單價最多列 12 年,超過就補一格「…」把截斷講明 */
+.pl.more{justify-content:center;color:var(--faint);cursor:help}
+
+/* 清單列可點進詳情頁 */
+.clickrow{cursor:pointer}
+
+/* ---- 合約詳情：月別履約圖 ----
+   柱子的 class 取名 .mchbar 而不是照抄任務書的 .mbar——「求解中」燈箱裡
+   已經有一個同名的進度條 .mbar（見上方 .mbar{height:8px;...}）,SVG2 的
+   geometry-property 映射會讓那條規則的 height/border-radius 蓋掉這裡
+   rect 的 height 屬性,12 根柱子全被壓成同一個 8px 高的小方塊,量測不出
+   任何差異。故意撞名嘛意義不大,加前綴或設 auto 也救不回來,乾脆換一個
+   不會撞的 class 名稱。 */
+.mchart svg{width:100%;height:auto;display:block}
+/* 點擊目標是整欄的透明命中區 .mchit,不是柱子本身——0 MWh 的月份沒有柱子,
+   binding_primary 為 none 的柱子又是 fill:none（內部接不到點擊）。柱子一律
+   pointer-events:none,讓命中區獨佔滑鼠事件,hover/選取都掛在外層的 .mcol 上。 */
+.mchit{cursor:pointer}
+.mchbar{pointer-events:none;transition:opacity .12s}
+.mcol:hover .mchbar{opacity:.82}
+.mcol.on .mchit{fill:var(--seller-soft)}
+.mcol.on .mchbar{stroke:var(--ink);stroke-width:1.5}
+.mchbar.b-cap{fill:var(--brand)} .mchbar.b-sup{fill:var(--warn)}
+.mchbar.b-dem{fill:var(--buyer)} .mchbar.b-nif{fill:var(--line-strong)}
+.mchbar.b-non{fill:none;stroke:var(--line-strong);stroke-dasharray:3 3}
+.mchblank{font:650 13px var(--font-ui);fill:var(--muted);pointer-events:none}
+.mcap{stroke:var(--ink);stroke-width:2}
+.mfloor{stroke:var(--warn);stroke-width:1.6;stroke-dasharray:4 3}
+.mtick{font:500 10px var(--font-mono);fill:var(--faint)}
+.blg .ln{display:inline-block;width:14px;height:0;border-top:2px solid var(--ink);
+  margin-right:5px;vertical-align:3px}
+.blg .mfloorln{border-top:2px dashed var(--warn)}
+.mdetail{border-top:1px solid var(--line);padding:12px 18px 16px}
+.mdhd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;font-size:14px}
+.mdhd .aside{margin-left:auto;font:500 11px var(--font-mono);color:var(--faint)}
+
+/* ---- 合約詳情：雙面帳 ---- */
+.billcols{display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  border-bottom:1px solid var(--line)}
+.billcol{padding:14px 18px 16px;border-right:1px solid var(--line)}
+.billcol:last-child{border-right:0}
+.billcol .rows{margin-top:6px}
+.bctag{display:inline-block;font-size:11px;font-weight:650;padding:3px 9px;border-radius:20px;
+  background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.bctag.buyer{background:var(--buyer-soft);color:var(--buyer);border-color:transparent}
+.bctag.seller{background:var(--seller-soft);color:var(--seller);border-color:transparent}
+tbody tr.dim td{opacity:.45}
+@media (max-width:900px){.billcols{grid-template-columns:1fr}
+  .billcol{border-right:0;border-bottom:1px solid var(--line)}}

@@ -14,6 +14,7 @@ from app.schemas.analytics import (
     PeriodSummary,
     WindFarmAnalytics,
 )
+from app.schemas.contract_detail import ContractDetail
 from app.schemas.customer_optimization import CustomerOptimizationResult
 from app.schemas.evaluation import EvaluationResult
 from app.schemas.investment import InvestmentResult
@@ -22,6 +23,7 @@ from app.schemas.recommendation import ReTargetAdvice
 from app.schemas.risk import RiskReport
 from app.schemas.settlement import SettlementResult
 from app.services import analytics_service as svc
+from app.services import contract_detail_service as contract_detail_svc
 from app.services import customer_optimization_service as copt_svc
 from app.services import evaluation as eval_svc
 from app.services import investment_service as inv_svc
@@ -179,3 +181,13 @@ def re_recommendations(
 ) -> ReTargetAdvice:
     """Cheapest-first surplus-farm recommendations to close a customer's RE gap."""
     return reco_svc.compute_re_recommendations(db, customer_id, period)
+
+
+@router.get("/contract-detail", response_model=ContractDetail)
+def contract_detail(
+    contract_id: int = Query(..., ge=1),
+    year: int = Query(..., ge=2000, le=2100),
+    db: Session = Depends(get_db),
+) -> ContractDetail:
+    """One contract's year: monthly fulfilment, binding constraint, two-sided bill."""
+    return contract_detail_svc.compute_contract_detail(db, contract_id, year)
