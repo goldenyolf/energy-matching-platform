@@ -422,7 +422,6 @@
     expired: "已到期", pending: "未生效", terminated: "已終止",
   };
 
-
   // 12 格分佈條 + 圖例。一格一個月,顏色就是那個月的主綁定約束。
   // 各類別的月數一律讀 API 的 totals.binding_counts——同一張卡片裡結論句也讀它,
   // 前端不該為同一個統計量再算一套。顯示順序仍照 12 個月裡首次出現的先後。
@@ -515,6 +514,11 @@
       var n = Math.max(0, y - d.price_base_year);
       out.push('<span class="pl"><b>' + y + "</b>" +
         price(d.base_price_per_kwh * Math.pow(1 + d.price_escalation_percent / 100, n)) + "</span>");
+    }
+    // 15 年的 PPA 只列 12 年就停,尾巴不能無聲消失——補一格「…」把截斷說出來。
+    if (y1 > y0 + 11) {
+      out.push('<span class="pl more" title="' + esc("另有 " + (y1 - y0 - 11) + " 年未列出") +
+        '">…</span>');
     }
     return '<div class="subhd"><span>逐年單價</span><small>基準年 ' + d.price_base_year +
       " · 每年 +" + pct(d.price_escalation_percent, 1) + "%</small></div>" +
@@ -857,8 +861,10 @@
       kpi("到期倒數", contractRemaining(d) ||
         '<span class="u">' + esc(CONTRACT_END_STATE[d.status] || "–") + "</span>",
         "至 " + d.end_date) +
+      // 到期告警是對「今天」算的,供電不足／保證量差額只算一月——KPI 掛在一張
+      // 整年的頁面上,不講評估基準就會被讀成「這一年共 N 則」。
       kpi("風險告警", alerts.length + "<small>則</small>",
-        alerts.length ? "見下方清單" : "目前無告警", alerts.length ? "prem" : "") +
+        "以 " + d.year + "-01 為評估期間", alerts.length ? "prem" : "") +
       "</div></section>";
 
     html += '<section class="card"><div class="hd"><h3>月別履約</h3>' +
@@ -1223,7 +1229,9 @@
 
   // ---------- 合約風險告警 ----------
   var SEV = { high: ["高", "bad"], medium: ["中", "warnp"], low: ["低", "ok"] };
-  var RISK_CAT = { expiry: "即將到期", under_delivery: "供電不足", over_commitment: "超額承諾", status_mismatch: "狀態不一致" };
+  // risk_service 會發 take_or_pay 這一類,但這張對照表漏了它,類型欄就把原始
+  // 代碼直接印進中文欄位——而保證量差額正是合約詳情頁最該講清楚的那一則告警。
+  var RISK_CAT = { expiry: "即將到期", under_delivery: "供電不足", over_commitment: "超額承諾", status_mismatch: "狀態不一致", take_or_pay: "保證量差額" };
   function sevPill(s) { var x = SEV[s] || [s, "warnp"]; return '<span class="pill ' + x[1] + '"><span class="dot"></span>' + x[0] + "</span>"; }
 
   function renderRisks() {
