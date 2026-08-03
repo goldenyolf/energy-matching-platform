@@ -420,6 +420,7 @@
   // 「–」在到期倒數這一格會被讀成資料缺漏,而狀態本身就是答案。
   var CONTRACT_END_STATE = {
     expired: "已到期", pending: "未生效", terminated: "已終止",
+    active: "已過期(狀態未更新)",
   };
 
   // 12 格分佈條 + 圖例。一格一個月,顏色就是那個月的主綁定約束。
@@ -564,7 +565,8 @@
       // 「點得到的柱子」——那個墊高在 1,400 MWh 的尺度下,把所有低於約 16 MWh 的
       // 月份畫成跟真正的 0 一模一樣的記號;(2) binding_primary 為 none 的柱子是
       // fill:none,預設的 visiblePainted 讓它的內部完全接不到點擊;(3) 順便把每個
-      // 月的點擊目標從一根細柱放大成整欄。tooltip 也掛在命中區上,整欄都查得到。
+      // 月的點擊目標從一根細柱放大成 bw 寬（欄寬的 60%）的命中區。tooltip 也掛在
+      // 命中區上,同樣只在這塊寬度內查得到——兩側各 20% 的間距仍是點不到的。
       var s = '<g class="mcol" data-m="' + m.month + '">' +
         '<rect class="mchit" x="' + x0.toFixed(1) + '" y="' + T + '" width="' +
         bw.toFixed(1) + '" height="' + ph + '" fill="transparent"><title>' +
