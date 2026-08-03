@@ -19,7 +19,9 @@ def test_contract_detail_endpoint(client, seeded_db):
     assert len(d["months"]) == 12
     assert d["has_period_data"] is True
     assert d["has_price"] is True
-    assert sum(d["totals"]["binding_counts"].values()) == 12
+    # 釘住實際分佈,不是「加起來有 12 個月」——後者跟上面的 len(months) == 12
+    # 是同一件事,永遠不會紅。005 是拿滿上限的合約,12 個月全被合約上限卡住。
+    assert d["totals"]["binding_counts"] == {"contract_cap": 12}
 
 
 def test_unknown_contract_is_404(client, seeded_db):

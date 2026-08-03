@@ -232,10 +232,32 @@ def test_out_of_force_months_are_not_zero_allocations(db):
     assert d.totals.allocated_mwh == pytest.approx(0.0)
 
 
-def test_binding_counts_cover_all_twelve_months(db):
+def test_binding_counts_pin_the_actual_distribution(db):
+    """釘分佈,不是釘總和。「加起來有 12」跟 len(months) == 12 是同一句話,不會紅。"""
     contract, _, _ = _build(db)
     d = compute_contract_detail(db, contract.id, 2024)
-    assert sum(d.totals.binding_counts.values()) == 12
+    assert d.totals.binding_counts == {"contract_cap": 12}
+
+
+def test_headroom_is_wired_through_with_its_two_inputs(db):
+    """cap-bound 且案場有餘電、客戶有未滿足用電 → 有加購空間,且兩個依據都回報得出來。
+
+    在這之前沒有任何測試釘過 headroom 為 True、也沒有釘過 totals.headroom_months,
+    純函數測得再好,接線斷了照樣不會紅。
+
+    兩個依據刻意取不同的數字(2000 / 4000):_month_context() 回傳的是一個
+    (farm_left, cust_unmet) 的位置元組,對調就會被這兩行抓到。
+    （has_headroom 後兩個引數本身是對稱的——兩者都只判 > EPS——所以「對調
+    has_headroom 的引數」這種變異在任何 fixture 下都觀察不到,不是這裡的目標。）
+    """
+    contract, _, _ = _build(db)
+    d = compute_contract_detail(db, contract.id, 2024)
+    jan = d.months[0]
+    assert jan.binding_primary == "contract_cap"
+    assert jan.headroom is True
+    assert jan.farm_unallocated_mwh == pytest.approx(2000.0)
+    assert jan.customer_unmet_mwh == pytest.approx(4000.0)
+    assert d.totals.headroom_months == 12
 
 
 def test_annual_totals_equal_the_sum_of_months(db):
