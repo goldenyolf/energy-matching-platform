@@ -416,6 +416,13 @@
   };
   function bindMeta(k) { return BIND_META[k] || BIND_META.none; }
 
+  // contractRemaining() 只對生效中的合約給得出天數。給不出來時說明為什麼——
+  // 「–」在到期倒數這一格會被讀成資料缺漏,而狀態本身就是答案。
+  var CONTRACT_END_STATE = {
+    expired: "已到期", pending: "未生效", terminated: "已終止",
+  };
+
+
   // 12 格分佈條 + 圖例。一格一個月,顏色就是那個月的主綁定約束。
   // 各類別的月數一律讀 API 的 totals.binding_counts——同一張卡片裡結論句也讀它,
   // 前端不該為同一個統計量再算一套。顯示順序仍照 12 個月裡首次出現的先後。
@@ -642,6 +649,20 @@
     });
   }
 
+  // 年度選單：改 hash 讓路由自己重畫,不另外抓一次資料。
+  function wireYearPicker(root, d) {
+    var inp = root.querySelector("#cd-year");
+    if (!inp) return;
+    var go = function () {
+      var y = parseInt(inp.value, 10);
+      if (!y || y < 2000 || y > 2100) { inp.value = d.year; return; }
+      if (y === d.year) return;
+      location.hash = "#/contract?id=" + d.contract_id + "&year=" + y;
+    };
+    inp.addEventListener("change", go);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+  }
+
   function alertsBlock(alerts, year) {
     var rows = "";
     if (!alerts.length) {
@@ -783,7 +804,12 @@
       esc(d.company_name) + "</span><span>" + esc(d.start_date) + " ～ " + esc(d.end_date) +
       "</span><span>優先序 " + d.priority + "</span></div>" +
       (contractTerms(d) || "") + "</div>" +
-      '<div class="headactions"><a class="btn" href="#/contracts">← 回合約清單</a></div></div>';
+      // 年度選單。?year= 一直都能用,只是沒有 UI 可改;沿用其他頁的 period-input
+      // 樣式,但這裡只收年份（合約詳情一次就是整年,YYYY-MM 沒有意義）。
+      '<div class="headactions">' +
+      '<input id="cd-year" class="period-input num yr-input" value="' + esc(String(d.year)) +
+      '" placeholder="2024" inputmode="numeric" maxlength="4" aria-label="年度" title="切換年度">' +
+      '<a class="btn" href="#/contracts">← 回合約清單</a></div></div>';
 
     if (!d.has_period_data) {
       html += '<div class="placeholder"><div class="big">📄</div>' +
@@ -791,6 +817,8 @@
         "<p>此年度沒有任何量測資料,無法計算履約與金額。以下僅顯示合約條款。</p></div>" +
         contractTermsCard(d);
       body.innerHTML = html;
+      // 「這一年沒資料」正是最需要換一年看的時候,選單在這條路徑上也要接起來
+      wireYearPicker(body, d);
       return;
     }
 
@@ -825,6 +853,10 @@
           : t.months_in_force === 0 ? "該年度無生效月份,無從評估"
             : (t.shortfall_months ? t.shortfall_months + " 個月未達標" : "全年皆達標,未觸發"),
         t.shortfall_mwh > 0 ? "neg" : "") +
+      // 到期倒數。清單頁的 contractRemaining() 就是這個數字,兩頁講同一句話。
+      kpi("到期倒數", contractRemaining(d) ||
+        '<span class="u">' + esc(CONTRACT_END_STATE[d.status] || "–") + "</span>",
+        "至 " + d.end_date) +
       kpi("風險告警", alerts.length + "<small>則</small>",
         alerts.length ? "見下方清單" : "目前無告警", alerts.length ? "prem" : "") +
       "</div></section>";
@@ -839,6 +871,7 @@
     html += contractTermsCard(d);
     body.innerHTML = html;
     wireContractChart(body, d);
+    wireYearPicker(body, d);
   }
 
   function renderContracts() {
