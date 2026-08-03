@@ -520,13 +520,18 @@
   function monthChart(months) {
     var W = 760, Ht = 210, L = 46, R = 12, T = 14, B = 26;
     var pw = W - L - R, ph = Ht - T - B;
-    var vals = [1];
+    var vals = [];
     months.forEach(function (m) {
       vals.push(m.allocated_mwh);
       if (m.cap_mwh != null) vals.push(m.cap_mwh);
       if (m.min_offtake_mwh) vals.push(m.min_offtake_mwh);
     });
-    var ymax = Math.max.apply(null, vals) * 1.12;
+    // 整年沒有分配、沒有上限也沒有門檻時,以前用一個 [1] 的種子撐起座標軸,
+    // 於是刻度印出「0 / 1 / 1」——兩個一樣的標籤,配一條沒有意義的軸。
+    // 這種情況不畫刻度,改在圖面正中寫明本年度無分配。
+    var dataMax = vals.length ? Math.max.apply(null, vals) : 0;
+    var blank = !(dataMax > 0);
+    var ymax = (blank ? 1 : dataMax) * 1.12;
     var bw = pw / 12 * 0.6;
     var X = function (i) { return L + pw * (i + 0.5) / 12; };
     var Y = function (v) { return T + ph - v / ymax * ph; };
@@ -535,22 +540,32 @@
       var gy = T + ph - ph * g / 2;
       grid += '<line class="cfe-axis" x1="' + L + '" y1="' + gy.toFixed(1) +
         '" x2="' + (W - R) + '" y2="' + gy.toFixed(1) + '"/>' +
-        '<text class="mtick" x="' + (L - 6) + '" y="' + (gy + 3.5).toFixed(1) +
-        '" text-anchor="end">' + abbr(ymax * g / 2) + "</text>";
+        (blank ? "" : '<text class="mtick" x="' + (L - 6) + '" y="' + (gy + 3.5).toFixed(1) +
+          '" text-anchor="end">' + abbr(ymax * g / 2) + "</text>");
     }
     var body = months.map(function (m, i) {
       var meta = bindMeta(m.binding_primary);
+      var x0 = X(i) - bw / 2;
       var y = Y(m.allocated_mwh);
       var h = Math.max(0, T + ph - y);
-      // 分配量 0（例如未生效的月份）畫出來的柱高會是 0——貼著底線的一條線,
-      // 滑鼠點不到。用 2px 的最小高度墊底,柱頂跟著往上移、底線不動,
-      // 讓「未生效」的灰色柱仍點得到,同時不影響正常柱子的真實高度。
-      if (h < 2) { h = 2; y = T + ph - h; }
-      var s = '<rect class="mchbar ' + meta.cls + '" data-m="' + m.month + '" x="' +
-        (X(i) - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) +
-        '" height="' + h.toFixed(1) + '" rx="2"><title>' +
-        esc(m.period + " · " + meta.name + " · " + nfmt(m.allocated_mwh, 0) + " MWh") +
+      // 每個月先鋪一塊整欄高的透明命中區,再畫看得見的柱子。
+      // 這一塊同時解掉三件事:(1) 0 MWh 的月份不必再靠 2px 的最小高度墊出一個
+      // 「點得到的柱子」——那個墊高在 1,400 MWh 的尺度下,把所有低於約 16 MWh 的
+      // 月份畫成跟真正的 0 一模一樣的記號;(2) binding_primary 為 none 的柱子是
+      // fill:none,預設的 visiblePainted 讓它的內部完全接不到點擊;(3) 順便把每個
+      // 月的點擊目標從一根細柱放大成整欄。tooltip 也掛在命中區上,整欄都查得到。
+      var s = '<g class="mcol" data-m="' + m.month + '">' +
+        '<rect class="mchit" x="' + x0.toFixed(1) + '" y="' + T + '" width="' +
+        bw.toFixed(1) + '" height="' + ph + '" fill="transparent"><title>' +
+        esc(m.period + " · " + meta.name + " · " +
+          (m.in_force ? nfmt(m.allocated_mwh, 0) + " MWh" : "–")) +
         "</title></rect>";
+      // 高度 0 就不畫——「沒有分配」與「分配是 0」畫成同一個記號,正是這一頁要避免的事。
+      if (h > 0) {
+        s += '<rect class="mchbar ' + meta.cls + '" x="' + x0.toFixed(1) + '" y="' +
+          y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) +
+          '" rx="2"/>';
+      }
       if (m.cap_mwh != null) {
         s += '<line class="mcap" x1="' + (X(i) - bw / 2 - 3).toFixed(1) + '" y1="' +
           Y(m.cap_mwh).toFixed(1) + '" x2="' + (X(i) + bw / 2 + 3).toFixed(1) +
@@ -563,20 +578,27 @@
       }
       s += '<text class="mtick" x="' + X(i).toFixed(1) + '" y="' + (T + ph + 15) +
         '" text-anchor="middle">' + m.month + "</text>";
-      return s;
+      return s + "</g>";
     }).join("");
+    if (blank) {
+      body += '<text class="mchblank" x="' + (L + pw / 2).toFixed(1) + '" y="' +
+        (T + ph / 2).toFixed(1) + '" text-anchor="middle">本年度無分配</text>';
+    }
     return '<div class="mchart"><svg viewBox="0 0 ' + W + " " + Ht +
       '" role="img" aria-label="月別履約圖">' + grid + body + "</svg></div>" +
       '<div class="blg"><span><i class="ln mcapln"></i>月上限</span>' +
       '<span><i class="ln mfloorln"></i>保證量門檻</span>' +
-      '<span class="cfe-hint">點任一柱看該月明細</span></div>';
+      '<span class="cfe-hint">點任一月看該月明細</span></div>';
   }
 
   // 單月明細。金額只在合約有售電價時才出現。
   function monthDetailPanel(m, d) {
     var rows = erow("狀態", m.in_force ? "生效"
       : '<span class="u">' + esc(m.skip_reason || "未生效") + "</span>");
-    rows += erow("分配量", nfmt(m.allocated_mwh, 1), "MWh");
+    // 未生效的月份沒有分配量可言,不是拿了 0——0 分配與「不該有分配」是兩件事。
+    rows += m.in_force
+      ? erow("分配量", nfmt(m.allocated_mwh, 1), "MWh")
+      : erow("分配量", '<span class="u">–</span>');
     rows += erow("月上限", m.cap_mwh == null
       ? '<span class="u">未設上限</span>' : nfmt(m.cap_mwh, 1), m.cap_mwh == null ? "" : "MWh");
     rows += erow("使用率", m.utilization_percent == null
@@ -608,11 +630,12 @@
     var panel = root.querySelector("#cd-mdetail");
     if (!panel) return;
     root.addEventListener("click", function (e) {
-      var bar = e.target.closest ? e.target.closest(".mchbar") : null;
-      if (!bar) return;
-      var mo = parseInt(bar.getAttribute("data-m"), 10);
-      Array.prototype.forEach.call(root.querySelectorAll(".mchbar"), function (b) {
-        b.classList.toggle("on", b === bar);
+      // 命中的是整欄的 <g data-m>,不是柱子——0 MWh 的月份根本沒有柱子。
+      var col = e.target.closest ? e.target.closest(".mcol") : null;
+      if (!col) return;
+      var mo = parseInt(col.getAttribute("data-m"), 10);
+      Array.prototype.forEach.call(root.querySelectorAll(".mcol"), function (b) {
+        b.classList.toggle("on", b === col);
       });
       var m = d.months.filter(function (x) { return x.month === mo; })[0];
       if (m) panel.innerHTML = monthDetailPanel(m, d);
@@ -647,8 +670,16 @@
     }
     var t = d.totals;
     var rows = "";
+    // 未生效的月份整列給「–」。金額欄的 0 是真的 0（可加總）,但分配量欄的 0
+    // 會被讀成「這個月一度都沒拿到」,而事實是這個月根本不在合約期間內。
+    var dash = "";
+    for (var dc = 0; dc < 7; dc++) dash += '<td class="num"><span class="u">–</span></td>';
     d.months.forEach(function (m) {
-      rows += "<tr" + (m.in_force ? "" : ' class="dim"') + '><td class="num">' +
+      if (!m.in_force) {
+        rows += '<tr class="dim"><td class="num">' + esc(m.period) + "</td>" + dash + "</tr>";
+        return;
+      }
+      rows += '<tr><td class="num">' +
         esc(m.period) + '</td><td class="num">' + nfmt(m.allocated_mwh, 0) +
         '</td><td class="num">' + money(m.energy_cost) +
         '</td><td class="num">' + money(m.wheeling_fee) +

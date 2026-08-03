@@ -637,12 +637,18 @@ tbody tr:hover .rowact{background:var(--surface-2)}
    任何差異。故意撞名嘛意義不大,加前綴或設 auto 也救不回來,乾脆換一個
    不會撞的 class 名稱。 */
 .mchart svg{width:100%;height:auto;display:block}
-.mchbar{cursor:pointer;transition:opacity .12s}
-.mchbar:hover{opacity:.82}
-.mchbar.on{stroke:var(--ink);stroke-width:1.5}
+/* 點擊目標是整欄的透明命中區 .mchit,不是柱子本身——0 MWh 的月份沒有柱子,
+   binding_primary 為 none 的柱子又是 fill:none（內部接不到點擊）。柱子一律
+   pointer-events:none,讓命中區獨佔滑鼠事件,hover/選取都掛在外層的 .mcol 上。 */
+.mchit{cursor:pointer}
+.mchbar{pointer-events:none;transition:opacity .12s}
+.mcol:hover .mchbar{opacity:.82}
+.mcol.on .mchit{fill:var(--seller-soft)}
+.mcol.on .mchbar{stroke:var(--ink);stroke-width:1.5}
 .mchbar.b-cap{fill:var(--brand)} .mchbar.b-sup{fill:var(--warn)}
 .mchbar.b-dem{fill:var(--buyer)} .mchbar.b-nif{fill:var(--line-strong)}
 .mchbar.b-non{fill:none;stroke:var(--line-strong);stroke-dasharray:3 3}
+.mchblank{font:650 13px var(--font-ui);fill:var(--faint)}
 .mcap{stroke:var(--ink);stroke-width:2}
 .mfloor{stroke:var(--warn);stroke-width:1.6;stroke-dasharray:4 3}
 .mtick{font:500 10px var(--font-mono);fill:var(--faint)}
