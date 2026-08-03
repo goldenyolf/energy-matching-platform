@@ -417,58 +417,79 @@
   function bindMeta(k) { return BIND_META[k] || BIND_META.none; }
 
   // 12 格分佈條 + 圖例。一格一個月,顏色就是那個月的主綁定約束。
-  function bindStrip(months) {
+  // 各類別的月數一律讀 API 的 totals.binding_counts——同一張卡片裡結論句也讀它,
+  // 前端不該為同一個統計量再算一套。顯示順序仍照 12 個月裡首次出現的先後。
+  function bindStrip(d) {
+    var months = d.months, counts = d.totals.binding_counts || {};
     var cells = months.map(function (m) {
       var meta = bindMeta(m.binding_primary);
       return '<span class="bcell ' + meta.cls + '" title="' +
         esc(m.period + " · " + meta.name) + '">' + m.month + "</span>";
     }).join("");
-    var counts = {}, order = [];
+    var order = [];
     months.forEach(function (m) {
-      if (counts[m.binding_primary] == null) { counts[m.binding_primary] = 0; order.push(m.binding_primary); }
-      counts[m.binding_primary]++;
+      if (order.indexOf(m.binding_primary) < 0) order.push(m.binding_primary);
     });
     var lg = order.map(function (k) {
       return '<span><i class="sw ' + bindMeta(k).cls + '"></i>' + esc(bindMeta(k).name) +
-        " " + counts[k] + " 個月</span>";
+        " " + (counts[k] || 0) + " 個月</span>";
     }).join("");
     return '<div class="bstrip">' + cells + "</div>" + '<div class="blg">' + lg + "</div>";
   }
 
   // 全年結論句。每個子句都有成立條件——條件不成立就不寫,不靠形容詞硬補。
   function bindVerdict(d) {
-    var t = d.totals, counts = t.binding_counts || {}, top = null, n = -1;
-    Object.keys(counts).forEach(function (k) { if (counts[k] > n) { n = counts[k]; top = k; } });
-    if (top === "not_in_force") {
+    var t = d.totals, counts = t.binding_counts || {};
+    var nif = counts.not_in_force || 0;
+    // 「未生效」只有在整年一個月都沒生效時才是這一年的結論。過去這裡取的是
+    // 全 12 個月的眾數,而 not_in_force 也在裡面數——年中才起始的合約（生效
+    // 月數不到 6）於是被判成未生效,印在一個寫著實際分配量的 KPI 旁邊。
+    // 眾數只在生效月份裡取,未生效的月數改成句尾的附註。
+    if (!t.months_in_force) {
       return "本合約於 " + d.year + " 年度未生效或已到期,無實際分配。";
     }
+    var top = null, n = -1;
+    Object.keys(counts).forEach(function (k) {
+      if (k !== "not_in_force" && counts[k] > n) { n = counts[k]; top = k; }
+    });
+    var s;
     if (top === "contract_cap") {
-      var s = n + " 個月被合約上限卡住";
+      s = n + " 個月被合約上限卡住";
       if (t.headroom_months > 0) {
         s += "——客戶的需求高於合約允許量,其中 " + t.headroom_months +
           " 個月案場仍有餘電,有加購空間";
       }
-      return s + "。";
-    }
-    if (top === "farm_supply") {
-      var f = n + " 個月被案場供給卡住——此案場已無餘電可分配";
+    } else if (top === "farm_supply") {
+      s = n + " 個月被案場供給卡住——此案場已無餘電可分配";
       if (t.utilization_percent != null) {
-        f += ",全年只拿到上限的 " + pct(t.utilization_percent, 0) + "%";
+        s += ",全年只拿到上限的 " + pct(t.utilization_percent, 0) + "%";
       }
       if (d.higher_priority_sibling_count > 0) {
-        f += ";同案場另有 " + d.higher_priority_sibling_count + " 紙優先序更高的合約先分";
+        s += ";同案場另有 " + d.higher_priority_sibling_count + " 紙優先序更高的合約先分";
       }
-      return f + "。";
+    } else if (top === "customer_demand") {
+      s = n + " 個月被客戶用電卡住——合約允許量高於客戶實際用得掉的量";
+    } else {
+      s = "生效月份未取得任何分配,引擎未指出單一約束";
     }
-    if (top === "customer_demand") {
-      return n + " 個月被客戶用電卡住——合約允許量高於客戶實際用得掉的量。";
-    }
-    return "該年度未取得任何分配,引擎未指出單一約束。";
+    return s + (nif ? ";另 " + nif + " 個月未生效" : "") + "。";
   }
 
   // 月別配比小條圖。條款本身就是資料——未生效的年度也照畫。
-  function sharesBar(fr) {
-    if (!fr) return '<span class="u">未設,年電量平均 1/12 分攤</span>';
+  // 沒設月別配比時要講清楚「那月上限怎麼來的」,而這取決於合約設的是哪一種上限:
+  // 只有設了年電量的合約才會走 1/12 平均分攤。比例型合約根本沒有年電量可攤,
+  // 上限是「當月發電量 × 比例」,逐月跟著風況跳（004 一到三月 104,741 → 81,466 MWh）。
+  function sharesBar(d) {
+    var fr = d.monthly_share_fractions;
+    if (!fr) {
+      if (d.contracted_energy_mwh == null) {
+        return d.contracted_percentage == null
+          ? '<span class="u">未設;本合約未設上限,無年電量可分攤</span>'
+          : '<span class="u">未設;本合約上限依當月發電量的 ' +
+            pct(d.contracted_percentage, 0) + "% 計算,不走年電量分攤</span>";
+      }
+      return '<span class="u">未設,年電量平均 1/12 分攤</span>';
+    }
     var mx = Math.max.apply(null, fr) || 1;
     return '<div class="shbar">' + fr.map(function (v, i) {
       return '<span class="shcell" title="' + (i + 1) + " 月 " + (v * 100).toFixed(1) +
@@ -692,7 +713,7 @@
       erow("保證量 (take-or-pay)", top) +
       "</div>" +
       '<div class="subhd"><span>月別配比</span><small>年電量如何攤到各月</small></div>' +
-      '<div style="padding:0 18px 16px">' + sharesBar(d.monthly_share_fractions) + "</div>" +
+      '<div style="padding:0 18px 16px">' + sharesBar(d) + "</div>" +
       priceLadder(d) +
       "</section>";
   }
@@ -720,6 +741,8 @@
   function renderContractDetailBody(body, d, risks) {
     crumb.textContent = "綠電合約 › " + d.contract_number;
     var t = d.totals;
+    // 「有沒有上限」是條款問題:年電量與佔發電比例二擇一或並用,兩個都沒有才是真的沒設。
+    var noCap = d.contracted_energy_mwh == null && d.contracted_percentage == null;
     var alerts = risks && risks.alerts
       ? risks.alerts.filter(function (a) { return a.contract_number === d.contract_number; })
       : [];
@@ -743,19 +766,33 @@
     html += '<section class="card"><div class="hd"><h3>全年被什麼卡住' +
       infoTip("bindingConstraint") + "</h3>" +
       '<span class="aside">' + d.year + " 年 · 依合約優先序引擎</span></div>" +
-      '<div style="padding:14px 18px 4px">' + bindStrip(d.months) +
+      '<div style="padding:14px 18px 4px">' + bindStrip(d) +
       '<p class="verdict">' + esc(bindVerdict(d)) + "</p></div>" +
       '<div class="kpis">' +
       kpi("年度分配量", nfmt(t.allocated_mwh, 0) + "<small>MWh</small>",
         "生效 " + t.months_in_force + " 個月", "hl") +
+      // 同一個毛病的第四處(清單沒點名,瀏覽器實測時撞見):「這紙合約有沒有設
+      // 上限」問的還是條款,而 totals.cap_mwh 只加總生效月份的上限。PPA-2025-008
+      // 於是在這裡寫「此合約未設上限」,同一頁的條款卡卻寫「合約上限 20,000
+      // MWh/年」——跟保證量差額那格是一模一樣的矛盾。有沒有上限改看條款欄位
+      // (與清單頁的 contractCap() 同源),年度上限算不出來的情形另給說明。
       kpi("上限使用率", t.utilization_percent == null
-        ? '<span class="u">未設上限</span>' : pct(t.utilization_percent, 1) + "%",
-        t.cap_mwh == null ? "此合約未設上限" : "年度上限 " + nfmt(t.cap_mwh, 0) + " MWh") +
-      kpi("保證量差額", t.min_offtake_mwh > 0
-        ? nfmt(t.shortfall_mwh, 0) + "<small>MWh</small>" : '<span class="u">無此條款</span>',
-        t.min_offtake_mwh > 0
-          ? (t.shortfall_months ? t.shortfall_months + " 個月未達標" : "全年皆達標,未觸發")
-          : "未約定 take-or-pay",
+        ? '<span class="u">' + (noCap ? "未設上限" : "–") + "</span>"
+        : pct(t.utilization_percent, 1) + "%",
+        noCap ? "此合約未設上限"
+          : t.cap_mwh == null ? "該年度無生效月份,無年度上限可比"
+            : "年度上限 " + nfmt(t.cap_mwh, 0) + " MWh") +
+      // 「有沒有這個條款」問的是條款,不是履約數量。以前這裡看 totals.min_offtake_mwh,
+      // 而那個量在未生效的月份是 0——於是 PPA-2025-008 一邊寫「未約定 take-or-pay」,
+      // 同一頁的合約條款卡一邊寫「保證量 90%」。比例型合約也一樣中招（沒有年電量,
+      // 月門檻算不出來）。改看 min_offtake_percent,就是條款卡自己用的那個欄位。
+      kpi("保證量差額",
+        d.min_offtake_percent == null ? '<span class="u">無此條款</span>'
+          : t.months_in_force === 0 ? '<span class="u">–</span>'
+            : nfmt(t.shortfall_mwh, 0) + "<small>MWh</small>",
+        d.min_offtake_percent == null ? "未約定 take-or-pay"
+          : t.months_in_force === 0 ? "該年度無生效月份,無從評估"
+            : (t.shortfall_months ? t.shortfall_months + " 個月未達標" : "全年皆達標,未觸發"),
         t.shortfall_mwh > 0 ? "neg" : "") +
       kpi("風險告警", alerts.length + "<small>則</small>",
         alerts.length ? "見下方清單" : "目前無告警", alerts.length ? "prem" : "") +
