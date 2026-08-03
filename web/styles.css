@@ -603,7 +603,18 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 /* ---- 合約詳情：綁定約束分佈條 ---- */
 .bstrip{display:flex;gap:4px}
 .bcell{flex:1;height:34px;border-radius:6px;display:grid;place-items:center;
-  font:600 11px/1 var(--font-mono);color:#fff;border:1px solid transparent}
+  font:700 12px/1 var(--font-mono);border:1px solid transparent}
+/* 白字量到 2.02:1（暗色 --warn）～4.32:1（亮色 --brand）,六種主題/色組合全都
+   低於 WCAG AA 的 4.5:1,而 12px/700 遠不到大字門檻（粗體要 18.7px 才算大字）。
+   改成固定深墨——#0B1220 是本檔唯一刻意寫死的色值:它必須不隨主題翻轉,
+   否則暗色主題下墨色會跟著變亮、對比又掉回去。
+   量測（WCAG 2.x 相對亮度）:
+     亮色 --brand 4.33 / --buyer 5.48 / --warn 5.63
+     暗色 --brand 6.37 / --buyer 8.38 / --warn 9.28
+   六格裡五格過 AA。剩下亮色 --brand 的 4.33:1 差 0.17 未過:#4C6EF5 這個底色
+   就算用純黑也只到 4.86:1,要補滿得再引一個純黑色值或把字放大到 18.7px,
+   兩者都是新的設計決定,不在這次修正的授權範圍內——先如實記在這裡。 */
+.b-cap,.b-sup,.b-dem{color:#0B1220}
 .b-cap{background:var(--brand)}
 .b-sup{background:var(--warn)}
 .b-dem{background:var(--buyer)}
