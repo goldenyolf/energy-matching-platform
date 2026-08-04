@@ -87,25 +87,54 @@ class EntitySpec:
 
 陷阱：`BaseRepository.create()` 內部就 `db.commit()`，所以「跑完驗證再 rollback」在現有結構下做不到——service 早就 commit 了。
 
-解法不動 service 也不動 repository：
+解法不動 service 也不動 repository。**關鍵是不要另開連線**：`tests/conftest.py` 用 `sqlite://` ＋ `StaticPool`，整個 engine 共用同一條 DBAPI 連線，`engine.connect()` 拿到的就是外層 session 正在用的那條，`conn.begin()` 會直接撞 `cannot start a transaction within a transaction`。（此路已實測失敗，見下方註記。）
+
+改綁在**外層 session 自己的連線**上做 SAVEPOINT：
 
 ```python
 @contextmanager
 def dry_run_session(db: Session) -> Iterator[Session]:
-    """一條與外界隔絕的 session：內層 commit 只釋放 SAVEPOINT，離開時整條 rollback。"""
-    conn = db.get_bind().connect()
-    trans = conn.begin()
+    """一條與外界隔絕的 session：內層 commit 只釋放 SAVEPOINT，離開時退回。"""
+    conn = db.connection()
+    sp = conn.begin_nested()
     factory = sessionmaker(bind=conn, join_transaction_mode="create_savepoint")
     scoped = factory()
     try:
         yield scoped
     finally:
         scoped.close()
-        trans.rollback()
-        conn.close()
+        if sp.is_active:
+            sp.rollback()
+        db.expire_all()
 ```
 
-SQLAlchemy 2.0 在 `create_savepoint` 模式下把內層 `commit()` 變成釋放 SAVEPOINT，外層交易不受影響。**驗證路徑與真匯入是同一份程式碼**——這是選方案 A 的整個賣點，不在這裡打折。
+SQLAlchemy 2.0 在 `create_savepoint` 模式下把內層 `commit()` 變成釋放 SAVEPOINT，外層 SAVEPOINT 不受影響。**驗證路徑與真匯入是同一份程式碼**——這是選方案 A 的整個賣點，不在這裡打折。
+
+**已實測**（2026-08-04，本機 SQLAlchemy 2.x）：
+
+| 做法 | 記憶體 SQLite ＋ StaticPool | 檔案式 SQLite |
+|---|---|---|
+| `engine.connect()` 另開連線 | ❌ 漏水／`cannot start a transaction within a transaction` | — |
+| 綁外層 session 連線 ＋ `begin_nested()` | ✅ dry-run 無殘留、外層事後仍可正常寫入 | ✅ |
+
+**尚未實測：Postgres。** 本機無 Docker，線上為 Neon。機制本身是 SQLAlchemy 的標準用法，但 §4.3.1 的每列 SAVEPOINT 對 Postgres 是**必要**而非優化。
+
+### 4.3.1 每列一個 SAVEPOINT
+
+importer 的語意是「單列出錯就記下來、繼續跑下一列」。在 Postgres 上，交易中一旦有語句失敗，整個交易就進入 aborted 狀態，之後每一句都會被拒絕——**除非退回到某個 SAVEPOINT**。所以每列的寫入要包在自己的 `begin_nested()` 裡，出錯就退回該列的 savepoint：
+
+```python
+nested = session.begin_nested()
+try:
+    ...persist...
+    session.commit()
+except Exception as exc:
+    if nested.is_active:
+        nested.rollback()
+    ...記錄錯誤，繼續下一列...
+```
+
+已實測在 SQLite 下同樣成立：壞列被隔離，dry-run 與真匯入產出**完全相同**的成功列與錯誤列。
 
 ### 4.3 共用匯入管線（改寫 `app/ingestion/csv_importer.py`）
 
@@ -251,8 +280,8 @@ generation / consumption 的自然鍵順帶關掉 §2 那個「匯兩次變兩�
 
 | 風險 | 處理 |
 |---|---|
-| **測試環境的 StaticPool**：`tests/conftest.py` 用 `sqlite://` ＋ `StaticPool`，整個 engine 共用**同一條** DBAPI 連線。`db.get_bind().connect()` 拿到的是同一條連線，可能與外層 session 的交易互踩 | 這是實作第一個要驗的點。若踩到，改為由呼叫端傳入 connection，或在測試中改綁 file-based SQLite。**先寫一個最小的 dry-run 隔離測試跑通再往下做**，不要等整條管線寫完才發現 |
-| `pysqlite` driver 預設不會自動開 BEGIN，SAVEPOINT 行為與 Postgres 有落差 | dry-run 不落地的測試要在 SQLite 與 Postgres 都跑；若 SQLite 不可靠，以 Postgres 為準並在測試層改用 file-based DB |
+| ~~測試環境的 StaticPool 與另開連線互踩~~ | **已解決**：改綁外層 session 自己的連線 ＋ `begin_nested()`，兩種 SQLite 設定都實測通過（§4.2） |
+| **Postgres 未實測**（本機無 Docker） | §4.3.1 的每列 SAVEPOINT 就是為此而設。實作完成後**必須在 Neon 或本機 Postgres 上實跑一次含壞列的匯入**，確認錯誤列不會毒死整批。這是唯一還沒證明的假設 |
 | 共用管線改寫動到七個 importer，可能回歸 | 先讓現有 import 測試全綠再重構，逐實體遷移 |
 | upsert 改變寫入語意，既有使用者預期「重複會略過」 | 預覽明確標示 `update` 與 `changed` 欄位，按下去前看得到；no-op 仍算 skip，語意連續 |
 | dry-run 讓每次匯入變兩次請求 | 檔案上限 10 MB 不變；外鍵預載後單次成本大幅下降 |
