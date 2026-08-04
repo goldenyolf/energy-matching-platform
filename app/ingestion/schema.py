@@ -44,7 +44,15 @@ FARM = EntitySpec(
         Column("name", "案場名稱", "str", required=True, example="彰化外海一期"),
         Column("operator_name", "營運商", "str", example="示範能源"),
         Column("location", "場址", "str", example="彰化縣"),
-        Column("installed_capacity_mw", "裝置容量 (MW)", "float", example="100"),
+        # WindFarmCreate 是 gt=0、沒有預設值的必填欄——標成 required 讓空白在
+        # 這裡就被攔成清楚的中文訊息，不是留給 pydantic 丟英文例外。
+        Column(
+            "installed_capacity_mw",
+            "裝置容量 (MW)",
+            "float",
+            required=True,
+            example="100",
+        ),
         Column("feed_in_price_per_kwh", "躉售價 (元/度)", "float", example="2.5"),
         Column(
             "commercial_operation_date",
@@ -140,8 +148,16 @@ BATTERY = EntitySpec(
         ),
         Column("code", "電池代碼", "str", required=True, example="BAT-001"),
         Column("name", "電池名稱", "str", example="一廠儲能"),
-        Column("energy_capacity_mwh", "電量容量 (MWh)", "float", example="20"),
-        Column("power_mw", "功率 (MW)", "float", example="5"),
+        # BatteryCreate 這兩欄是 gt=0、沒有預設值的必填欄——標成 required
+        # 讓空白在這裡就被攔成清楚的中文訊息，不是留給 pydantic 丟英文例外。
+        Column(
+            "energy_capacity_mwh",
+            "電量容量 (MWh)",
+            "float",
+            required=True,
+            example="20",
+        ),
+        Column("power_mw", "功率 (MW)", "float", required=True, example="5"),
         Column("round_trip_efficiency_percent", "往返效率 (%)", "float", example="88"),
         Column("initial_soc_percent", "初始 SOC (%)", "float", example="0"),
     ),
@@ -171,11 +187,24 @@ CONTRACT = EntitySpec(
             example="CUS-001",
             note="必須是已存在的客戶",
         ),
+        # ContractCreate 的 start_date / end_date 是沒有預設值的必填欄——標成
+        # required 讓空白在這裡就被攔成清楚的中文訊息，不是留給 pydantic 丟英文
+        # 例外。
         Column(
-            "start_date", "起始日", "date", example="2026-01-01", note="格式 YYYY-MM-DD"
+            "start_date",
+            "起始日",
+            "date",
+            required=True,
+            example="2026-01-01",
+            note="格式 YYYY-MM-DD",
         ),
         Column(
-            "end_date", "結束日", "date", example="2035-12-31", note="格式 YYYY-MM-DD"
+            "end_date",
+            "結束日",
+            "date",
+            required=True,
+            example="2035-12-31",
+            note="格式 YYYY-MM-DD",
         ),
         Column("contracted_energy_mwh", "年度合約量 (MWh)", "float", example="50000"),
         Column("contracted_percentage", "案場發電比例 (%)", "float", example="40"),

@@ -1,11 +1,9 @@
-"""欄位表是單一真相：它宣告的欄位必須真的被 importer 讀到。"""
+"""欄位表是單一真相：它宣告的欄位必須真的被 importer 讀到、寫進去。"""
 
 from __future__ import annotations
 
-import inspect
-import re
-
 import pytest
+from sqlalchemy import inspect as sa_inspect
 
 from app.ingestion import csv_importer
 from app.ingestion.schema import SPECS
@@ -22,8 +20,7 @@ IMPORTERS = {
 }
 
 # entity → 實際做讀取／寫入的 handler class。Task 4 把每個 import_* 函式改成薄薄
-# 一層，委派給共用管線＋這裡的 handler；欄位真正被讀到的地方是 handler，不是
-# import_* 本身，所以漂移檢查要看 handler 的原始碼。
+# 一層，委派給共用管線＋這裡的 handler。
 HANDLERS = {
     "farm": csv_importer._FarmHandler,
     "customer": csv_importer._CustomerHandler,
@@ -34,39 +31,36 @@ HANDLERS = {
     "consumption": csv_importer._ConsumptionHandler,
 }
 
-# build() 若含有這個樣式，代表它逐一跑過 spec 宣告的每個欄位（見
-# csv_importer._parse_row_cell 的呼叫方式）——這時「有沒有讀到」是結構上保證的，
-# 不需要欄位名稱以字面量出現在原始碼裡才算數。
-_GENERIC_READ_MARKER = "self.spec.columns"
-
 
 def test_every_entity_has_an_importer():
     assert set(SPECS) == set(IMPORTERS) == set(HANDLERS)
 
 
 @pytest.mark.parametrize("entity", sorted(SPECS))
-def test_declared_columns_are_actually_read(entity):
-    """防止 IMPORT_COLS 那種漂移：宣告了卻沒人讀 = 騙使用者。
+def test_declared_columns_are_actually_consumed(entity):
+    """防止 IMPORT_COLS 那種漂移：宣告了卻沒地方接 = 騙使用者。
 
-    大多數欄位由 handler.build() 泛化地跑過 ``self.spec.columns`` 讀取，這時
-    「有沒有讀到」是迴圈結構保證的，不必逐一以字面量出現。改成查代碼再轉 id
-    的外鍵欄位（如 customer_code）不在這個迴圈裡，仍要求以字面量出現，跟原本
-    一樣嚴格。
+    handler.build() 是泛化地跑過 ``self.spec.columns`` 讀取的——「原始碼裡有沒有
+    出現這個欄名的字面量」不再是有意義的訊號，因為泛化迴圈本來就不會逐一提到
+    每個欄名。真正有意義的問題是「讀到之後，create()／update() 接不接得住」：
+    這兩條路徑分別要看目標 pydantic ``*Create`` model 有沒有這個欄位、以及 ORM
+    model 有沒有這個 mapped column（外鍵欄位如 customer_code 改用它在
+    ``_fk_specs`` 裡宣告要轉成的 payload 欄位，如 customer_id，來比對）。
+    只要兩邊有一邊接不住，這欄實質上就是宣告了但沒用——不管 build() 有沒有讀到它。
     """
-    handler = HANDLERS[entity]
-    source = inspect.getsource(handler)
-    reads_generically = _GENERIC_READ_MARKER in source
-    fk_columns = set(getattr(handler, "_fk_columns", ()))
+    handler = HANDLERS[entity]()
+    create_fields = set(handler.create_model.model_fields)
+    orm_columns = {c.key for c in sa_inspect(handler.model).mapper.column_attrs}
+    fk_targets = {
+        csv_col: payload_field for csv_col, _, payload_field, _ in handler._fk_specs
+    }
 
-    def _is_read(name: str) -> bool:
-        if reads_generically and name not in fk_columns:
-            return True
-        # Anchor to quoted literals to avoid false positives from substring
-        # matches (e.g., 'code' substring of 'customer_code').
-        return bool(re.search(rf'["\']{re.escape(name)}["\']', source))
-
-    missing = [c.name for c in SPECS[entity].columns if not _is_read(c.name)]
-    assert not missing, f"{entity} 宣告了但 importer 沒讀: {missing}"
+    missing = []
+    for col in SPECS[entity].columns:
+        target = fk_targets.get(col.name, col.name)
+        if target not in create_fields or target not in orm_columns:
+            missing.append(col.name)
+    assert not missing, f"{entity} 宣告了但 create()/update() 接不到: {missing}"
 
 
 @pytest.mark.parametrize("entity", sorted(SPECS))

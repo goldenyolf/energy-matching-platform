@@ -64,14 +64,17 @@ def parse_cell(column: Column, raw: str | None) -> object:
     except CellError:
         raise
     except ValueError as exc:
-        raise CellError(column.name, column.label, text, _reason(column, text)) from exc
+        raise CellError(column.name, column.label, text, _reason(column)) from exc
 
 
-def _reason(column: Column, text: str) -> str:
+def _reason(column: Column) -> str:
+    """訊息刻意不帶原值——原值放在 CellError.value（→ ErrorGroup.sample_value）。
+    如果原值混進 reason，同一欄同一種錯誤但值不同的列就沒辦法收斂成同一組。
+    """
     if column.kind in ("float", "int"):
-        return f"{column.label}「{text}」不是數字"
+        return f"{column.label}不是數字"
     if column.kind == "date":
-        return f"{column.label}「{text}」不是有效日期，格式須為 YYYY-MM-DD"
+        return f"{column.label}不是有效日期，格式須為 YYYY-MM-DD"
     if column.kind == "shares":
-        return f"{column.label}「{text}」格式錯誤，須為以分號隔開的數字"
-    return f"{column.label}「{text}」無效"
+        return f"{column.label}格式錯誤，須為以分號隔開的數字"
+    return f"{column.label}無效"

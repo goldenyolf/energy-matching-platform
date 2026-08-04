@@ -15,6 +15,8 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
 
+from pydantic import BaseModel
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,17 +50,36 @@ from app.services import wind_farms as wind_farm_svc
 from app.services.battery_service import create as create_battery
 
 
+class _Rows(list[dict[str, str]]):
+    """跟一般 list 沒有兩樣，只是多帶著 CSV 標題列。
+
+    這樣即使資料列是 0 筆（例如標題打錯、DictReader 因此一列都讀不出來），
+    ``pipeline._check_header`` 仍看得到實際的標題，不會把「整份標題都是錯的」
+    誤判成「檔案是空的所以沒問題」。
+    """
+
+    fieldnames: tuple[str, ...] = ()
+
+
 def parse_csv(content: str | bytes) -> list[dict[str, str]]:
     """Parse CSV text (or bytes) into a list of row dicts."""
     if isinstance(content, bytes):
         content = content.decode("utf-8-sig")
-    return list(csv.DictReader(io.StringIO(content)))
+    reader = csv.DictReader(io.StringIO(content))
+    rows = _Rows(reader)
+    rows.fieldnames = tuple(reader.fieldnames or ())
+    return rows
 
 
 def _code_to_id(db: Session, code_col: Any, id_col: Any) -> dict[str, int]:
     """把某個 model 的 code→id 全表撈成字典，供 build()/locate() 查外鍵用。"""
     rows = db.execute(select(code_col, id_col)).all()
     return dict(rows)  # type: ignore[arg-type]
+
+
+def _mapped_columns(model: type[Any]) -> set[str]:
+    """回傳某個 ORM model 實際對應到資料庫欄位的屬性名稱（不含 relationship）。"""
+    return {c.key for c in sa_inspect(model).mapper.column_attrs}
 
 
 def _drop_none(payload: dict[str, Any]) -> dict[str, Any]:
@@ -73,7 +94,11 @@ def _drop_none(payload: dict[str, Any]) -> dict[str, Any]:
 def _resolve_code(
     ctx_map: dict[str, int], column: Column, code: str | None, entity_label: str
 ) -> int:
-    """把 CSV 提供的 ``*_code`` 轉成內部 id；查無資料時丟出帶欄位資訊的 CellError。"""
+    """把 CSV 提供的 ``*_code`` 轉成內部 id；查無資料時丟出帶欄位資訊的 CellError。
+
+    訊息不把 ``code`` 嵌進 reason——放進 CellError.value，讓同一欄「查無資料」
+    的錯誤即使各列代碼不同，也能收斂成同一組（見 pipeline._group）。
+    """
     if code is None:
         raise CellError(
             column.name, column.label, "", f"{column.label}為必填，不可空白"
@@ -84,7 +109,7 @@ def _resolve_code(
             column.name,
             column.label,
             code,
-            f"{column.label}「{code}」不存在，請先建立該{entity_label}",
+            f"{column.label}對應不到現有的{entity_label}，請先建立該{entity_label}",
         )
     return fk_id
 
@@ -116,44 +141,100 @@ def _require_for_create(
             raise CellError(c.name, c.label, "", f"{c.label}為必填，不可空白")
 
 
+# ctx key（preload() 放進 dict 的名字）→ 要撈 code/id 的 model。目前只有這兩種
+# 外鍵目標；新增第三種時在這裡加一行即可，不用動任何 handler。
+_FK_MODELS: dict[str, type[Any]] = {"farms": WindFarm, "customers": Customer}
+
+
 class _BaseHandler:
-    """七個 handler 共用的差異比對：空白＝不動，只更新真的變了的欄位。"""
+    """七個 handler 共用的骨架。
+
+    真正逐欄不同的，只有：目標 ORM model／pydantic Create model、外鍵欄位
+    （``_fk_specs``：CSV 欄名 → ctx key → payload 欄位 → 中文實體名）、用什麼
+    欄位查找既有列（預設 ``code``），以及 ``create()`` 要呼叫哪個 service。
+    這些用類別屬性宣告，``preload`` / ``build`` / ``locate`` / ``update`` 都是
+    照這些屬性泛化跑過 ``spec.columns``，不必每個 handler 各寫一份。
+    """
 
     spec: EntitySpec
-    _fk_columns: tuple[str, ...] = ()
+    model: type[Any]
+    create_model: type[BaseModel]
+    _locate_by: str = "code"
+    _fk_specs: tuple[tuple[str, str, str, str], ...] = ()
+
+    @property
+    def _fk_columns(self) -> tuple[str, ...]:
+        return tuple(fk[0] for fk in self._fk_specs)
+
+    def preload(self, db: Session) -> dict[str, Any]:
+        ctx_keys = {fk[1] for fk in self._fk_specs}
+        return {
+            key: _code_to_id(db, _FK_MODELS[key].code, _FK_MODELS[key].id)
+            for key in ctx_keys
+        }
+
+    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
+        fk_columns = self._fk_columns
+        payload = {
+            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
+            for c in self.spec.columns
+            if c.name in row and c.name not in fk_columns
+        }
+        for csv_col, ctx_key, payload_field, label in self._fk_specs:
+            payload[payload_field] = _resolve_code(
+                ctx[ctx_key],
+                self.spec.column(csv_col),  # type: ignore[arg-type]
+                p.s(row.get(csv_col)),
+                label,
+            )
+        return payload
+
+    def locate(
+        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
+    ) -> Any | None:
+        key = p.s(row.get(self._locate_by))
+        if key is None:
+            return None
+        return BaseRepository(self.model, db).get_by(**{self._locate_by: key})
 
     def update(self, db: Session, existing: Any, payload: dict[str, Any]) -> list[str]:
         # 空白＝不動：Excel 導出常整欄空白，把它當「清空」會毀掉既有資料。
-        changed = [
-            name
-            for name, value in payload.items()
-            if value is not None and getattr(existing, name, None) != value
-        ]
+        mapped = _mapped_columns(type(existing))
+        changed = []
+        for name, value in payload.items():
+            if value is None:
+                continue
+            if name not in mapped:
+                # 不是 ORM 真的認得的欄位：setattr 會建立一個永遠存不進 DB 的
+                # 幽靈屬性，之後每次重新匯入都會把這一列誤判成「有變更」卻什麼
+                # 都沒真的改到，寧可在這裡就大聲失敗。
+                raise ValueError(
+                    f"「{name}」不是 {type(existing).__name__} 的欄位，無法更新"
+                )
+            if getattr(existing, name) != value:
+                changed.append(name)
+        if not changed:
+            return []
+        # 合併後的完整狀態要先通過驗證，才能真的寫進既有列——不然重新匯入可以把
+        # end_date 改到 start_date 之前，或把 re_target_percent 改成 150；這一關
+        # create() 本來就擋得住，但沒有它，bare setattr 完全不管。多出來的
+        # id／created_at／updated_at 等欄位，pydantic 預設會忽略未宣告的欄位。
+        merged = {col: getattr(existing, col) for col in mapped}
+        merged.update({name: payload[name] for name in changed})
+        self.create_model(**merged)
         for name in changed:
             setattr(existing, name, payload[name])
-        if changed:
-            db.flush()
+        db.flush()
         return changed
+
+    def create(self, db: Session, payload: dict[str, Any]) -> None:
+        raise NotImplementedError
 
 
 class _FarmHandler(_BaseHandler):
     spec = schema.FARM
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {}  # 案場沒有外鍵，不需要預載
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        return {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row
-        }
-
-    def locate(
-        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
-    ) -> WindFarm | None:
-        code = p.s(row.get("code"))
-        return None if code is None else BaseRepository(WindFarm, db).get_by(code=code)
+    model = WindFarm
+    create_model = WindFarmCreate
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
         _require_for_create(self.spec, payload)
@@ -162,22 +243,8 @@ class _FarmHandler(_BaseHandler):
 
 class _CustomerHandler(_BaseHandler):
     spec = schema.CUSTOMER
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {}  # 客戶沒有外鍵，不需要預載
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        return {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row
-        }
-
-    def locate(
-        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
-    ) -> Customer | None:
-        code = p.s(row.get("code"))
-        return None if code is None else BaseRepository(Customer, db).get_by(code=code)
+    model = Customer
+    create_model = CustomerCreate
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
         _require_for_create(self.spec, payload)
@@ -188,35 +255,15 @@ class _MeterHandler(_BaseHandler):
     """電號／廠區 (Meter) 以 *customer_code* 參照所屬客戶。"""
 
     spec = schema.METER
-    _fk_columns = ("customer_code",)
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {"customers": _code_to_id(db, Customer.code, Customer.id)}
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        payload = {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row and c.name not in self._fk_columns
-        }
-        payload["customer_id"] = _resolve_code(
-            ctx["customers"],
-            self.spec.column("customer_code"),  # type: ignore[arg-type]
-            p.s(row.get("customer_code")),
-            "客戶",
-        )
-        # 用電名稱沒填就沿用電號代碼，維持既有匯入行為。
-        payload["name"] = payload.get("name") or payload["code"]
-        return payload
-
-    def locate(
-        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
-    ) -> Meter | None:
-        code = p.s(row.get("code"))
-        return None if code is None else BaseRepository(Meter, db).get_by(code=code)
+    model = Meter
+    create_model = MeterCreate
+    _fk_specs = (("customer_code", "customers", "customer_id", "客戶"),)
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
         _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        # 用電名稱沒填就沿用電號代碼——只在「確定要新建」時才這樣兜底，不能放在
+        # build()：build() 在 update 路徑也會跑，那樣會把既有列的名稱洗成代碼。
+        payload = {**payload, "name": payload.get("name") or payload["code"]}
         meter_service.create(db, MeterCreate(**_drop_none(payload)))
 
 
@@ -224,34 +271,13 @@ class _BatteryHandler(_BaseHandler):
     """客戶側儲能 (Battery) 以 *customer_code* 參照所屬客戶。"""
 
     spec = schema.BATTERY
-    _fk_columns = ("customer_code",)
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {"customers": _code_to_id(db, Customer.code, Customer.id)}
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        payload = {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row and c.name not in self._fk_columns
-        }
-        payload["customer_id"] = _resolve_code(
-            ctx["customers"],
-            self.spec.column("customer_code"),  # type: ignore[arg-type]
-            p.s(row.get("customer_code")),
-            "客戶",
-        )
-        payload["name"] = payload.get("name") or payload["code"]
-        return payload
-
-    def locate(
-        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
-    ) -> Battery | None:
-        code = p.s(row.get("code"))
-        return None if code is None else BaseRepository(Battery, db).get_by(code=code)
+    model = Battery
+    create_model = BatteryCreate
+    _fk_specs = (("customer_code", "customers", "customer_id", "客戶"),)
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
         _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        payload = {**payload, "name": payload.get("name") or payload["code"]}
         create_battery(db, BatteryCreate(**_drop_none(payload)))
 
 
@@ -259,43 +285,13 @@ class _ContractHandler(_BaseHandler):
     """合約以 *wind_farm_code* / *customer_code* 參照案場與客戶。"""
 
     spec = schema.CONTRACT
-    _fk_columns = ("wind_farm_code", "customer_code")
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {
-            "farms": _code_to_id(db, WindFarm.code, WindFarm.id),
-            "customers": _code_to_id(db, Customer.code, Customer.id),
-        }
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        payload = {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row and c.name not in self._fk_columns
-        }
-        payload["wind_farm_id"] = _resolve_code(
-            ctx["farms"],
-            self.spec.column("wind_farm_code"),  # type: ignore[arg-type]
-            p.s(row.get("wind_farm_code")),
-            "案場",
-        )
-        payload["customer_id"] = _resolve_code(
-            ctx["customers"],
-            self.spec.column("customer_code"),  # type: ignore[arg-type]
-            p.s(row.get("customer_code")),
-            "客戶",
-        )
-        return payload
-
-    def locate(
-        self, db: Session, row: dict[str, str], ctx: dict[str, Any]
-    ) -> Contract | None:
-        number = p.s(row.get("contract_number"))
-        return (
-            None
-            if number is None
-            else BaseRepository(Contract, db).get_by(contract_number=number)
-        )
+    model = Contract
+    create_model = ContractCreate
+    _locate_by = "contract_number"
+    _fk_specs = (
+        ("wind_farm_code", "farms", "wind_farm_id", "案場"),
+        ("customer_code", "customers", "customer_id", "客戶"),
+    )
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
         _require_for_create(self.spec, payload, exclude=self._fk_columns)
@@ -303,27 +299,13 @@ class _ContractHandler(_BaseHandler):
 
 
 class _GenerationHandler(_BaseHandler):
-    """發電數據以 *wind_farm_code* 參照案場；自然鍵是 (案場, 期間)。"""
+    """發電數據以 *wind_farm_code* 參照案場；自然鍵是 (案場, 期間)，不是單一
+    ``code``，所以要覆寫 ``locate()``。"""
 
     spec = schema.GENERATION
-    _fk_columns = ("wind_farm_code",)
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {"farms": _code_to_id(db, WindFarm.code, WindFarm.id)}
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        payload = {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row and c.name not in self._fk_columns
-        }
-        payload["wind_farm_id"] = _resolve_code(
-            ctx["farms"],
-            self.spec.column("wind_farm_code"),  # type: ignore[arg-type]
-            p.s(row.get("wind_farm_code")),
-            "案場",
-        )
-        return payload
+    model = GenerationData
+    create_model = GenerationCreate
+    _fk_specs = (("wind_farm_code", "farms", "wind_farm_id", "案場"),)
 
     def locate(
         self, db: Session, row: dict[str, str], ctx: dict[str, Any]
@@ -351,27 +333,13 @@ class _GenerationHandler(_BaseHandler):
 
 
 class _ConsumptionHandler(_BaseHandler):
-    """用電數據以 *customer_code* 參照客戶；自然鍵是 (客戶, 期間)。"""
+    """用電數據以 *customer_code* 參照客戶；自然鍵是 (客戶, 期間)，不是單一
+    ``code``，所以要覆寫 ``locate()``。"""
 
     spec = schema.CONSUMPTION
-    _fk_columns = ("customer_code",)
-
-    def preload(self, db: Session) -> dict[str, Any]:
-        return {"customers": _code_to_id(db, Customer.code, Customer.id)}
-
-    def build(self, row: dict[str, str], ctx: dict[str, Any]) -> dict[str, Any]:
-        payload = {
-            c.name: _parse_row_cell(self.spec, c, row.get(c.name))
-            for c in self.spec.columns
-            if c.name in row and c.name not in self._fk_columns
-        }
-        payload["customer_id"] = _resolve_code(
-            ctx["customers"],
-            self.spec.column("customer_code"),  # type: ignore[arg-type]
-            p.s(row.get("customer_code")),
-            "客戶",
-        )
-        return payload
+    model = ConsumptionData
+    create_model = ConsumptionCreate
+    _fk_specs = (("customer_code", "customers", "customer_id", "客戶"),)
 
     def locate(
         self, db: Session, row: dict[str, str], ctx: dict[str, Any]
