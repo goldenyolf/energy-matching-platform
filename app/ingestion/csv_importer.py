@@ -128,16 +128,27 @@ def _parse_row_cell(spec: EntitySpec, column: Column, raw: str | None) -> object
 
 
 def _require_for_create(
-    spec: EntitySpec, payload: dict[str, Any], *, exclude: tuple[str, ...] = ()
+    spec: EntitySpec,
+    payload: dict[str, Any],
+    *,
+    fk_specs: tuple[tuple[str, str, str, str], ...] = (),
 ) -> None:
     """新建列不能有必填欄位空白——這是 ``_parse_row_cell`` 延後的那一半檢查。
 
     已存在列的空白在 ``update()`` 早就被當作「不動」處理，不會走到這裡。
-    ``exclude`` 用來跳過改用外鍵 id 表示的欄位（如 customer_code → customer_id），
-    它們的必填性已經在 ``_resolve_code`` 檢查過。
+
+    ``fk_specs`` 是外鍵欄位（如 customer_code → customer_id）的宣告：這些欄位
+    的 payload key 不是 CSV 欄名本身，而是 ``build()`` 解析後的 id 欄位，所以
+    不能直接用 ``payload.get(c.name)`` 檢查。CSV 有給值但查無資料的情況已經在
+    ``_resolve_code`` 擋下；這裡要抓的是 partial-update 檔案完全沒有這欄
+    ——build() 因此完全沒有設定對應的 payload key，新建列仍然缺這個外鍵。
     """
+    fk_targets = {csv_col: payload_field for csv_col, _, payload_field, _ in fk_specs}
     for c in spec.columns:
-        if c.required and c.name not in exclude and payload.get(c.name) is None:
+        if not c.required:
+            continue
+        target = fk_targets.get(c.name, c.name)
+        if payload.get(target) is None:
             raise CellError(c.name, c.label, "", f"{c.label}為必填，不可空白")
 
 
@@ -181,6 +192,14 @@ class _BaseHandler:
             if c.name in row and c.name not in fk_columns
         }
         for csv_col, ctx_key, payload_field, label in self._fk_specs:
+            if csv_col not in row:
+                # 這欄整個不在這份 CSV 的標題列裡——一份只更新其他欄位的
+                # partial-update 檔案（§4.7）。不要求重新提供這個外鍵：
+                # 不設定 payload_field，update() 就會把它當成「沒有提供」而
+                # 略過不動，跟其他欄位的部分更新語意一致。新建列若因此真的
+                # 缺這個外鍵，交給 create() 呼叫的 _require_for_create 用
+                # 這一欄自己的中文標籤報一則清楚的錯誤。
+                continue
             payload[payload_field] = _resolve_code(
                 ctx[ctx_key],
                 self.spec.column(csv_col),  # type: ignore[arg-type]
@@ -260,7 +279,7 @@ class _MeterHandler(_BaseHandler):
     _fk_specs = (("customer_code", "customers", "customer_id", "客戶"),)
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
-        _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        _require_for_create(self.spec, payload, fk_specs=self._fk_specs)
         # 用電名稱沒填就沿用電號代碼——只在「確定要新建」時才這樣兜底，不能放在
         # build()：build() 在 update 路徑也會跑，那樣會把既有列的名稱洗成代碼。
         payload = {**payload, "name": payload.get("name") or payload["code"]}
@@ -276,7 +295,7 @@ class _BatteryHandler(_BaseHandler):
     _fk_specs = (("customer_code", "customers", "customer_id", "客戶"),)
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
-        _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        _require_for_create(self.spec, payload, fk_specs=self._fk_specs)
         payload = {**payload, "name": payload.get("name") or payload["code"]}
         create_battery(db, BatteryCreate(**_drop_none(payload)))
 
@@ -294,7 +313,7 @@ class _ContractHandler(_BaseHandler):
     )
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
-        _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        _require_for_create(self.spec, payload, fk_specs=self._fk_specs)
         contract_svc.create(db, ContractCreate(**_drop_none(payload)))
 
 
@@ -328,7 +347,7 @@ class _GenerationHandler(_BaseHandler):
         )
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
-        _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        _require_for_create(self.spec, payload, fk_specs=self._fk_specs)
         measurement_svc.create_generation(db, GenerationCreate(**_drop_none(payload)))
 
 
@@ -362,7 +381,7 @@ class _ConsumptionHandler(_BaseHandler):
         )
 
     def create(self, db: Session, payload: dict[str, Any]) -> None:
-        _require_for_create(self.spec, payload, exclude=self._fk_columns)
+        _require_for_create(self.spec, payload, fk_specs=self._fk_specs)
         measurement_svc.create_consumption(db, ConsumptionCreate(**_drop_none(payload)))
 
 

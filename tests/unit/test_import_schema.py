@@ -97,3 +97,26 @@ def test_farm_exposes_the_engineering_fields():
         "turbine_count",
         "grid_connection_voltage",
     } <= names
+
+
+@pytest.mark.parametrize("entity", sorted(SPECS))
+def test_enum_column_notes_match_the_live_enum(entity):
+    """欄位表是單一真相，但 note 曾經是手寫的第二份真相——會漂移，也真的漂移過
+    （FARM.status 印過『planned』，實際 enum 是 `planning`；CUSTOMER.green_target_type
+    印過『energy_mwh』，實際 enum 是 `energy`）。這條測試釘住 note 與即時 enum
+    完全一致，不多不少，讓這個檔案不會再對使用者印出 enum 不接受的值。
+
+    只檢查有宣告 ``enum_cls`` 的欄位：像 farm_type 這種故意用 plain String
+    存、沒有 DB enum 背書的欄位不在範圍內（它的允許值本來就不是由任何 enum
+    定義，沒有「漂移」這件事可言）。
+    """
+    for col in SPECS[entity].columns:
+        if col.kind != "enum" or col.enum_cls is None:
+            continue
+        expected = {member.value for member in col.enum_cls}
+        assert col.note, f"{entity}.{col.name} 是 enum 欄位卻沒有 note"
+        found = {part.split("（")[0].strip() for part in col.note.split("/")}
+        assert found == expected, (
+            f"{entity}.{col.name} 的 note 與 {col.enum_cls.__name__} 不一致："
+            f"note 缺 {expected - found}，note 多印了 {found - expected}"
+        )

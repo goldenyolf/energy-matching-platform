@@ -51,8 +51,25 @@ def test_unknown_entity_is_404(client):
 
 
 def test_downloaded_template_imports_straight_back(client):
-    """範本永遠是合法輸入。用沒有外鍵的兩類驗（farm / customer）。"""
-    for entity, path in [("farm", "wind-farms"), ("customer", "customers")]:
+    """範本永遠是合法輸入——全部七種實體都要驗，不是只驗沒有外鍵的兩類。
+
+    有外鍵的五類（meter／battery／contract／generation／consumption）範本的
+    範例值都指向 ``WF-001``／``CUS-001``（FARM.code／CUSTOMER.code 各自的
+    ``example``），所以先把 farm／customer 的範本匯進去，其餘五類的外鍵範例
+    才能真的解析成功，而不是各自獨立測，那樣會漏掉「範例代碼有沒有串得起來」
+    這件事本身。
+    """
+    order = [
+        ("farm", "wind-farms"),
+        ("customer", "customers"),
+        ("meter", "meters"),
+        ("battery", "batteries"),
+        ("contract", "contracts"),
+        ("generation", "generation"),
+        ("consumption", "consumption"),
+    ]
+    assert {entity for entity, _ in order} == set(SPECS), "漏掉了某個實體"
+    for entity, path in order:
         content = client.get(f"/api/v1/import/template/{entity}").content
         resp = client.post(
             f"/api/v1/{path}/import",

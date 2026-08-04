@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
+from app.models.enums import ContractStatus, GreenTargetType, WindFarmStatus
+
 Kind = Literal["str", "float", "int", "date", "enum", "shares"]
+
+
+def _enum_note(enum_cls: type[StrEnum], gloss: dict[str, str] | None = None) -> str:
+    """從即時的 enum 產生 note 文字，允許值的清單不再手寫、不會漂移。
+
+    ``gloss`` 保留既有的中文註解（如 offshore（離岸））；沒有對應中文說明的
+    值就只印英文值本身。
+    """
+    gloss = gloss or {}
+    parts = []
+    for member in enum_cls:
+        note = gloss.get(member.value)
+        parts.append(f"{member.value}（{note}）" if note else member.value)
+    return " / ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -16,6 +33,10 @@ class Column:
     required: bool = False
     example: str = ""
     note: str | None = None
+    # 有真正的 StrEnum backing 這一欄時才設定——讓 note 由 enum 產生，且
+    # test_import_schema.py 能反過來驗證 note 與 enum 沒有漂移。像
+    # farm_type 這種故意用 plain String 存、沒有 DB enum 的欄位不設這個。
+    enum_cls: type[StrEnum] | None = None
 
 
 @dataclass(frozen=True)
@@ -66,7 +87,8 @@ FARM = EntitySpec(
             "狀態",
             "enum",
             example="operational",
-            note="operational / under_construction / planned",
+            note=_enum_note(WindFarmStatus),
+            enum_cls=WindFarmStatus,
         ),
         Column(
             "farm_type",
@@ -100,14 +122,17 @@ CUSTOMER = EntitySpec(
             "綠電目標型態",
             "enum",
             example="re_percent",
-            note="re_percent（比例）/ energy_mwh（絕對量）",
+            note=_enum_note(
+                GreenTargetType, {"re_percent": "比例", "energy": "絕對量"}
+            ),
+            enum_cls=GreenTargetType,
         ),
         Column(
             "target_energy_mwh",
             "目標綠電量 (MWh)",
             "float",
             example="36000",
-            note="green_target_type=energy_mwh 時才有意義",
+            note="green_target_type=energy 時才有意義",
         ),
     ),
 )
@@ -215,7 +240,8 @@ CONTRACT = EntitySpec(
             "狀態",
             "enum",
             example="active",
-            note="active / pending / expired / terminated",
+            note=_enum_note(ContractStatus),
+            enum_cls=ContractStatus,
         ),
         Column(
             "monthly_shares",

@@ -19,6 +19,10 @@ from app.schemas.common import ErrorGroup, ImportResult, RowResult
 _SAMPLE_LIMIT = 20
 # 每組錯誤附幾個列號，讓使用者找得到但不洗版。
 _GROUP_ROWS = 10
+# errors 是保留給舊呼叫端相容的扁平清單（見 ImportResult docstring）；
+# error_groups 才是使用者真正該看的東西，這裡只夠給一個大致印象，不能讓一份
+# 全壞的大檔案把 payload 撐到幾 MB——尤其 dry-run 在選檔當下就自動打一次。
+_ERROR_MSG_LIMIT = 50
 
 # pydantic 驗證失敗的欄位層級原因 → 中文樣板。ge/le/gt/lt 的界限值從 ctx 動態取。
 _BOUND_OPS = {
@@ -53,7 +57,19 @@ def dry_run_session(db: Session) -> Iterator[Session]:
     within a transaction」。``join_transaction_mode="create_savepoint"`` 讓
     ``BaseRepository.create()`` 內部的 ``commit()`` 只是釋放 SAVEPOINT，
     外層不受影響——所以 dry-run 走的是與真匯入完全相同的寫入路徑。
+
+    前置條件（未寫進型別，呼叫端必須自己遵守）：外層 ``db`` 進來時不能帶著
+    已 flush 但未 commit 的異動。SAVEPOINT rollback 只會退回這個 context
+    manager 自己開的那段，外層若已經 flush 過東西，session 仍會以為那些異動
+    留著，實際上已經跟著退回去了。今天每個呼叫端傳進來的都是全新的 request
+    session，這個前提不會被打破；assert 只抓得到「還沒 flush 的新物件／
+    已 flush 但仍 dirty 的物件」這兩種情況，抓不到「已 flush 且乾淨」的
+    異動，所以是盡力而為，不是完整證明。
     """
+    assert not db.new and not db.dirty, (
+        "dry_run_session 的前置條件是外層 session 沒有待處理的異動；"
+        "呼叫端必須傳入一個乾淨的 session"
+    )
     conn = db.connection()
     savepoint = conn.begin_nested()
     factory = sessionmaker(bind=conn, join_transaction_mode="create_savepoint")
@@ -112,7 +128,14 @@ def _check_header(
     rows: list[dict[str, str]],
     fieldnames: tuple[str, ...] | None,
 ) -> ErrorGroup | None:
-    """缺必填欄是整檔的問題。逐列報一千次只會把真正的訊息淹掉。
+    """缺自然鍵是整檔的問題：連是哪一列都定不下來，逐列報也沒有意義。
+
+    只檢查自然鍵（不是所有必填欄）——這是刻意放寬，讓「只更新既有資料某幾欄」
+    的部分更新檔（如只給 contract_number,price_per_kwh）能通過標題檢查。
+    §4.7 承諾「只更新 CSV 有給且非空的欄位」，若標題檢查仍要求全部必填欄都在，
+    這種檔案永遠會被整檔擋下，兩條規則互相矛盾。真正建立新列時漏填的必填欄，
+    由每一列的 ``_require_for_create``（見 csv_importer.py）攔下，給出一則
+    per-row 的中文錯誤，不需要在標題這關就擋。
 
     標題檢查不能只看 ``rows[0]``：一個標題全錯、但也因此一列資料都解析不出來
     的檔案，``rows`` 會是空的，若因此放行就等於告訴使用者「匯入成功、0 筆」，
@@ -125,7 +148,7 @@ def _check_header(
         present = set(fieldnames)
     else:
         return None
-    missing = [c for c in spec.required_names() if c not in present]
+    missing = [c for c in spec.natural_key if c not in present]
     if not missing:
         return None
     labels = "、".join(
@@ -152,23 +175,42 @@ def _validation_errors(
         loc = err.get("loc") or ()
         field = str(loc[0]) if loc else None
         column = spec.column(field) if field else None
-        label = column.label if column is not None else (field or spec.label)
+        # column 找不到時（loc 指到 spec 沒宣告的內部欄位，如外鍵解析後的
+        # wind_farm_id／customer_id）不要把原始英文欄名塞進中文句子——退回
+        # 這個實體的中文名，至少讀起來是通順的一句話。
+        label = column.label if column is not None else spec.label
         kind = err.get("type", "")
+        # loc 為空時 err["input"] 是整個 payload，不是單一值，不能放進
+        # sample_value（那會把整包資料印出來）。
+        value = str(err["input"]) if field is not None and "input" in err else None
         if kind == "missing":
             reason = f"{label}為必填，不可空白"
         elif kind in _BOUND_OPS:
             ctx = err.get("ctx") or {}
             bound = next(iter(ctx.values()), "")
             reason = f"{label}必須{_BOUND_OPS[kind]} {bound}"
+        elif kind == "enum":
+            # enum 不合法：把允許值附進訊息，讓使用者不必回頭查 schema 端點
+            # 就知道該改成什麼——這正是本次要修的「照著面板打卻被拒絕」。
+            ctx = err.get("ctx") or {}
+            expected = ctx.get("expected")
+            reason = (
+                f"{label}不合法，允許值為 {expected}" if expected else f"{label}不合法"
+            )
         elif kind == "value_error":
             ctx = err.get("ctx") or {}
             raw_msg = str(ctx["error"]) if "error" in ctx else err.get("msg", "")
-            reason = _VALUE_ERROR_ZH.get(raw_msg, f"{label}不合法：{raw_msg}")
+            if raw_msg in _VALUE_ERROR_ZH:
+                reason = _VALUE_ERROR_ZH[raw_msg]
+            else:
+                # 未知的跨欄位規則：原始英文訊息可能夾帶值（如 IntegrityError
+                # 引用失敗的參數），不能直接放進 reason——否則每一列的訊息都
+                # 不一樣，_group 收斂不起來。改放進 value，跟 _resolve_code／
+                # 通用例外分支收斂的做法一致。
+                reason = f"{label}不合法"
+                value = raw_msg
         else:
             reason = f"{label}不合法"
-        # loc 為空時 err["input"] 是整個 payload，不是單一值，不能放進
-        # sample_value（那會把整包資料印出來）。
-        value = str(err["input"]) if field is not None and "input" in err else None
         out.append((field, reason, value))
     return out
 
@@ -217,13 +259,14 @@ def _run(
             imported=0,
             updated=0,
             skipped=0,
+            errored=len(rows),
             errors=[header_error.message],
             error_groups=[header_error],
             total_rows=len(rows),
         )
 
     ctx = handler.preload(db)
-    created = updated = skipped = 0
+    created = updated = skipped = errored = 0
     errors: list[tuple[int, str | None, str, str | None]] = []
     samples: list[RowResult] = []
     total = 0
@@ -260,10 +303,16 @@ def _run(
             # 設計要防的事。rollback() 從 ACTIVE/DEACTIVE/PREPARED 都合法，
             # 一律呼叫，不看 is_active。
             nested.rollback()
+            errored += 1
             errors.append((row_no, exc.field, exc.reason, exc.value))
             _sample(samples, row_no, "error", key, [], exc.reason)
         except PydanticValidationError as exc:
             nested.rollback()
+            errored += 1
+            # 一列可能同時炸出好幾個欄位的錯誤，但這仍然只是「一列失敗」——
+            # errored 只加一次，不要跟著 sub_errors 的個數走，否則「錯誤 N」
+            # 數的是欄位錯誤數，不是列數，跟「新增／更新／略過」三個列計數
+            # 對不上（這正是本次要修的計數 bug）。
             sub_errors = _validation_errors(spec, exc)
             for field, reason, value in sub_errors:
                 errors.append((row_no, field, reason, value))
@@ -271,21 +320,33 @@ def _run(
             _sample(samples, row_no, "error", key, [], message)
         except DomainError as exc:
             nested.rollback()
+            errored += 1
             reason = str(exc)
             errors.append((row_no, None, reason, None))
             _sample(samples, row_no, "error", key, [], reason)
         except Exception as exc:  # noqa: BLE001 - 逐列回報，不中斷整批
             nested.rollback()
-            reason = str(exc)
-            errors.append((row_no, None, reason, None))
+            errored += 1
+            # 未知例外（如 DB 層的 IntegrityError）的 str(exc) 常常引用失敗的
+            # 參數值，塞進 reason 會讓每一列訊息都不同，_group 收斂不起來，
+            # 兩百列爛資料就是兩百組——固定成一句中文，原始文字改放進
+            # sample_value，跟 CellError／_resolve_code 收斂的做法一致。
+            reason = "該列寫入失敗"
+            errors.append((row_no, None, reason, str(exc)))
             _sample(samples, row_no, "error", key, [], reason)
 
     groups = _group(errors)
+    messages = [f"第 {n} 列：{reason}" for n, _, reason, _ in errors]
+    if len(messages) > _ERROR_MSG_LIMIT:
+        remaining = len(messages) - _ERROR_MSG_LIMIT
+        messages = messages[:_ERROR_MSG_LIMIT]
+        messages.append(f"…還有 {remaining} 則錯誤，詳見上方分組摘要。")
     return ImportResult(
         imported=created,
         updated=updated,
         skipped=skipped,
-        errors=[f"第 {n} 列：{reason}" for n, _, reason, _ in errors],
+        errored=errored,
+        errors=messages,
         error_groups=groups,
         sample_rows=samples,
         total_rows=total,

@@ -42,6 +42,10 @@ class ImportResult(BaseModel):
     errors: list[str] = []
     updated: int = 0
     error_groups: list[ErrorGroup] = []
+    # 失敗的「列」數，不是失敗的「欄位」數：一列的 ValidationError 可能同時
+    # 帶好幾個欄位錯誤，errors/error_groups 會展開成好幾筆，但使用者要看的
+    # 「錯誤 N」跟「將略過 N 列」講的是列，這個欄位才是那個數字的真相來源。
+    errored: int = 0
     sample_rows: list[RowResult] = []
     total_rows: int = 0
     dry_run: bool = False

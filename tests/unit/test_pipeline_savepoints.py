@@ -70,3 +70,28 @@ def test_two_db_level_failures_in_a_row_still_do_not_kill_the_batch(db):
     assert result.imported == 1
     assert len(result.errors) == 2
     assert {f.code for f in db.query(WindFarm).all()} == {"C"}
+
+
+def test_generic_db_failures_collapse_to_one_chinese_group_not_one_per_row(db):
+    """IntegrityError 的 str(exc) 常常引用失敗的參數（含原值），如果那段英文
+    原封不動塞進 reason，_group 就收斂不起來——兩百列同一種資料庫層失敗會
+    變成兩百組，而不是設計要的『種類數決定 payload 大小』。這裡用 60 列同一種
+    NOT NULL 失敗驗證：全部收斂成一組、reason 是固定中文、原始例外文字改放
+    進 sample_value。``locate()`` 在這個假 handler 裡永遠回傳 ``None``，所以
+    60 列同樣的 code 都會走 create 路徑，不會被誤判成 upsert。"""
+    rows = [_row("BAD") for _ in range(60)]
+
+    result = pipeline.run_import(db, SPECS["farm"], rows, _FlakyFarmHandler())
+
+    assert result.imported == 0
+    assert result.errored == 60
+    assert len(result.error_groups) == 1
+    group = result.error_groups[0]
+    assert group.count == 60
+    assert group.message == "該列寫入失敗"
+    assert group.sample_value is not None and "wind_farms" in group.sample_value
+
+    # errors 是保留給舊呼叫端的扁平清單，容量必須有上限：60 則不該原封不動地
+    # 全部塞進去，一份全壞的大檔案不該讓這個欄位的 payload 跟著壞列數線性成長。
+    assert len(result.errors) <= 51
+    assert "還有" in result.errors[-1]

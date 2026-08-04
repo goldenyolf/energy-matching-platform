@@ -391,3 +391,93 @@ def test_dry_run_matches_the_real_import_for_updates_and_skips(db):
     # dry-run 的 update／skip 不該留下任何殘跡：既有列的欄位值仍是真正 commit
     # 過的那個版本，不是預覽路徑 setattr 之後沒退乾淨的髒狀態。
     assert db.query(WindFarm).one().name == "改過的名稱"
+
+
+def test_partial_update_csv_only_touches_the_columns_it_provides(db):
+    """§4.7（只更新有給且非空的欄位）與 §4.9（標題列缺必填欄是整檔錯誤）曾經
+    互相矛盾：只給 contract_number,price_per_kwh 的檔案在舊版標題檢查下，
+    會因為缺 wind_farm_code／customer_code／start_date／end_date 這些必填欄
+    而被整檔擋下，即使這份檔案根本不打算建立新合約。人類已裁決：支援
+    partial update，標題檢查只看自然鍵（contract_number）。"""
+    csv_importer.import_wind_farms(
+        db, _rows("code,name,installed_capacity_mw\nWF-P1,P1,10\n")
+    )
+    csv_importer.import_customers(db, _rows("code,company_name\nCUS-P1,P1\n"))
+    full = (
+        "contract_number,wind_farm_code,customer_code,start_date,end_date,"
+        "contracted_percentage,price_per_kwh\n"
+        "PPA-P1,WF-P1,CUS-P1,2026-01-01,2026-12-31,50,4.0\n"
+    )
+    csv_importer.import_contracts(db, _rows(full))
+    before = db.query(Contract).one()
+    assert before.price_per_kwh == 4.0
+
+    partial = "contract_number,price_per_kwh\nPPA-P1,5.5\n"
+    result = csv_importer.import_contracts(db, _rows(partial))
+
+    assert result.error_groups == []
+    assert (result.imported, result.updated, result.skipped) == (0, 1, 0)
+    assert result.sample_rows[0].changed == ["price_per_kwh"]
+    after = db.query(Contract).one()
+    assert after.price_per_kwh == 5.5
+    # 沒被這份檔案提到的欄位維持原樣，不是被清空或改掉。
+    assert after.wind_farm_id == before.wind_farm_id
+    assert after.customer_id == before.customer_id
+    assert after.start_date.isoformat() == "2026-01-01"
+    assert after.end_date.isoformat() == "2026-12-31"
+
+
+def test_create_file_missing_a_required_column_fails_per_row_not_file_wide(db):
+    """跟上一個測試相反的形狀：整檔都是全新合約，卻整欄漏了必填的
+    wind_farm_code。標題檢查放寬到只看自然鍵之後，這種檔案不會再被整檔擋
+    下——但也不能因此悄悄地半殘匯入。每一列要在 create() 被
+    ``_require_for_create`` 逮到，給出一則指名「案場代碼」的中文錯誤，而不是
+    pydantic 對著使用者從沒在 CSV 打過的內部欄位（wind_farm_id）丟一句英文。"""
+    csv_importer.import_customers(db, _rows("code,company_name\nCUS-P2,P2\n"))
+    csv = (
+        "contract_number,customer_code,start_date,end_date,contracted_percentage\n"
+        "PPA-P2,CUS-P2,2026-01-01,2026-12-31,50\n"
+    )
+    result = csv_importer.import_contracts(db, _rows(csv))
+
+    assert result.imported == 0
+    assert db.query(Contract).count() == 0
+    assert len(result.error_groups) == 1
+    message = result.error_groups[0].message
+    assert "案場代碼" in message and "必填" in message
+    assert "wind_farm_id" not in message
+
+
+def test_bad_enum_value_names_the_allowed_values(db):
+    """CRITICAL 1 的核心：照著面板印的 note 打卻被拒絕，若錯誤訊息連允許值
+    都不給，使用者沒辦法只憑這則訊息自己修——這正是 note 曾經印過『planned』
+    （真正 enum 是 planning）時發生的事。note 現在由即時 enum 產生，錯誤訊息
+    也要跟上，不能只說一句『狀態不合法』。"""
+    csv_importer.import_wind_farms(
+        db, _rows("code,name,installed_capacity_mw\nWF-EN1,EN1,10\n")
+    )
+    csv = "code,name,installed_capacity_mw,status\nWF-EN1,EN1,10,planned\n"
+    result = csv_importer.import_wind_farms(db, _rows(csv))
+
+    assert result.updated == 0
+    assert len(result.error_groups) == 1
+    message = result.error_groups[0].message
+    assert "狀態不合法" in message
+    assert "planning" in message
+
+
+def test_errored_counts_rows_not_field_errors(db):
+    """一列可能同時炸出好幾個欄位的 pydantic 錯誤，但使用者要看到的『錯誤』
+    講的是列數，不是欄位錯誤數——這正是預覽面板曾經把『1 列、2 個欄位錯誤』
+    報成『錯誤 2』的 bug（見 ImportResult.errored 的說明）。"""
+    csv = (
+        "code,company_name,re_target_percent,target_year\n"
+        "CUS-E1,好公司,50,2030\n"
+        "CUS-E2,壞公司,999,1500\n"
+    )
+    result = csv_importer.import_customers(db, _rows(csv))
+
+    assert result.imported == 1
+    assert result.errored == 1
+    total_field_errors = sum(g.count for g in result.error_groups)
+    assert total_field_errors == 2, "這一列剛好炸兩欄的錯，用來對照 errored 只算列數"
