@@ -2600,15 +2600,20 @@
     return '<div class="tablewrap imp-cols"><table><thead><tr><th>欄名</th><th>說明</th><th>備註</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
   }
   // 錯誤依(欄位,原因)已在後端收斂成組;這裡只負責把一組畫成一行中文說明。
+  // 後端 message 本身已經以欄位中文名開頭(見 app/ingestion/parsing.py::_reason);
+  // 這裡再加一次粗體前綴是為了視覺上凸顯欄位,所以要把 message 開頭重複的欄位名
+  // 去掉,否則會印成「裝置容量 (MW) · 裝置容量 (MW)不是數字」這種疊字。
   function importErrorGroups(entity, groups) {
     if (!groups || !groups.length) return "";
     var labelOf = {};
     (entity.columns || []).forEach(function (c) { labelOf[c.name] = c.label; });
     return groups.map(function (g) {
-      var head = g.field ? "<b>" + esc(labelOf[g.field] || g.field) + "</b> · " : "";
+      var label = g.field ? (labelOf[g.field] || g.field) : "";
+      var head = label ? "<b>" + esc(label) + "</b> · " : "";
+      var msg = (label && g.message.indexOf(label) === 0) ? g.message.slice(label.length) : g.message;
       var rowsTxt = (g.sample_rows && g.sample_rows.length) ? "，例：第 " + g.sample_rows.join("、") + " 列" : "";
       var valTxt = g.sample_value != null ? "，值「" + esc(g.sample_value) + "」" : "";
-      return '<div class="imp-grp">' + head + esc(g.message) + "（" + g.count + " 列" + rowsTxt + valTxt + "）</div>";
+      return '<div class="imp-grp">' + head + esc(msg) + "（" + g.count + " 列" + rowsTxt + valTxt + "）</div>";
     }).join("");
   }
   function importSampleRows(rows) {
@@ -2661,10 +2666,13 @@
 
     loadImportSchema().then(function (schema) {
       entity = schema[kind] || { columns: [], natural_key: [] };
+      // 欄位參考表預設收合:它是查閱用的參考資料,不是使用者打開這個面板要做的事
+      // (選檔案)——攤開來 13、14 列會把「選擇 CSV 檔」擠到畫面外。
       schemaEl.innerHTML = '<p class="fm-note">關鍵欄:<b>' + esc(entity.natural_key.join("、")) +
         '</b>;已存在者依關鍵欄比對後更新,內容相同則略過。</p>' +
         '<a class="btn ghost sm" href="' + api.importTemplateUrl(kind) + '" download>⇩ 下載範本 CSV</a>' +
-        importColsTable(entity);
+        '<details class="mm-explain imp-help"><summary>欄位說明（' + entity.columns.length + ' 欄）· 點此展開</summary>' +
+        '<div class="mm-explain-body">' + importColsTable(entity) + '</div></details>';
     }).catch(function (err) {
       entity = { columns: [], natural_key: [] };
       schemaEl.innerHTML = '<p class="fm-note">欄位定義載入失敗:' + esc(writeErr(err)) + "</p>";

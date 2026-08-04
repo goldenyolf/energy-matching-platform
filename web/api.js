@@ -48,6 +48,8 @@
   function upload(path, file, params) {
     var fd = new FormData();
     fd.append("file", file);
+    // dry_run:false relies on the endpoint's own default (a real write) —
+    // there is no "?dry_run=false", the query string is simply omitted.
     var qs = params && params.dry_run ? "?dry_run=true" : "";
     var headers = { Accept: "application/json" };
     if (adminToken) headers["X-Admin-Token"] = adminToken;
