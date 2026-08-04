@@ -45,12 +45,13 @@
         throw new ApiError("無法連線到後端 API：" + err.message, 0);
       });
   }
-  function upload(path, file) {
+  function upload(path, file, params) {
     var fd = new FormData();
     fd.append("file", file);
+    var qs = params && params.dry_run ? "?dry_run=true" : "";
     var headers = { Accept: "application/json" };
     if (adminToken) headers["X-Admin-Token"] = adminToken;
-    return fetch(V1 + path, { method: "POST", headers: headers, body: fd })
+    return fetch(V1 + path + qs, { method: "POST", headers: headers, body: fd })
       .then(function (resp) {
         return resp.text().then(function (body) {
           if (!resp.ok) {
@@ -77,10 +78,15 @@
     setToken: function (t) { adminToken = t || null; },
     customers: function () { return get("/customers", { limit: 1000 }); },
     windFarms: function () { return get("/wind-farms", { limit: 1000 }); },
-    importFarms: function (file) { return upload("/wind-farms/import", file); },
-    importCustomers: function (file) { return upload("/customers/import", file); },
-    importContracts: function (file) { return upload("/contracts/import", file); },
-    importMeters: function (file) { return upload("/meters/import", file); },
+    importFarms: function (file, o) { return upload("/wind-farms/import", file, o); },
+    importCustomers: function (file, o) { return upload("/customers/import", file, o); },
+    importContracts: function (file, o) { return upload("/contracts/import", file, o); },
+    importMeters: function (file, o) { return upload("/meters/import", file, o); },
+    importGeneration: function (file, o) { return upload("/generation/import", file, o); },
+    importConsumption: function (file, o) { return upload("/consumption/import", file, o); },
+    importBatteries: function (file, o) { return upload("/batteries/import", file, o); },
+    importSchema: function () { return get("/import/schema"); },
+    importTemplateUrl: function (entity) { return V1 + "/import/template/" + entity; },
     createFarm: function (data) { return postJson("/wind-farms", data); },
     updateFarm: function (id, data) { return putJson("/wind-farms/" + id, data); },
     deleteFarm: function (id) { return del("/wind-farms/" + id); },

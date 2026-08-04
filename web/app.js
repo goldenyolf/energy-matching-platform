@@ -249,7 +249,7 @@
       .then(function (r) {
         var custs = r[0], an = r[1];
         var html = '<section class="card"><div class="hd"><h3>客戶基本資料</h3><span class="aside">點代碼可查看該客戶的電號/廠區</span>' + entityAddBtn("customer", "新增客戶") + importBtn("customer") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>電號/廠區</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>代碼</th><th>公司名稱</th><th>產業</th><th>總用電 (MWh)</th><th>RE 目標</th><th>目標年</th><th>電號/廠區</th><th class=\"actcol\">操作</th></tr></thead><tbody>";
         custs.forEach(function (c) {
           crudCache.customer[c.id] = c;
           html += "<tr><td class=\"code\"><a href=\"#/meters?cid=" + c.id + "\">" + esc(c.code) + "</a></td><td>" + esc(c.company_name) + "</td><td>" + esc(c.industry || "–") +
@@ -312,9 +312,9 @@
     meters.forEach(function (m) { crudCache.meter[m.id] = m; });
     var sumKwh = meters.reduce(function (s, m) { return s + (m.total_kwh || 0); }, 0);
     var html = '<section class="card"><div class="hd"><h3>用電負載數據(各電號)</h3><span class="aside">年度用電加總 ' + nfmt(sumKwh / 1000, 0) + " MWh(= 客戶總用電)</span>" + entityAddBtn("meter", "新增電號", cid) + importBtn("meter") + "</div><div class=\"tablewrap\"><table>" +
-      "<thead><tr><th>電號</th><th>用電名稱</th><th>契約容量 (kW)</th><th>時間電價</th><th>尖峰 (kWh)</th><th>半尖峰 (kWh)</th><th>周六半尖峰 (kWh)</th><th>離峰 (kWh)</th><th>總量 (kWh)</th><th>數據區間</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+      "<thead><tr><th>電號</th><th>用電名稱</th><th>契約容量 (kW)</th><th>時間電價</th><th>尖峰 (kWh)</th><th>半尖峰 (kWh)</th><th>周六半尖峰 (kWh)</th><th>離峰 (kWh)</th><th>總量 (kWh)</th><th>數據區間</th><th class=\"actcol\">操作</th></tr></thead><tbody>";
     if (!meters.length) {
-      html += '<tr><td class="empty" colspan="' + (editMode ? 11 : 10) + '">此客戶尚無電號' + (editMode ? ",可按「新增電號」建立。" : "。") + "</td></tr>";
+      html += '<tr><td class="empty" colspan="11">此客戶尚無電號,可按「新增電號」建立。</td></tr>';
     } else {
       meters.forEach(function (m) {
         html += "<tr><td><span class=\"code\">" + esc(m.code) + "</span></td>" +
@@ -898,9 +898,9 @@
         r[2].forEach(function (c) { cm[c.id] = c.company_name || c.code; contractCustOpts.push([c.id, (c.company_name || c.code)]); });
         cs.forEach(function (c) { crudCache.contract[c.id] = c; });
         var html = '<section class="card"><div class="hd"><h3>合約清單</h3><span class="aside">' + cs.length + " 筆</span>" + entityAddBtn("contract", "新增合約") + importBtn("contract") + "</div><div class=\"tablewrap\"><table>" +
-          "<thead><tr><th>合約編號</th><th>案場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約上限" + infoTip("contractCap") + "</th><th>售電價</th><th>優先序</th><th>狀態</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+          "<thead><tr><th>合約編號</th><th>案場</th><th>客戶</th><th>起始</th><th>結束</th><th>合約上限" + infoTip("contractCap") + "</th><th>售電價</th><th>優先序</th><th>狀態</th><th class=\"actcol\">操作</th></tr></thead><tbody>";
         if (!cs.length) {
-          html += '<tr><td class="empty" colspan="' + (editMode ? 10 : 9) + '">尚無合約' + (editMode ? ",可按「新增合約」建立。" : "。") + "</td></tr>";
+          html += '<tr><td class="empty" colspan="10">尚無合約,可按「新增合約」建立。</td></tr>';
         }
         cs.forEach(function (c) {
           var fname = String(fm[c.wind_farm_id] || c.wind_farm_id);
@@ -1027,7 +1027,7 @@
         kpi("平均躉售價", avgPrice != null ? price(avgPrice) : "–", "NTD / kWh") +
         "</div>";
       html += '<section class="card"><div class="hd"><h3>發電數據</h3><span class="aside">' + farms.length + " 場 · 含時段別發電與容量因數" + "</span>" + entityAddBtn("farm", "新增案場") + importBtn("farm") + "</div><div class=\"tablewrap\"><table>" +
-        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90" + infoTip("cf") + "</th><th>躉售價" + infoTip("feedIn") + "</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)" + infoTip("expP50") + "</th><th>達成</th>" + (editMode ? '<th class="actcol">操作</th>' : "") + "</tr></thead><tbody>";
+        "<thead><tr><th>案場</th><th>場址</th><th>裝置容量 (MW)</th><th>容量因數 P50/P90" + infoTip("cf") + "</th><th>躉售價" + infoTip("feedIn") + "</th><th>狀態</th><th>總發電 (MWh)</th><th>預期 P50 (MWh)" + infoTip("expP50") + "</th><th>達成</th><th class=\"actcol\">操作</th></tr></thead><tbody>";
       farms.slice().sort(function (a, b) { return a.code > b.code ? 1 : -1; }).forEach(function (f) {
         crudCache.farm[f.id] = f;
         var a = agg[f.id] || { total: 0, peak: 0, half_peak: 0, off_peak: 0 };
@@ -2474,7 +2474,6 @@
   // ---------- 實體 CRUD(發電案場 / 企業客戶) ----------
   // 這兩個是「管理頁」,一律顯示新增/編輯/刪除。密碼保護暫時隱藏(之後再設計呈現);
   // 後端仍有 ADMIN_WRITE_TOKEN 寫入閘,設定後即需帶密碼(屆時再補密碼輸入 UI)。
-  var editMode = true;
   var crudCache = { farm: {}, customer: {}, contract: {} };
 
   var FARM_FIELDS = [
@@ -2565,60 +2564,151 @@
   }
 
   function entityAddBtn(kind, label, custId) {
-    if (!editMode) return "";
     return '<button class="btn primary sm entity-add" data-kind="' + kind + '"' +
       (custId != null ? ' data-cust="' + custId + '"' : "") + ">+ " + esc(label) + "</button>";
   }
-  // CSV 匯入:各類實體的欄位提示(第一欄為關鍵欄)
-  var IMPORT_COLS = {
-    farm: "code, name, installed_capacity_mw, operator_name, location, feed_in_price_per_kwh, commercial_operation_date, status",
-    customer: "code, company_name, industry, annual_consumption_mwh, re_target_percent, target_year",
-    contract: "contract_number, wind_farm_code, customer_code, start_date, end_date, contracted_energy_mwh, contracted_percentage, price_per_kwh, priority, status",
-    meter: "customer_code, code, name, location, re_target_percent, annual_consumption_mwh",
-  };
+  // CSV 匯入:欄位定義來自後端 /import/schema(單一真相),啟動後抓一次並快取。
+  var IMPORT_SCHEMA = null;
+  function loadImportSchema() {
+    if (IMPORT_SCHEMA) return Promise.resolve(IMPORT_SCHEMA);
+    return api.importSchema().then(function (r) {
+      IMPORT_SCHEMA = {};
+      r.entities.forEach(function (e) { IMPORT_SCHEMA[e.entity] = e; });
+      return IMPORT_SCHEMA;
+    });
+  }
   var IMPORT_FN = {
-    farm: function (f) { return api.importFarms(f); },
-    customer: function (f) { return api.importCustomers(f); },
-    contract: function (f) { return api.importContracts(f); },
-    meter: function (f) { return api.importMeters(f); },
+    farm: function (f, o) { return api.importFarms(f, o); },
+    customer: function (f, o) { return api.importCustomers(f, o); },
+    contract: function (f, o) { return api.importContracts(f, o); },
+    meter: function (f, o) { return api.importMeters(f, o); },
+    battery: function (f, o) { return api.importBatteries(f, o); },
+    generation: function (f, o) { return api.importGeneration(f, o); },
+    consumption: function (f, o) { return api.importConsumption(f, o); },
   };
+  var IMPORT_ACT_LABEL = { create: "新增", update: "更新", skip: "略過", error: "錯誤" };
   function importBtn(kind) {
-    if (!editMode) return "";
     return '<button class="btn ghost sm entity-import" data-kind="' + kind + '">⇪ 匯入 CSV</button>';
+  }
+  // 欄位說明表:欄名 / 中文說明(含必填記號) / 備註(格式提示或範例)
+  function importColsTable(entity) {
+    var rows = entity.columns.map(function (c) {
+      var hint = c.note || (c.example ? "例:" + c.example : "");
+      return "<tr><td class=\"code\">" + esc(c.name) + "</td><td>" + esc(c.label) +
+        (c.required ? ' <i class="req">*</i>' : "") + "</td><td class=\"wrapname\">" + esc(hint) + "</td></tr>";
+    }).join("");
+    return '<div class="tablewrap imp-cols"><table><thead><tr><th>欄名</th><th>說明</th><th>備註</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
+  }
+  // 錯誤依(欄位,原因)已在後端收斂成組;這裡只負責把一組畫成一行中文說明。
+  function importErrorGroups(entity, groups) {
+    if (!groups || !groups.length) return "";
+    var labelOf = {};
+    (entity.columns || []).forEach(function (c) { labelOf[c.name] = c.label; });
+    return groups.map(function (g) {
+      var head = g.field ? "<b>" + esc(labelOf[g.field] || g.field) + "</b> · " : "";
+      var rowsTxt = (g.sample_rows && g.sample_rows.length) ? "，例：第 " + g.sample_rows.join("、") + " 列" : "";
+      var valTxt = g.sample_value != null ? "，值「" + esc(g.sample_value) + "」" : "";
+      return '<div class="imp-grp">' + head + esc(g.message) + "（" + g.count + " 列" + rowsTxt + valTxt + "）</div>";
+    }).join("");
+  }
+  function importSampleRows(rows) {
+    if (!rows || !rows.length) return "";
+    var trs = rows.map(function (r) {
+      var lab = IMPORT_ACT_LABEL[r.action] || r.action;
+      var detail = (r.changed && r.changed.length) ? esc(r.changed.join("、")) : (r.message ? esc(r.message) : "–");
+      return "<tr><td class=\"num\">" + r.row + "</td><td>" + (r.key ? esc(r.key) : "–") +
+        "</td><td><span class=\"imp-act " + esc(r.action) + "\">" + esc(lab) + "</span></td><td class=\"wrapname\">" + detail + "</td></tr>";
+    }).join("");
+    return '<div class="imp-rows tablewrap"><table><thead><tr><th>列</th><th>關鍵值</th><th>動作</th><th>異動欄位 / 訊息</th></tr></thead><tbody>' + trs + "</tbody></table></div>";
+  }
+  function importErrorCount(r) {
+    return (r.error_groups || []).reduce(function (s, g) { return s + g.count; }, 0);
+  }
+  function renderImportPreview(entity, r) {
+    var errCount = importErrorCount(r);
+    return '<div class="imp-sum">' +
+      '<span>新增<br><b class="good">' + r.imported + '</b></span>' +
+      '<span>更新<br><b class="warn">' + r.updated + '</b></span>' +
+      '<span>略過<br><b>' + r.skipped + '</b></span>' +
+      '<span>錯誤<br><b class="bad">' + errCount + '</b></span>' +
+      '<span class="aside">共 ' + r.total_rows + ' 列</span></div>' +
+      importErrorGroups(entity, r.error_groups) + importSampleRows(r.sample_rows);
   }
   function openImportModal(kind) {
     var ov = document.createElement("div");
     ov.className = "overlay show formov";
-    ov.innerHTML = '<div class="formmodal"><div class="fm-hd"><h3>匯入' + esc(ENTITY_NAME[kind]) + ' CSV</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
-      '<form class="fm-body"><p class="fm-note">CSV 欄位(首行為標題,關鍵欄:<b>' + esc(IMPORT_COLS[kind].split(",")[0]) + '</b>):<br><code style="font-size:11px">' + esc(IMPORT_COLS[kind]) + '</code><br>已存在(代碼重複)者自動略過。</p>' +
+    ov.innerHTML = '<div class="formmodal impmodal"><div class="fm-hd"><h3>匯入' + esc(ENTITY_NAME[kind]) + ' CSV</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
+      '<div class="fm-body">' +
+      '<div class="imp-schema"><div class="placeholder">載入欄位定義中…</div></div>' +
       '<label class="fm-f"><span>選擇 CSV 檔 <i class="req">*</i></span><input type="file" name="file" accept=".csv,text/csv" required></label>' +
-      '<div class="fm-err"></div><div class="fm-result"></div><div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button><button type="submit" class="btn primary">匯入</button></div></form></div>';
+      '<div class="fm-err"></div><div class="imp-preview"></div>' +
+      '<div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button>' +
+      '<button type="button" class="btn primary imp-confirm" disabled>確認匯入</button></div>' +
+      "</div></div>";
     document.body.appendChild(ov);
     function close() { ov.remove(); }
     ov.querySelector(".fm-x").onclick = close;
     ov.querySelector(".fm-cancel").onclick = close;
     ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
-    ov.querySelector("form").addEventListener("submit", function (e) {
-      e.preventDefault();
-      var input = ov.querySelector('input[name="file"]');
-      var file = input.files && input.files[0];
-      var errEl = ov.querySelector(".fm-err"), resEl = ov.querySelector(".fm-result");
-      errEl.textContent = ""; resEl.innerHTML = "";
-      if (!file) { errEl.textContent = "請選擇檔案。"; return; }
-      var btn = ov.querySelector('button[type="submit"]'); btn.disabled = true;
-      IMPORT_FN[kind](file).then(function (r) {
-        toast("已匯入 " + r.imported + " 筆" + ENTITY_NAME[kind]);
-        var msg = "匯入 <b>" + r.imported + "</b> 筆,略過 " + (r.skipped || 0) + " 筆" + ((r.errors && r.errors.length) ? "," + r.errors.length + " 筆錯誤" : "") + "。";
-        if (r.errors && r.errors.length) msg += '<div style="margin-top:6px;color:var(--bad);font-size:11.5px">' + r.errors.slice(0, 5).map(esc).join("<br>") + "</div>";
-        resEl.innerHTML = msg;
-        route();
-        setTimeout(close, r.errors && r.errors.length ? 4000 : 1200);
-      }).catch(function (err) { btn.disabled = false; errEl.textContent = writeErr(err); });
+
+    var schemaEl = ov.querySelector(".imp-schema");
+    var fileInput = ov.querySelector('input[name="file"]');
+    var errEl = ov.querySelector(".fm-err");
+    var previewEl = ov.querySelector(".imp-preview");
+    var confirmBtn = ov.querySelector(".imp-confirm");
+    var entity = null;
+    var currentFile = null;
+
+    loadImportSchema().then(function (schema) {
+      entity = schema[kind] || { columns: [], natural_key: [] };
+      schemaEl.innerHTML = '<p class="fm-note">關鍵欄:<b>' + esc(entity.natural_key.join("、")) +
+        '</b>;已存在者依關鍵欄比對後更新,內容相同則略過。</p>' +
+        '<a class="btn ghost sm" href="' + api.importTemplateUrl(kind) + '" download>⇩ 下載範本 CSV</a>' +
+        importColsTable(entity);
+    }).catch(function (err) {
+      entity = { columns: [], natural_key: [] };
+      schemaEl.innerHTML = '<p class="fm-note">欄位定義載入失敗:' + esc(writeErr(err)) + "</p>";
     });
-    ov.querySelector('input[name="file"]').focus();
+
+    // 選檔即自動送出 dry_run 預覽 — 不需要另一次點擊,否則很容易被跳過。
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      currentFile = file || null;
+      errEl.textContent = "";
+      previewEl.innerHTML = "";
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "確認匯入";
+      if (!file) return;
+      previewEl.innerHTML = '<div class="placeholder">預覽中…</div>';
+      IMPORT_FN[kind](file, { dry_run: true }).then(function (r) {
+        previewEl.innerHTML = renderImportPreview(entity, r);
+        var errCount = importErrorCount(r);
+        confirmBtn.textContent = errCount > 0 ? "確認匯入（將略過 " + errCount + " 列）" : "確認匯入";
+        confirmBtn.disabled = false;
+      }).catch(function (err) {
+        previewEl.innerHTML = "";
+        errEl.textContent = writeErr(err);
+      });
+    });
+
+    confirmBtn.addEventListener("click", function () {
+      if (!currentFile) return;
+      confirmBtn.disabled = true;
+      errEl.textContent = "";
+      IMPORT_FN[kind](currentFile, { dry_run: false }).then(function (r) {
+        toast("已匯入" + ENTITY_NAME[kind] + ":新增 " + r.imported + "、更新 " + r.updated + "。");
+        previewEl.innerHTML = renderImportPreview(entity, r);
+        confirmBtn.textContent = "已匯入完成";
+        route();
+      }).catch(function (err) {
+        confirmBtn.disabled = false;
+        errEl.textContent = writeErr(err);
+      });
+    });
+
+    fileInput.focus();
   }
   function rowActions(kind, id) {
-    if (!editMode) return "";
     return '<td class="rowact"><button class="mini entity-edit" data-kind="' + kind + '" data-id="' + id + '">編輯</button>' +
       '<button class="mini danger entity-del" data-kind="' + kind + '" data-id="' + id + '">刪除</button></td>';
   }

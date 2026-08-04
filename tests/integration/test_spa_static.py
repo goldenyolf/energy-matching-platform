@@ -57,3 +57,8 @@ def test_api_index_advertises_app(client):
 
 def test_api_still_works(client):
     assert client.get("/health").status_code == 200
+
+
+def test_import_schema_and_template_are_served(client):
+    assert client.get("/api/v1/import/schema").status_code == 200
+    assert client.get("/api/v1/import/template/contract").status_code == 200

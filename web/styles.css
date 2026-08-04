@@ -510,6 +510,30 @@ tbody tr:hover .rowact{background:var(--surface-2)}
 .fm-err:not(:empty){padding:8px 11px;background:var(--bad-soft);border-radius:8px;line-height:1.5}
 .fm-act{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
 
+/* CSV 匯入預覽面板 */
+.formmodal.impmodal{max-width:640px}
+.imp-schema .btn{margin:6px 0 4px}
+.imp-cols td,.imp-cols th{text-align:left;white-space:normal}
+.imp-cols .code{font-family:var(--font-mono);font-size:11.5px}
+.imp-cols .req{color:var(--bad);font-style:normal;margin-left:3px}
+.imp-sum{display:flex;gap:14px;margin:10px 0;flex-wrap:wrap;align-items:flex-end}
+.imp-sum span{font-size:11.5px;color:var(--muted);line-height:1.5}
+.imp-sum b{display:block;font-size:18px;color:var(--ink)}
+.imp-sum b.good{color:var(--good)}
+.imp-sum b.warn{color:var(--warn)}
+.imp-sum b.bad{color:var(--bad)}
+.imp-sum .aside{margin-left:auto;color:var(--faint)}
+.imp-grp{border-left:3px solid var(--bad);background:var(--surface-2);padding:7px 10px;
+  margin:6px 0;font-size:12px;line-height:1.6;border-radius:0 6px 6px 0}
+.imp-rows{max-height:260px;overflow:auto}
+.imp-rows table{font-size:11.5px}
+.imp-rows td,.imp-rows th{white-space:normal}
+.imp-act{display:inline-block;padding:0 6px;border-radius:5px;font-size:10.5px;font-weight:700}
+.imp-act.create{background:var(--good-soft);color:var(--good)}
+.imp-act.update{background:var(--warn-soft);color:var(--warn)}
+.imp-act.skip{background:var(--surface-2);color:var(--faint)}
+.imp-act.error{background:var(--bad-soft);color:var(--bad)}
+
 /* 名詞說明 ⓘ + popover */
 .infotip{display:inline-grid;place-items:center;width:16px;height:16px;margin-left:5px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--faint);cursor:pointer;vertical-align:middle;transition:color .15s}
 .infotip:hover{color:var(--brand)}
