@@ -2626,8 +2626,11 @@
     }).join("");
     return '<div class="imp-rows tablewrap"><table><thead><tr><th>列</th><th>關鍵值</th><th>動作</th><th>異動欄位 / 訊息</th></tr></thead><tbody>' + trs + "</tbody></table></div>";
   }
+  // 錯誤數算的是「列」,不是「欄位錯誤」:一列可能同時炸兩個欄位的錯,
+  // error_groups 的 count 加總是欄位錯誤數,會比實際被略過的列數還多。
+  // errored 是後端逐列算好的列數,跟新增/更新/略過三個計數同一個單位。
   function importErrorCount(r) {
-    return (r.error_groups || []).reduce(function (s, g) { return s + g.count; }, 0);
+    return r.errored || 0;
   }
   function renderImportPreview(entity, r) {
     var errCount = importErrorCount(r);
@@ -2661,6 +2664,7 @@
     var errEl = ov.querySelector(".fm-err");
     var previewEl = ov.querySelector(".imp-preview");
     var confirmBtn = ov.querySelector(".imp-confirm");
+    var cancelBtn = ov.querySelector(".fm-cancel");
     var entity = null;
     var currentFile = null;
 
@@ -2691,8 +2695,16 @@
       IMPORT_FN[kind](file, { dry_run: true }).then(function (r) {
         previewEl.innerHTML = renderImportPreview(entity, r);
         var errCount = importErrorCount(r);
-        confirmBtn.textContent = errCount > 0 ? "確認匯入（將略過 " + errCount + " 列）" : "確認匯入";
-        confirmBtn.disabled = false;
+        var okCount = (r.imported || 0) + (r.updated || 0) + (r.skipped || 0);
+        // 一整欄必填標題缺漏會讓 imported/updated/skipped 全是 0——這種檔案
+        // 按下去只會重打一次同樣的請求、什麼都不寫入卻回報成功,所以不給按。
+        if (okCount === 0) {
+          confirmBtn.textContent = "無可匯入的資料";
+          confirmBtn.disabled = true;
+        } else {
+          confirmBtn.textContent = errCount > 0 ? "確認匯入（將略過 " + errCount + " 列）" : "確認匯入";
+          confirmBtn.disabled = false;
+        }
       }).catch(function (err) {
         previewEl.innerHTML = "";
         errEl.textContent = writeErr(err);
@@ -2707,6 +2719,9 @@
         toast("已匯入" + ENTITY_NAME[kind] + ":新增 " + r.imported + "、更新 " + r.updated + "。");
         previewEl.innerHTML = renderImportPreview(entity, r);
         confirmBtn.textContent = "已匯入完成";
+        // 匯入後這個 modal 唯一的出路是「取消」,但主按鈕已經說「已匯入完成」
+        // ——留著「取消」讀起來像是可以反悔,其實只是關掉視窗而已。
+        if (cancelBtn) cancelBtn.textContent = "關閉";
         route();
       }).catch(function (err) {
         confirmBtn.disabled = false;
