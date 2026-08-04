@@ -11,6 +11,7 @@ from app.api.v1 import (
     contracts,
     customers,
     generation,
+    imports,
     live,
     matching,
     meters,
@@ -30,3 +31,4 @@ api_router.include_router(matching.router)
 api_router.include_router(analytics.router)
 api_router.include_router(live.router)
 api_router.include_router(trecs.router)
+api_router.include_router(imports.router)
