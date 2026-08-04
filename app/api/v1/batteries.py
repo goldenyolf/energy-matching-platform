@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_write_access
+from app.api.deps import get_db, read_upload, require_write_access
+from app.ingestion import csv_importer
 from app.schemas.battery import BatteryCreate, BatteryRead, BatteryUpdate
+from app.schemas.common import ImportResult
 from app.services import battery_service as svc
 
 router = APIRouter(prefix="/batteries", tags=["batteries"])
 _write = Depends(require_write_access)
+
+
+@router.post("/import", response_model=ImportResult, dependencies=[_write])
+async def import_batteries(
+    file: UploadFile = File(..., description="CSV of battery rows"),
+    dry_run: bool = Query(False, description="只驗證與預覽，不寫入"),
+    db: Session = Depends(get_db),
+) -> ImportResult:
+    rows = csv_importer.parse_csv(await read_upload(file))
+    return csv_importer.import_batteries(db, rows, dry_run=dry_run)
 
 
 @router.get("", response_model=list[BatteryRead])

@@ -38,7 +38,8 @@ def create_consumption(payload: ConsumptionCreate, db: Session = Depends(get_db)
 @router.post("/import", response_model=ImportResult, dependencies=[_write])
 async def import_consumption(
     file: UploadFile = File(..., description="CSV file of consumption rows"),
+    dry_run: bool = Query(False, description="只驗證與預覽，不寫入"),
     db: Session = Depends(get_db),
 ) -> ImportResult:
     rows = csv_importer.parse_csv(await read_upload(file))
-    return csv_importer.import_consumption(db, rows)
+    return csv_importer.import_consumption(db, rows, dry_run=dry_run)
