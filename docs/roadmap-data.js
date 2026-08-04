@@ -22,7 +22,9 @@ window.RM = (function () {
     { id: 'I', n: '品質、測試與上線', d: 'CI、E2E、負載、產品頁、正式上線。', c: 7 },
   ];
   const DEMO = 'https://emp-api-bxbe.onrender.com/app/#/';
-  const T = (id, a, ph, t, d, goal, benefit, tasks, deps, link) => ({ id, a, ph, t, d, goal, benefit, tasks, deps: deps || [], link, done: PH[ph].done });
+  // 整個 Phase 未完成、但個別工項已出貨者列在此（v0.3.0 出了 Phase 6 的風光互補與儲能兩條主線）。
+  const SHIPPED = new Set(['A7', 'A8', 'A9', 'B4', 'B5', 'B6', 'B7', 'C6']);
+  const T = (id, a, ph, t, d, goal, benefit, tasks, deps, link) => ({ id, a, ph, t, d, goal, benefit, tasks, deps: deps || [], link, done: PH[ph].done || (SHIPPED.has(id) ? 1 : 0) });
   const ITEMS = [
     T('A1', 'A', 1, '案場／客戶／電號／合約 CRUD＋匯入', '四類主資料新增/編輯/刪除；六類 CSV 匯入。',
       '讓營運者在平台上維護所有主資料並批次匯入。', '脫離只能靠 seed script，真實資料進得來。',
@@ -176,6 +178,14 @@ window.RM = (function () {
     '· <b class="hi">替代</b>：Fly.io(Tokyo)＋managed Postgres＝最省又 always-on，但<b>資料出境</b>；AWS ECS+RDS＝企業級但無台灣區、較重；Render 付費＝最少改動的跳板（新加坡區）。<br>' +
     '· <b class="hi">搭配必做</b>：managed Postgres 備份＋PITR（H3）、求解移背景佇列（H4）、prod/staging＋secrets、觀測性 Sentry＋指標＋告警（H5）。<br>' +
     '· <b class="hi">成本感</b>：Cloud Run＋Cloud SQL 小型實例約月數十美元（依流量）；Fly.io 更省（~$5–15/月，代價是資料出境）。';
+
+  // 各 Phase 狀態由其卡片推導（done / part / plan），避免與卡片各寫一份而失真。
+  PHS.forEach((p) => {
+    const cs = ITEMS.filter((i) => i.ph === p);
+    const n = cs.filter((i) => i.done).length;
+    PH[p].st = n === cs.length ? 'done' : n ? 'part' : 'plan';
+    PH[p].stLabel = { done: '✓ 已上線', part: `部分上線 ${n}/${cs.length}`, plan: '規劃中' }[PH[p].st];
+  });
 
   return { PH, PHS, AREAS, ITEMS, byId };
 })();
