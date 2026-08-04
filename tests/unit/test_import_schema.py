@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 
 import pytest
 
@@ -29,7 +30,13 @@ def test_every_entity_has_an_importer():
 def test_declared_columns_are_actually_read(entity):
     """防止 IMPORT_COLS 那種漂移：宣告了卻沒人讀 = 騙使用者。"""
     source = inspect.getsource(IMPORTERS[entity])
-    missing = [c.name for c in SPECS[entity].columns if c.name not in source]
+    # Anchor to quoted literals to avoid false positives from substring matches
+    # (e.g., 'code' substring of 'customer_code')
+    missing = [
+        c.name
+        for c in SPECS[entity].columns
+        if not re.search(rf'["\']{re.escape(c.name)}["\']', source)
+    ]
     assert not missing, f"{entity} 宣告了但 importer 沒讀: {missing}"
 
 
