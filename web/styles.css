@@ -11,7 +11,8 @@
   --seller-soft:rgba(76,110,245,.10); --buyer-soft:rgba(12,154,160,.10);
   --good-soft:rgba(47,162,77,.12); --bad-soft:rgba(225,70,80,.12); --warn-soft:rgba(199,124,16,.13);
   --rail:#0E1826; --rail-2:#132134; --rail-line:#233247; --rail-ink:#93A2BC; --rail-active:#FFFFFF; --rail-active-bg:rgba(76,110,245,.18);
-  --kpi-bg:#0E1826; --kpi-line:#243350; --kpi-ink:#EAF0FA; --kpi-muted:#8FA0BD; --kpi-num:#7FA0FF;
+  /* KPI 帶在淺色主題是卡片，不是深色板：內容區唯一的深色元素會跟下方表格卡片打架。 */
+  --kpi-bg:#FFFFFF; --kpi-line:#E4E8F0; --kpi-ink:#131C2E; --kpi-muted:#64728A; --kpi-num:#4C6EF5;
   --shadow:0 1px 2px rgba(16,28,48,.04),0 4px 16px rgba(16,28,48,.05);
   --radius:14px; --radius-sm:9px;
   --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
@@ -38,7 +39,7 @@
   --seller-soft:rgba(76,110,245,.10); --buyer-soft:rgba(12,154,160,.10);
   --good-soft:rgba(47,162,77,.12); --bad-soft:rgba(225,70,80,.12); --warn-soft:rgba(199,124,16,.13);
   --rail:#0E1826; --rail-2:#132134; --rail-line:#233247; --rail-ink:#93A2BC; --rail-active-bg:rgba(76,110,245,.18);
-  --kpi-bg:#0E1826; --kpi-line:#243350; --kpi-ink:#EAF0FA; --kpi-muted:#8FA0BD; --kpi-num:#7FA0FF;
+  --kpi-bg:#FFFFFF; --kpi-line:#E4E8F0; --kpi-ink:#131C2E; --kpi-muted:#64728A; --kpi-num:#4C6EF5;
   --shadow:0 1px 2px rgba(16,28,48,.04),0 4px 16px rgba(16,28,48,.05);
 }
 :root[data-theme="dark"]{

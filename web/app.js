@@ -2702,7 +2702,7 @@
       '<label class="fm-f"><span>選擇 CSV 檔 <i class="req">*</i></span><input type="file" name="file" accept=".csv,text/csv" required></label>' +
       '<div class="fm-err"></div><div class="imp-preview"></div>' +
       '<div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button>' +
-      '<button type="button" class="btn primary imp-confirm" disabled>確認匯入</button></div>' +
+      '<button type="button" class="btn primary imp-confirm" disabled>請先選擇 CSV 檔</button></div>' +
       "</div></div>";
     document.body.appendChild(ov);
     function close() { ov.remove(); }
@@ -2740,8 +2740,9 @@
       errEl.textContent = "";
       previewEl.innerHTML = "";
       confirmBtn.disabled = true;
-      confirmBtn.textContent = "確認匯入";
-      if (!file) return;
+      // 停用時一律說明原因:一個灰掉卻寫著「確認匯入」的按鈕看起來像壞了。
+      if (!file) { confirmBtn.textContent = "請先選擇 CSV 檔"; return; }
+      confirmBtn.textContent = "檢查中…";
       previewEl.innerHTML = '<div class="placeholder">預覽中…</div>';
       IMPORT_FN[kind](file, { dry_run: true }).then(function (r) {
         previewEl.innerHTML = renderImportPreview(entity, r);
