@@ -21,7 +21,18 @@
   }
 
   var adminToken = null; // set via api.setToken() when 編輯模式 is on
-  function request(method, path, params, jsonBody) {
+  // app.js 註冊的密碼提示回呼;回傳 Promise<token|null>。未註冊時(或已重試過一次)
+  // 403 就照舊丟 ApiError,不攔截 —— api.js 只管重試機制,畫面一律交給 app.js。
+  var onAuthRequired = null;
+  function authRetry(err, retryFn) {
+    if (!(err.status === 403 && onAuthRequired)) throw err;
+    return onAuthRequired().then(function (token) {
+      if (!token) throw err;
+      adminToken = token;
+      return retryFn();
+    });
+  }
+  function request(method, path, params, jsonBody, retried) {
     var headers = { Accept: "application/json" };
     var opts = { method: method, headers: headers };
     if (jsonBody !== undefined) {
@@ -35,7 +46,12 @@
           if (!resp.ok) {
             var detail = body;
             try { detail = JSON.parse(body).detail || body; } catch (e) { /* keep text */ }
-            throw new ApiError(resp.status + ": " + detail, resp.status);
+            var err = new ApiError(resp.status + ": " + detail, resp.status);
+            if (err.status === 403 && retried) err.afterRetry = true;
+            if (err.status === 403 && !retried) {
+              return authRetry(err, function () { return request(method, path, params, jsonBody, true); });
+            }
+            throw err;
           }
           return body ? JSON.parse(body) : null;
         });
@@ -45,21 +61,26 @@
         throw new ApiError("無法連線到後端 API：" + err.message, 0);
       });
   }
-  function upload(path, file, params) {
+  function upload(path, file, params, retried) {
     var fd = new FormData();
     fd.append("file", file);
     // dry_run:false relies on the endpoint's own default (a real write) —
     // there is no "?dry_run=false", the query string is simply omitted.
-    var qs = params && params.dry_run ? "?dry_run=true" : "";
+    var qsStr = params && params.dry_run ? "?dry_run=true" : "";
     var headers = { Accept: "application/json" };
     if (adminToken) headers["X-Admin-Token"] = adminToken;
-    return fetch(V1 + path + qs, { method: "POST", headers: headers, body: fd })
+    return fetch(V1 + path + qsStr, { method: "POST", headers: headers, body: fd })
       .then(function (resp) {
         return resp.text().then(function (body) {
           if (!resp.ok) {
             var detail = body;
             try { detail = JSON.parse(body).detail || body; } catch (e) { /* keep */ }
-            throw new ApiError(resp.status + ": " + detail, resp.status);
+            var err = new ApiError(resp.status + ": " + detail, resp.status);
+            if (err.status === 403 && retried) err.afterRetry = true;
+            if (err.status === 403 && !retried) {
+              return authRetry(err, function () { return upload(path, file, params, true); });
+            }
+            throw err;
           }
           return body ? JSON.parse(body) : null;
         });
@@ -78,6 +99,7 @@
   global.api = {
     ApiError: ApiError,
     setToken: function (t) { adminToken = t || null; },
+    setAuthPrompt: function (fn) { onAuthRequired = fn; },
     customers: function () { return get("/customers", { limit: 1000 }); },
     windFarms: function () { return get("/wind-farms", { limit: 1000 }); },
     importFarms: function (file, o) { return upload("/wind-farms/import", file, o); },

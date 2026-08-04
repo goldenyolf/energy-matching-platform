@@ -62,3 +62,17 @@ def test_api_still_works(client):
 def test_import_schema_and_template_are_served(client):
     assert client.get("/api/v1/import/schema").status_code == 200
     assert client.get("/api/v1/import/template/contract").status_code == 200
+
+
+def test_spa_wires_the_admin_token_prompt(client):
+    # api.js exposes the retry hook that app.js registers a password modal
+    # against, so a 403 on any write can prompt-and-retry instead of just
+    # failing silently. If either half goes missing, ADMIN_WRITE_TOKEN can be
+    # set in production without anyone being able to unlock the SPA again.
+    api_js = client.get("/app/api.js").text
+    assert "setAuthPrompt" in api_js
+    assert "X-Admin-Token" in api_js
+
+    app_js = client.get("/app/app.js").text
+    assert "api.setAuthPrompt(" in app_js
+    assert "emp_admin_token" in app_js

@@ -2471,9 +2471,60 @@
   helpOverlay.addEventListener("click", function (e) { if (e.target === helpOverlay) hideHelp(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideHelp(); hideModal(); closeTip(); } });
 
+  // ---------- 寫入密碼保護 ----------
+  // 後端有 ADMIN_WRITE_TOKEN 寫入閘;平時完全不顯示任何常駐元件,只在 api.js 回報
+  // 403 時才跳出密碼框(見 api.js 的 onAuthRequired 攔截與單次重試)。同分頁內用
+  // sessionStorage 記住解鎖結果,關掉分頁即等同登出。
+  var ADMIN_TOKEN_KEY = "emp_admin_token";
+  (function restoreAdminToken() {
+    try {
+      var saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+      if (saved) api.setToken(saved);
+    } catch (e) { /* sessionStorage 不可用(如無痕模式)時略過,退化成每次都要輸入密碼 */ }
+  })();
+  function openAuthPrompt() {
+    return new Promise(function (resolve) {
+      var ov = document.createElement("div");
+      ov.className = "overlay show formov";
+      ov.innerHTML = '<div class="formmodal"><div class="fm-hd"><h3>需要編輯密碼</h3><button class="fm-x" aria-label="關閉">&times;</button></div>' +
+        '<form class="fm-body"><p class="fm-note">此環境已啟用寫入保護。請輸入密碼以繼續。</p>' +
+        '<label class="fm-f"><span>密碼</span><input type="password" name="token" required></label>' +
+        '<div class="fm-err"></div><div class="fm-act"><button type="button" class="btn ghost fm-cancel">取消</button>' +
+        '<button type="submit" class="btn primary">解鎖</button></div></form></div>';
+      document.body.appendChild(ov);
+      var done = false;
+      function finish(v) {
+        if (done) return;
+        done = true;
+        document.removeEventListener("keydown", onKey);
+        ov.remove();
+        resolve(v);
+      }
+      function onKey(e) { if (e.key === "Escape") finish(null); }
+      document.addEventListener("keydown", onKey);
+      ov.querySelector(".fm-x").onclick = function () { finish(null); };
+      ov.querySelector(".fm-cancel").onclick = function () { finish(null); };
+      ov.addEventListener("click", function (e) { if (e.target === ov) finish(null); });
+      ov.querySelector("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        finish(ov.querySelector('input[name="token"]').value || null);
+      });
+      ov.querySelector('input[name="token"]').focus();
+    });
+  }
+  api.setAuthPrompt(function () {
+    return openAuthPrompt().then(function (token) {
+      // 成功解鎖(使用者有輸入內容)才記住;取消(null)不寫入。密碼是否正確由
+      // api.js 的單次重試判定,這裡樂觀寫入即可 —— 打錯的話下次寫入照樣會再跳一次。
+      if (token) {
+        try { sessionStorage.setItem(ADMIN_TOKEN_KEY, token); } catch (e) { /* ignore */ }
+      }
+      return token;
+    });
+  });
+
   // ---------- 實體 CRUD(發電案場 / 企業客戶) ----------
-  // 這兩個是「管理頁」,一律顯示新增/編輯/刪除。密碼保護暫時隱藏(之後再設計呈現);
-  // 後端仍有 ADMIN_WRITE_TOKEN 寫入閘,設定後即需帶密碼(屆時再補密碼輸入 UI)。
+  // 這兩個是「管理頁」,一律顯示新增/編輯/刪除;寫入密碼保護見上方。
   var crudCache = { farm: {}, customer: {}, contract: {} };
 
   var FARM_FIELDS = [
@@ -2736,6 +2787,7 @@
       '<button class="mini danger entity-del" data-kind="' + kind + '" data-id="' + id + '">刪除</button></td>';
   }
   function writeErr(err) {
+    if (err && err.status === 403 && err.afterRetry) return "密碼不正確。";
     if (err && err.status === 403) return "沒有編輯權限:此環境已啟用寫入密碼保護(ADMIN_WRITE_TOKEN)。";
     return String((err && err.message) || "").replace(/^\d+:\s*/, "") || "操作失敗";
   }
