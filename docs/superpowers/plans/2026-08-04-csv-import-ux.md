@@ -1624,13 +1624,27 @@ spec 裡唯一還沒被證明的假設是 Postgres 的逐列 SAVEPOINT。**沒�
 
 - [ ] **Step 1: 起一個真的 Postgres**
 
+這台機器沒有 Docker，Homebrew 也太舊（Intel 路徑、不認得 macOS 26）。改用 `pgserver`——它自帶 PostgreSQL binaries，不需要系統安裝或 sudo。已在 worktree 的 venv 裝好並驗過 SAVEPOINT 語意；**不寫進 `pyproject.toml`**，它只是驗證工具。
+
 ```bash
-docker compose up -d db
-export DATABASE_URL="postgresql+psycopg://energy:energy@localhost:5432/energy_matching"
+.venv/bin/python - <<'PY'
+import pathlib, pgserver
+d = pathlib.Path(".pgtest/pgdata").absolute()
+d.parent.mkdir(exist_ok=True)
+srv = pgserver.get_server(d)
+print(srv.get_uri())
+PY
+```
+
+把印出的 URI 轉成 SQLAlchemy 的形式（`postgresql://` → `postgresql+psycopg://`）設進 `DATABASE_URL`，然後：
+
+```bash
 .venv/bin/alembic upgrade head
 ```
 
-若本機沒有 Docker，改用 Neon 的測試分支；**不要跳過這一步**。
+`.pgtest/` 用完即刪，不要提交。
+
+若 `pgserver` 這條也不通，改用 Neon 的測試分支；**不要跳過這一步**。
 
 - [ ] **Step 2: 實跑一個含壞列的匯入**
 
