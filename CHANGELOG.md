@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **CSV 匯入體驗強化**：
+  - 範本下載——每種可匯入實體都有一鍵下載的範本 CSV，欄位與匯入 schema 單一真相。
+  - 匯入前預覽（dry-run）——選檔即自動跑一次完整匯入路徑並在最後整個退回，顯示新增／更新／略過／
+    錯誤四個計數與逐列動作，寫入前先看得到結果。
+  - 逐列錯誤依（欄位、原因）分組回報，兩千列同一種錯誤收斂成一筆，不再洗版成兩千行英文訊息。
+  - 依自然鍵 upsert：重複匯入同一份檔案會更新已存在的資料而不是報錯或造成重複。
+  - 補齊 battery／generation／consumption 三種實體的匯入端點，之前只有測試用的 seeder 用得到。
+
+### Fixed
+- 重複匯入同一份發電（generation）資料會把電量加倍，而不是更新既有紀錄。
+
+### Changed
+- **Breaking:** 發電（generation）與用電（consumption）CSV 匯入不再接受 `wind_farm_id` /
+  `customer_id` 這兩個備援欄位，一律改用 `wind_farm_code` / `customer_code` 對應案場與客戶。
+  舊格式的檔案需要先把欄位改名才能重新匯入。
+
 - **合約詳情頁（商務視角）** — 合約清單每一列可點入 `#/contract?id=&year=`，看該紙合約整年的逐月履約與雙面帳。
   - **全年被什麼卡住**：12 格分佈條標出每個月的綁定約束（合約上限／案場供給／客戶用電／未生效），並產生一句有成立條件的結論——「有加購空間」只在案場尚有餘電且客戶仍有未滿足用電時才會出現。
   - **月別履約圖**：柱為實際分配、短橫為月上限、虛線短橫為 take-or-pay 門檻；點任一月展開明細，含引擎原文的分配理由。
